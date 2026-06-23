@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Google Sans', system-ui, sans-serif;
+
+  /* Lighter Military palette */
+  --color-olive-50:  #f8fae8;
+  --color-olive-100: #edf4dc;
+  --color-olive-200: #dce7ba;
+  --color-olive-300: #c5d38c;
+  --color-olive-400: #b0c061;
+  --color-olive-500: #93a83e;
+  --color-olive-600: #748c2c;   /* Primary Lighter Olive */
+  --color-olive-700: #586c23;
+  --color-olive-800: #465620;
+  --color-olive-900: #3b491e;
+
+  --color-khaki-100: #fcfaf0;
+  --color-khaki-200: #f6eed7;
+  --color-khaki-300: #eedeba;
+  --color-khaki-400: #e3ca91;
+  --color-khaki-500: #caab5d;
+
+  --color-militarygray-50:  #f2f2f0;
+  --color-militarygray-100: #e0e0dc;
+  --color-militarygray-200: #c8c8c0;
+  --color-militarygray-800: #2a2a25;
+  --color-militarygray-900: #1a1a16;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: 'Google Sans', system-ui, sans-serif;
+  background: #f8fae8; /* Very light olive background */
+  color: #3b491e; /* Darker olive for text */
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9; /* slate-100 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
+}
