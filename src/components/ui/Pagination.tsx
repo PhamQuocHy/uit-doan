@@ -48,43 +48,31 @@ export default function Pagination({
 
   return (
     <div className="flex items-center justify-between px-1 py-1">
-      <p className="text-xs font-semibold" style={{ color: "#748c2c" }}>
+      <p className="text-[14px] font-medium text-[#6e6e73]">
         Hiển thị{" "}
-        <span className="font-bold" style={{ color: "#3b491e" }}>
-          {start}–{end}
+        <span className="font-bold text-[#1d1d1f]">
+          {start}-{end}
         </span>{" "}
-        trong{" "}
-        <span className="font-bold" style={{ color: "#3b491e" }}>
-          {total}
-        </span>{" "}
-        kết quả
+        trong <span className="font-bold text-[#1d1d1f]">{total}</span> kết quả
       </p>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className={clsx(
-            "p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
-            "hover:bg-gray-100",
-          )}
-          style={{ color: "#748c2c" }}
+          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <ChevronsLeft size={16} />
+          <ChevronsLeft size={20} />
         </button>
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
-          style={{ color: "#748c2c" }}
+          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={20} />
         </button>
         {getPages().map((page, idx) =>
           page === "..." ? (
-            <span
-              key={`dot-${idx}`}
-              className="px-2 py-1 text-slate-400 text-sm"
-            >
+            <span key={`dot-${idx}`} className="px-2 py-1 text-[15px] text-[#aeaeb2]">
               ...
             </span>
           ) : (
@@ -92,17 +80,11 @@ export default function Pagination({
               key={page}
               onClick={() => onPageChange(page as number)}
               className={clsx(
-                "w-8 h-8 text-sm rounded-lg font-bold transition-colors",
-              )}
-              style={
+                "h-10 w-10 rounded-[12px] text-[15px] font-bold transition-colors",
                 currentPage === page
-                  ? {
-                      background: "#748c2c",
-                      color: "#ffffff",
-                      boxShadow: "0 2px 8px rgba(116,140,44,0.2)",
-                    }
-                  : { color: "#748c2c" }
-              }
+                  ? "bg-[#007aff] text-white shadow-sm shadow-blue-500/25"
+                  : "text-[#1d1d1f] hover:bg-black/[0.04]",
+              )}
             >
               {page}
             </button>
@@ -111,18 +93,16 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
-          style={{ color: "#748c2c" }}
+          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={20} />
         </button>
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
-          style={{ color: "#748c2c" }}
+          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
         >
-          <ChevronsRight size={16} />
+          <ChevronsRight size={20} />
         </button>
       </div>
     </div>

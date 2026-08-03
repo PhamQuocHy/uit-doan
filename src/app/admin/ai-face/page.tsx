@@ -159,10 +159,10 @@ export default function AiFacePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
           Nhận dạng AI
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
           Nhận dạng khuôn mặt và quét NFC CCCD gắn chip qua điện thoại
         </p>
       </div>
@@ -188,7 +188,7 @@ export default function AiFacePage() {
             }`}
             style={
               activeTab === id
-                ? { color: "#3b491e", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+                ? { color: "#1d1d1f", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
                 : {}
             }
           >
@@ -202,13 +202,13 @@ export default function AiFacePage() {
       {activeTab === "face" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upload Panel */}
-          <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "#f8fae8" }}
+                style={{ background: "#f5f5f7" }}
               >
-                <ScanFace size={20} style={{ color: "#748c2c" }} />
+                <ScanFace size={20} style={{ color: "#007aff" }} />
               </div>
               <div>
                 <h2 className="font-semibold text-gray-900">
@@ -219,7 +219,7 @@ export default function AiFacePage() {
             </div>
 
             <div
-              className="border-2 border-dashed border-[#edf4dc] rounded-xl p-6 text-center cursor-pointer hover:border-[#748c2c] transition-colors"
+              className="border-2 border-dashed border-[#e5e5ea] rounded-xl p-6 text-center cursor-pointer hover:border-[#007aff] transition-colors"
               onClick={() => fileRef.current?.click()}
             >
               {imagePreview ? (
@@ -249,7 +249,7 @@ export default function AiFacePage() {
               <button
                 onClick={handleScan}
                 disabled={!imagePreview || isScanning}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#748c2c] hover:bg-[#586c23] disabled:opacity-50 text-white rounded-xl transition-colors font-medium text-sm"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl transition-colors font-medium text-sm"
               >
                 {isScanning ? (
                   <>
@@ -273,8 +273,8 @@ export default function AiFacePage() {
               )}
             </div>
 
-            <div className="p-3 rounded-xl bg-[#f8fae8] border border-[#edf4dc]">
-              <p className="text-xs text-[#586c23]">
+            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea]">
+              <p className="text-xs text-[#636366]">
                 <span className="font-semibold">Lưu ý:</span> Ảnh cần rõ mặt, đủ
                 ánh sáng, không bị che khuất để đạt độ chính xác cao nhất.
               </p>
@@ -282,7 +282,7 @@ export default function AiFacePage() {
           </div>
 
           {/* Result Panel */}
-          <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6">
             <h2 className="font-semibold text-gray-900 mb-4">
               Kết quả nhận dạng
             </h2>
@@ -298,7 +298,7 @@ export default function AiFacePage() {
 
             {isScanning && (
               <div className="h-48 flex flex-col items-center justify-center space-y-3">
-                <RefreshCw size={36} className="text-[#748c2c] animate-spin" />
+                <RefreshCw size={36} className="text-[#007aff] animate-spin" />
                 <p className="text-sm text-gray-500">
                   Đang phân tích khuôn mặt...
                 </p>
@@ -349,7 +349,7 @@ export default function AiFacePage() {
                     </div>
                   ))}
                 </div>
-                <button className="w-full py-2 border border-[#edf4dc] text-[#748c2c] hover:bg-[#f8fae8] rounded-xl text-sm font-medium transition-colors">
+                <button className="w-full py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors">
                   Xem hồ sơ đầy đủ
                 </button>
               </div>
@@ -362,13 +362,13 @@ export default function AiFacePage() {
       {activeTab === "nfc" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Connection panel */}
-          <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm p-6 space-y-5">
+          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6 space-y-5">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "#f8fae8" }}
+                style={{ background: "#f5f5f7" }}
               >
-                <Smartphone size={20} style={{ color: "#748c2c" }} />
+                <Smartphone size={20} style={{ color: "#007aff" }} />
               </div>
               <div>
                 <h2 className="font-semibold text-gray-900">
@@ -432,14 +432,14 @@ export default function AiFacePage() {
                 <p className="text-xs text-gray-500">Mã kết nối</p>
                 <div
                   className="text-5xl font-bold tracking-[0.3em] py-4 rounded-2xl"
-                  style={{ color: "#3b491e", background: "#f8fae8" }}
+                  style={{ color: "#1d1d1f", background: "#f5f5f7" }}
                 >
                   {nfcCode}
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={copyCode}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 border border-[#edf4dc] text-[#748c2c] hover:bg-[#f8fae8] rounded-xl text-sm transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm transition-colors"
                   >
                     {copied ? (
                       <>
@@ -453,7 +453,7 @@ export default function AiFacePage() {
                   </button>
                   <button
                     onClick={generateSession}
-                    className="flex items-center justify-center gap-2 px-4 py-2 border border-[#edf4dc] text-[#748c2c] hover:bg-[#f8fae8] rounded-xl text-sm transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm transition-colors"
                   >
                     <RefreshCw size={14} />
                     Tạo mã mới
@@ -463,14 +463,14 @@ export default function AiFacePage() {
             )}
 
             {/* Mobile link */}
-            <div className="p-3 rounded-xl bg-[#f8fae8] border border-[#edf4dc] space-y-2">
+            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea] space-y-2">
               <div className="flex items-center gap-2">
-                <p className="text-xs font-semibold text-[#586c23]">
+                <p className="text-xs font-semibold text-[#636366]">
                   Trang quét NFC (điện thoại)
                 </p>
                 <button
                   onClick={() => window.open(mobileUrl, "_blank")}
-                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#edf4dc] text-[#748c2c] transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#e5e5ea] text-[#007aff] transition-colors"
                 >
                   <ArrowRight size={14} />
                 </button>
@@ -479,7 +479,7 @@ export default function AiFacePage() {
           </div>
 
           {/* Right: Result panel */}
-          <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6">
             <h2 className="font-semibold text-gray-900 mb-4">Kết quả NFC</h2>
 
             {!nfcResult && (
@@ -524,10 +524,10 @@ export default function AiFacePage() {
                   <button
                     onClick={() =>
                       router.push(
-                        `/admin/health?cccd=${nfcResult.citizen?.cccd}`,
+                        `/admin/citizens?search=${encodeURIComponent(nfcResult.citizen?.cccd || "")}`,
                       )
                     }
-                    className="flex-1 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl text-sm font-medium transition-colors"
+                    className="flex-1 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl text-sm font-medium transition-colors"
                   >
                     Hồ sơ sức khỏe
                   </button>
@@ -537,7 +537,7 @@ export default function AiFacePage() {
                         `/admin/citizens?cccd=${nfcResult.citizen?.cccd}`,
                       )
                     }
-                    className="flex-1 py-2 border border-[#edf4dc] text-[#748c2c] hover:bg-[#f8fae8] rounded-xl text-sm font-medium transition-colors"
+                    className="flex-1 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors"
                   >
                     Thông tin chi tiết
                   </button>
@@ -578,7 +578,7 @@ export default function AiFacePage() {
                     );
                     router.push(`/admin/citizens?new=1&${params.toString()}`);
                   }}
-                  className="w-full py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   <UserPlus size={16} />
                   Thêm mới công dân

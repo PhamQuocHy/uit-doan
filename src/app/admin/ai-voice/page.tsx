@@ -56,10 +56,10 @@ export default function AIVoicePage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Nhận dạng giọng nói (AI Voice)
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             Đọc thông tin CCCD hoặc nộp file ghi âm để hệ thống tự động bóc tách
             dữ liệu
           </p>
@@ -68,8 +68,8 @@ export default function AIVoicePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recording Panel */}
-        <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-[#edf4dc] bg-[#f8fae8]/30 flex flex-col items-center justify-center min-h-[300px]">
+        <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-[#e5e5ea] bg-[#f5f5f7]/30 flex flex-col items-center justify-center min-h-[300px]">
             <div className="relative flex items-center justify-center mb-8">
               {isRecording && (
                 <>
@@ -82,7 +82,7 @@ export default function AIVoicePage() {
                 <button
                   onClick={handleStartRecording}
                   disabled={isProcessing}
-                  className="w-20 h-20 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 z-10"
+                  className="w-20 h-20 bg-[#007aff] hover:bg-[#636366] text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 z-10"
                 >
                   <Mic size={32} />
                 </button>
@@ -109,10 +109,10 @@ export default function AIVoicePage() {
               ) : isProcessing ? (
                 <div className="flex flex-col items-center">
                   <Loader2
-                    className="animate-spin text-[#748c2c] mb-2"
+                    className="animate-spin text-[#007aff] mb-2"
                     size={28}
                   />
-                  <h3 className="text-lg font-bold text-[#586c23]">
+                  <h3 className="text-lg font-bold text-[#636366]">
                     AI đang phân tích giọng nói...
                   </h3>
                 </div>
@@ -147,7 +147,7 @@ export default function AIVoicePage() {
         </div>
 
         {/* Result Panel */}
-        <div className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm flex flex-col relative overflow-hidden">
+        <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm flex flex-col relative overflow-hidden">
           {saved && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
               <div className="bg-green-50 text-green-600 p-4 rounded-full mb-4">
@@ -172,12 +172,12 @@ export default function AIVoicePage() {
             </div>
           )}
 
-          <div className="p-4 border-b border-[#edf4dc] bg-[#f8fae8]/50 flex justify-between items-center">
-            <h3 className="font-bold text-[#586c23]">Kết quả Bóc tách (NER)</h3>
+          <div className="p-4 border-b border-[#e5e5ea] bg-[#f5f5f7]/50 flex justify-between items-center">
+            <h3 className="font-bold text-[#636366]">Kết quả Bóc tách (NER)</h3>
             {parsedData && !saved && (
               <button
                 onClick={handleSave}
-                className="flex items-center gap-2 px-4 py-1.5 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                className="flex items-center gap-2 px-4 py-1.5 bg-[#007aff] hover:bg-[#636366] text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
               >
                 <Save size={16} />
                 Lưu hồ sơ
@@ -217,7 +217,7 @@ export default function AIVoicePage() {
                       type="text"
                       value={parsedData.cccd}
                       readOnly
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-[#007aff]"
                     />
                   </div>
                   <div className="space-y-1">
@@ -227,7 +227,7 @@ export default function AIVoicePage() {
                     <input
                       type="text"
                       value={parsedData.fullName}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-900 focus:outline-none focus:border-[#007aff]"
                       onChange={(e) =>
                         setParsedData({
                           ...parsedData,
@@ -243,7 +243,7 @@ export default function AIVoicePage() {
                     <input
                       type="text"
                       value={parsedData.dateOfBirth}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#007aff]"
                       onChange={(e) =>
                         setParsedData({
                           ...parsedData,
@@ -258,7 +258,7 @@ export default function AIVoicePage() {
                     </label>
                     <select
                       value={parsedData.gender}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#007aff]"
                       onChange={(e) =>
                         setParsedData({ ...parsedData, gender: e.target.value })
                       }
@@ -276,7 +276,7 @@ export default function AIVoicePage() {
                   <input
                     type="text"
                     value={parsedData.hometown}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#007aff]"
                     onChange={(e) =>
                       setParsedData({ ...parsedData, hometown: e.target.value })
                     }
@@ -290,7 +290,7 @@ export default function AIVoicePage() {
                   <textarea
                     value={parsedData.address}
                     rows={2}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#748c2c]"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#007aff]"
                     onChange={(e) =>
                       setParsedData({ ...parsedData, address: e.target.value })
                     }

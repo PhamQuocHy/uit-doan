@@ -54,7 +54,7 @@ export default function SearchableSelect({
       ref={dropdownRef}
     >
       {label && (
-        <label className="text-sm font-medium" style={{ color: "#586c23" }}>
+        <label className="text-sm font-medium" style={{ color: "#636366" }}>
           {label}
         </label>
       )}
@@ -63,8 +63,8 @@ export default function SearchableSelect({
         className={`w-full px-4 py-3.5 text-[16px] rounded-xl transition-all outline-none flex justify-between items-center ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
         style={{
           background: "#fff",
-          border: isOpen ? "1.5px solid #748c2c" : "1.5px solid #edf4dc",
-          color: "#3b491e",
+          border: isOpen ? "1.5px solid #007aff" : "1.5px solid #e5e5ea",
+          color: "#1d1d1f",
           boxShadow: isOpen ? "0 0 0 3px rgba(116,140,44,0.1)" : "none",
         }}
       >
@@ -74,7 +74,7 @@ export default function SearchableSelect({
         <ChevronDown
           size={20}
           className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-          style={{ color: "#93a83e" }}
+          style={{ color: "#86868b" }}
         />
       </div>
 
@@ -82,24 +82,24 @@ export default function SearchableSelect({
         <div
           className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border overflow-hidden"
           style={{
-            borderColor: "#edf4dc",
+            borderColor: "#e5e5ea",
             boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
           }}
         >
           <div
             className="p-2 border-b"
-            style={{ borderColor: "#edf4dc", backgroundColor: "#f8fae8" }}
+            style={{ borderColor: "#e5e5ea", backgroundColor: "#f5f5f7" }}
           >
             <div className="relative">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                style={{ color: "#93a83e" }}
+                style={{ color: "#86868b" }}
               />
               <input
                 type="text"
                 autoFocus
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg outline-none bg-white border border-[#edf4dc] focus:border-[#748c2c] transition-colors"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg outline-none bg-white border border-[#e5e5ea] focus:border-[#007aff] transition-colors"
                 placeholder="Tìm kiếm..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -120,8 +120,8 @@ export default function SearchableSelect({
                     value === opt.value ? "font-medium" : "hover:bg-gray-50"
                   }`}
                   style={{
-                    color: value === opt.value ? "#748c2c" : "#3b491e",
-                    backgroundColor: value === opt.value ? "#edf4dc" : "",
+                    color: value === opt.value ? "#007aff" : "#1d1d1f",
+                    backgroundColor: value === opt.value ? "#e5e5ea" : "",
                   }}
                   onClick={() => {
                     onChange(opt.value);

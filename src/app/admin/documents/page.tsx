@@ -164,10 +164,10 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Công văn đến / đi
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             {session && (
               <span className="font-medium">
                 Đơn vị: {unitNames[session.unitCode] || session.unitCode} (
@@ -178,7 +178,7 @@ export default function DocumentsPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium"
         >
           <Plus size={16} /> Soạn công văn
         </button>
@@ -196,7 +196,7 @@ export default function DocumentsPage() {
           {
             label: "Công văn đi",
             value: outgoingCount,
-            color: "#748c2c",
+            color: "#007aff",
             icon: ArrowUpCircle,
           },
           {
@@ -210,7 +210,7 @@ export default function DocumentsPage() {
           return (
             <div
               key={s.label}
-              className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm"
+              className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500">{s.label}</p>
@@ -225,8 +225,8 @@ export default function DocumentsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-        <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -235,7 +235,7 @@ export default function DocumentsPage() {
             <input
               type="text"
               placeholder="Tìm theo tiêu đề, số hiệu..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -246,7 +246,7 @@ export default function DocumentsPage() {
               size={18}
             />
             <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white cursor-pointer"
+              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
@@ -259,7 +259,7 @@ export default function DocumentsPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-6 py-4">Loại</th>
                 <th className="px-6 py-4">Số hiệu</th>
@@ -318,8 +318,8 @@ export default function DocumentsPage() {
                             <span
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                               style={{
-                                background: "#f8fae8",
-                                color: "#748c2c",
+                                background: "#f5f5f7",
+                                color: "#007aff",
                               }}
                             >
                               <ArrowUpCircle size={12} /> Đi
@@ -370,7 +370,7 @@ export default function DocumentsPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setViewDoc(doc)}
-                            className="p-1.5 text-gray-400 hover:text-[#748c2c] hover:bg-[#f8fae8] rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
                           >
                             <Eye size={15} />
                           </button>
@@ -409,7 +409,7 @@ export default function DocumentsPage() {
                   Loại công văn
                 </label>
                 <select
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c]"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                 >
@@ -425,7 +425,7 @@ export default function DocumentsPage() {
                 </label>
                 <input
                   type="text"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c]"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
                   placeholder="Nhập tiêu đề công văn..."
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -436,7 +436,7 @@ export default function DocumentsPage() {
                   Nội dung tóm tắt
                 </label>
                 <textarea
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c] resize-none"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
                   rows={3}
                   placeholder="Tóm tắt nội dung..."
                   value={form.content}
@@ -472,7 +472,7 @@ export default function DocumentsPage() {
                                 );
                             setForm({ ...form, selectedUnits: next });
                           }}
-                          className="accent-[#748c2c]"
+                          className="accent-[#007aff]"
                         />
                         <span className="text-sm text-gray-700">
                           {unit.name}
@@ -512,7 +512,7 @@ export default function DocumentsPage() {
                 disabled={
                   submitting || !form.title || form.selectedUnits.length === 0
                 }
-                className="flex-1 py-2.5 bg-[#748c2c] hover:bg-[#586c23] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Send size={15} />
                 {submitting ? "Đang gửi..." : "Gửi công văn"}

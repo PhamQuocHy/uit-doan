@@ -364,15 +364,15 @@ export default function RecruitmentPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSelectedCamp(null)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-[#748c2c] hover:bg-[#f8fae8] rounded-xl border border-gray-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-xl border border-gray-200 transition-colors"
           >
             <ChevronLeft size={16} /> Quay lại
           </button>
           <div>
-            <h1 className="text-xl font-bold" style={{ color: "#3b491e" }}>
+            <h1 className="text-xl font-bold" style={{ color: "#1d1d1f" }}>
               {selectedCamp.name}
             </h1>
-            <p className="text-xs mt-0.5" style={{ color: "#748c2c" }}>
+            <p className="text-xs mt-0.5" style={{ color: "#007aff" }}>
               {new Date(selectedCamp.startDate).toLocaleDateString("vi-VN")} –{" "}
               {new Date(selectedCamp.endDate).toLocaleDateString("vi-VN")} · Năm{" "}
               {selectedCamp.year}
@@ -386,7 +386,7 @@ export default function RecruitmentPage() {
             {
               label: "Tổng gọi khám",
               value: candidates.length,
-              color: "#3b491e",
+              color: "#1d1d1f",
             },
             { label: "Trúng tuyển", value: passedCount, color: "#059669" },
             { label: "Không đạt", value: failedCount, color: "#dc2626" },
@@ -394,7 +394,7 @@ export default function RecruitmentPage() {
           ].map((s) => (
             <div
               key={s.label}
-              className="bg-white rounded-2xl p-4 border border-[#edf4dc] shadow-sm"
+              className="bg-white rounded-2xl p-4 border border-[#e5e5ea] shadow-sm"
             >
               <p className="text-xs text-gray-500">{s.label}</p>
               <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>
@@ -408,13 +408,13 @@ export default function RecruitmentPage() {
         <div className="flex gap-2 border-b border-gray-100 pb-0">
           <button
             onClick={() => setTab("candidates")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "candidates" ? "border-[#748c2c] text-[#748c2c]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "candidates" ? "border-[#007aff] text-[#007aff]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             <Users size={16} /> Danh sách thanh niên khám ({candidates.length})
           </button>
           <button
             onClick={() => setTab("reserve")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "reserve" ? "border-[#748c2c] text-[#748c2c]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "reserve" ? "border-[#007aff] text-[#007aff]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             <Shield size={16} /> Danh sách dự bị ({mockReserves.length})
           </button>
@@ -428,8 +428,8 @@ export default function RecruitmentPage() {
 
         {/* TAB: Candidates */}
         {tab === "candidates" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-            <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+            <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -438,7 +438,7 @@ export default function RecruitmentPage() {
                 <input
                   type="text"
                   placeholder="Tìm họ tên, CCCD..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c]"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -450,7 +450,7 @@ export default function RecruitmentPage() {
                     onClick={() => setCandidateFilter(v)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                       candidateFilter === v
-                        ? "bg-[#748c2c] text-white"
+                        ? "bg-[#007aff] text-white"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
@@ -468,7 +468,7 @@ export default function RecruitmentPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+                <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
                   <tr>
                     <th className="px-5 py-3">Họ và Tên</th>
                     <th className="px-5 py-3">Đơn vị</th>
@@ -488,8 +488,8 @@ export default function RecruitmentPage() {
                       >
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-[#f8fae8] flex items-center justify-center shrink-0">
-                              <User2 size={12} style={{ color: "#748c2c" }} />
+                            <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
+                              <User2 size={12} style={{ color: "#007aff" }} />
                             </div>
                             <div>
                               <div className="font-medium text-gray-900 text-sm">
@@ -539,8 +539,8 @@ export default function RecruitmentPage() {
 
         {/* TAB: Reserve */}
         {tab === "reserve" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-            <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+            <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -549,13 +549,13 @@ export default function RecruitmentPage() {
                 <input
                   type="text"
                   placeholder="Tìm họ tên, CCCD..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c]"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
                   value={reserveSearch}
                   onChange={(e) => setReserveSearch(e.target.value)}
                 />
               </div>
               <select
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c] bg-white"
+                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] bg-white"
                 value={reserveStatus}
                 onChange={(e) => setReserveStatus(e.target.value)}
               >
@@ -566,7 +566,7 @@ export default function RecruitmentPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+                <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
                   <tr>
                     <th className="px-5 py-3">Họ và Tên</th>
                     <th className="px-5 py-3">Đơn vị dự bị</th>
@@ -585,8 +585,8 @@ export default function RecruitmentPage() {
                     >
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[#f8fae8] flex items-center justify-center shrink-0">
-                            <Shield size={12} style={{ color: "#748c2c" }} />
+                          <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
+                            <Shield size={12} style={{ color: "#007aff" }} />
                           </div>
                           <div>
                             <div className="font-medium text-gray-900 text-sm">
@@ -808,21 +808,21 @@ export default function RecruitmentPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Đợt khám tuyển
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             Quản lý các đợt gọi khám sức khỏe và kết quả gọi quân
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl transition-colors text-sm font-medium">
+        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
           <Plus size={16} /> Tạo đợt khám mới
         </button>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-[#edf4dc] shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
             <CalendarClock size={24} />
           </div>
@@ -833,7 +833,7 @@ export default function RecruitmentPage() {
             <p className="text-2xl font-bold text-gray-900">1</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#edf4dc] shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
             <Users size={24} />
           </div>
@@ -842,7 +842,7 @@ export default function RecruitmentPage() {
             <p className="text-2xl font-bold text-gray-900">3,200</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#edf4dc] shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
             <CheckCircle2 size={24} />
           </div>
@@ -853,15 +853,15 @@ export default function RecruitmentPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-        <div className="p-4 border-b border-[#edf4dc] flex gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+        <div className="p-4 border-b border-[#e5e5ea] flex gap-3">
           <div className="relative">
             <Filter
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               size={16}
             />
             <select
-              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white cursor-pointer"
+              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
               value={yearFilter}
               onChange={(e) => {
                 setYearFilter(e.target.value);
@@ -875,7 +875,7 @@ export default function RecruitmentPage() {
             </select>
           </div>
           <select
-            className="px-3 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white cursor-pointer"
+            className="px-3 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
@@ -891,7 +891,7 @@ export default function RecruitmentPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-6 py-4">Tên đợt khám</th>
                 <th className="px-6 py-4">Thời gian</th>
@@ -932,7 +932,7 @@ export default function RecruitmentPage() {
                   return (
                     <tr
                       key={camp.id}
-                      className="hover:bg-[#f8fae8]/30 transition-colors cursor-pointer"
+                      className="hover:bg-[#f5f5f7]/30 transition-colors cursor-pointer"
                       onClick={() => setSelectedCamp(camp)}
                     >
                       <td className="px-6 py-4">
@@ -989,7 +989,7 @@ export default function RecruitmentPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setSelectedCamp(camp)}
-                            className="p-1.5 text-gray-400 hover:text-[#748c2c] hover:bg-[#f8fae8] rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
                             title="Xem chi tiết"
                           >
                             <Eye size={16} />
@@ -1011,7 +1011,7 @@ export default function RecruitmentPage() {
         </div>
 
         {!loading && totalPages > 1 && (
-          <div className="p-4 border-t border-[#edf4dc] flex items-center justify-between text-sm">
+          <div className="p-4 border-t border-[#e5e5ea] flex items-center justify-between text-sm">
             <span className="text-gray-500">
               Trang {page} / {totalPages}
             </span>

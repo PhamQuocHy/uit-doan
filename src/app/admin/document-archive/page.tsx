@@ -79,7 +79,7 @@ const categoryConfig: Record<
   "Quyết định": { color: "#2563eb", bg: "#dbeafe", icon: ClipboardList },
   "Hướng dẫn": { color: "#059669", bg: "#d1fae5", icon: BookOpen },
   "Báo cáo": { color: "#d97706", bg: "#fef3c7", icon: FileText },
-  "Quy chế": { color: "#748c2c", bg: "#f8fae8", icon: Archive },
+  "Quy chế": { color: "#007aff", bg: "#f5f5f7", icon: Archive },
 };
 
 export default function DocumentArchivePage() {
@@ -104,10 +104,10 @@ export default function DocumentArchivePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
           Kho văn bản
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
           Lưu trữ và tra cứu thông tư, nghị định, quyết định về nghĩa vụ quân sự
         </p>
       </div>
@@ -116,7 +116,7 @@ export default function DocumentArchivePage() {
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setCategoryFilter("")}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!categoryFilter ? "bg-[#748c2c] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#748c2c]"}`}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!categoryFilter ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
         >
           Tất cả ({mockArchive.length})
         </button>
@@ -131,7 +131,7 @@ export default function DocumentArchivePage() {
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${categoryFilter === cat ? "text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#748c2c]"}`}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${categoryFilter === cat ? "text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
               style={categoryFilter === cat ? { background: cfg.color } : {}}
             >
               {cat} ({count})
@@ -140,9 +140,9 @@ export default function DocumentArchivePage() {
         })}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
         {/* Filters */}
-        <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -151,7 +151,7 @@ export default function DocumentArchivePage() {
             <input
               type="text"
               placeholder="Tìm theo tiêu đề, mã văn bản..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -162,7 +162,7 @@ export default function DocumentArchivePage() {
               size={18}
             />
             <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white cursor-pointer"
+              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
             >
@@ -236,7 +236,7 @@ export default function DocumentArchivePage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      className="p-1.5 text-gray-400 hover:text-[#748c2c] hover:bg-[#f8fae8] rounded-lg transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
                       title="Xem"
                     >
                       <Eye size={16} />

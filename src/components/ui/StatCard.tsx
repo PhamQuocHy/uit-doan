@@ -1,7 +1,5 @@
 "use client";
 
-import { clsx } from "clsx";
-
 interface StatCardProps {
   title: string;
   value: string | number;
@@ -11,6 +9,29 @@ interface StatCardProps {
   trend?: { value: number; label: string };
 }
 
+const colorMap = {
+  olive: {
+    bg: "rgba(0,122,255,0.12)",
+    text: "#007aff",
+  },
+  khaki: {
+    bg: "rgba(255,149,0,0.14)",
+    text: "#ff9500",
+  },
+  forest: {
+    bg: "rgba(52,199,89,0.14)",
+    text: "#34c759",
+  },
+  earth: {
+    bg: "rgba(90,200,250,0.16)",
+    text: "#5ac8fa",
+  },
+  alert: {
+    bg: "rgba(255,59,48,0.12)",
+    text: "#ff3b30",
+  },
+};
+
 export default function StatCard({
   title,
   value,
@@ -19,86 +40,46 @@ export default function StatCard({
   subtitle,
   trend,
 }: StatCardProps) {
-  const colorMap = {
-    olive: {
-      bg: "#f8fae8",
-      text: "#748c2c",
-      border: "#dce7ba",
-    },
-    khaki: {
-      bg: "rgba(227,202,145,0.15)",
-      text: "#a88a3e",
-      border: "rgba(227,202,145,0.3)",
-    },
-    forest: {
-      bg: "rgba(53,90,30,0.08)",
-      text: "#465620",
-      border: "rgba(53,90,30,0.15)",
-    },
-    earth: {
-      bg: "rgba(116,140,44,0.1)",
-      text: "#748c2c",
-      border: "rgba(116,140,44,0.2)",
-    },
-    alert: {
-      bg: "#fef2f2",
-      text: "#dc2626",
-      border: "#fecaca",
-    },
-  };
   const c = colorMap[color];
-  const trendColor = trend && trend.value >= 0 ? "#748c2c" : "#dc2626";
+  const trendUp = trend && trend.value >= 0;
 
   return (
     <div
-      className="rounded-3xl p-6 hover:shadow-lg transition-shadow duration-200"
+      className="rounded-[22px] p-6 transition-transform duration-200 hover:-translate-y-0.5"
       style={{
         background: "#ffffff",
-        border: "1px solid #edf4dc",
-        boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
+        border: "1px solid rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.03), 0 12px 32px rgba(0,0,0,0.05)",
       }}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div
-          className="p-3 rounded-xl shrink-0"
-          style={{
-            background: c.bg,
-            color: c.text,
-            border: `1px solid ${c.border}`,
-          }}
+          className="rounded-[16px] p-3.5"
+          style={{ background: c.bg, color: c.text }}
         >
           {icon}
         </div>
         {trend && (
           <span
-            className="text-xs font-semibold tracking-wide"
-            style={{ color: trendColor }}
+            className="rounded-[10px] px-2.5 py-1 text-[13px] font-bold"
+            style={{
+              color: trendUp ? "#248a3d" : "#ff3b30",
+              background: trendUp
+                ? "rgba(52,199,89,0.12)"
+                : "rgba(255,59,48,0.1)",
+            }}
           >
-            {trend.value >= 0 ? "▲" : "▼"} {Math.abs(trend.value)}%{" "}
-            {trend.label}
+            {trendUp ? "▲" : "▼"} {Math.abs(trend.value)}% {trend.label}
           </span>
         )}
       </div>
-      <div className="mt-4">
-        <p className="text-3xl font-bold" style={{ color: "#3b491e" }}>
+      <div className="mt-5">
+        <p className="text-[36px] font-bold leading-none tracking-tight text-[#1d1d1f]">
           {value}
         </p>
-        <p
-          className="text-xs font-bold mt-1 tracking-wide uppercase"
-          style={{
-            color: "#748c2c",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {title}
-        </p>
+        <p className="mt-2.5 text-[16px] font-semibold text-[#1d1d1f]">{title}</p>
         {subtitle && (
-          <p
-            className="text-xs mt-1.5 font-medium"
-            style={{ color: "#93a83e" }}
-          >
-            {subtitle}
-          </p>
+          <p className="mt-1 text-[14px] font-medium text-[#6e6e73]">{subtitle}</p>
         )}
       </div>
     </div>

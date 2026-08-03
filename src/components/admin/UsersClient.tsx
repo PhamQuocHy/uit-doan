@@ -200,11 +200,11 @@ export default function UsersClient() {
         <div>
           <h2
             className="text-xl font-bold tracking-wide"
-            style={{ color: "#3b491e" }}
+            style={{ color: "#1d1d1f" }}
           >
             Danh sách quân nhân
           </h2>
-          <p className="text-sm font-medium mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm font-medium mt-1" style={{ color: "#007aff" }}>
             {total} tài khoản trong hệ thống
           </p>
         </div>
@@ -223,7 +223,7 @@ export default function UsersClient() {
         className="rounded-3xl p-4"
         style={{
           background: "#ffffff",
-          border: "1px solid #edf4dc",
+          border: "1px solid #e5e5ea",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -232,7 +232,7 @@ export default function UsersClient() {
             <Search
               size={18}
               className="absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color: "#93a83e" }}
+              style={{ color: "#86868b" }}
             />
             <input
               type="text"
@@ -241,18 +241,18 @@ export default function UsersClient() {
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-11 pr-4 py-2.5 rounded-xl text-sm transition-all outline-none"
               style={{
-                background: "#f8fae8",
-                border: "1px solid #dce7ba",
-                color: "#3b491e",
+                background: "#f5f5f7",
+                border: "1px solid #e5e5ea",
+                color: "#1d1d1f",
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = "#748c2c";
+                e.target.style.borderColor = "#007aff";
                 e.target.style.background = "#fff";
                 e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = "#dce7ba";
-                e.target.style.background = "#f8fae8";
+                e.target.style.borderColor = "#e5e5ea";
+                e.target.style.background = "#f5f5f7";
                 e.target.style.boxShadow = "none";
               }}
             />
@@ -265,18 +265,18 @@ export default function UsersClient() {
             }}
             className="px-3 py-2.5 rounded-xl text-sm transition-all outline-none"
             style={{
-              background: "#f8fae8",
-              border: "1px solid #dce7ba",
-              color: "#3b491e",
+              background: "#f5f5f7",
+              border: "1px solid #e5e5ea",
+              color: "#1d1d1f",
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = "#748c2c";
+              e.target.style.borderColor = "#007aff";
               e.target.style.background = "#fff";
               e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "#dce7ba";
-              e.target.style.background = "#f8fae8";
+              e.target.style.borderColor = "#e5e5ea";
+              e.target.style.background = "#f5f5f7";
               e.target.style.boxShadow = "none";
             }}
           >
@@ -294,18 +294,18 @@ export default function UsersClient() {
             }}
             className="px-3 py-2.5 rounded-xl text-sm transition-all outline-none"
             style={{
-              background: "#f8fae8",
-              border: "1px solid #dce7ba",
-              color: "#3b491e",
+              background: "#f5f5f7",
+              border: "1px solid #e5e5ea",
+              color: "#1d1d1f",
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = "#748c2c";
+              e.target.style.borderColor = "#007aff";
               e.target.style.background = "#fff";
               e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "#dce7ba";
-              e.target.style.background = "#f8fae8";
+              e.target.style.borderColor = "#e5e5ea";
+              e.target.style.background = "#f5f5f7";
               e.target.style.boxShadow = "none";
             }}
           >
@@ -323,7 +323,7 @@ export default function UsersClient() {
         className="rounded-3xl overflow-hidden"
         style={{
           background: "#ffffff",
-          border: "1px solid #edf4dc",
+          border: "1px solid #e5e5ea",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -332,43 +332,43 @@ export default function UsersClient() {
             <thead>
               <tr
                 style={{
-                  borderBottom: "1px solid #edf4dc",
-                  background: "#f8fae8",
+                  borderBottom: "1px solid #e5e5ea",
+                  background: "#f5f5f7",
                 }}
               >
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Quân nhân
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden lg:table-cell"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Email
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden md:table-cell"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Đơn vị
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Vai trò
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Trạng thái
                 </th>
                 <th
                   className="text-right px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Hành động
                 </th>
@@ -423,7 +423,7 @@ export default function UsersClient() {
                     className="transition-colors hover:bg-gray-50 bg-white"
                     style={{
                       borderBottom:
-                        idx < users.length - 1 ? "1px solid #edf4dc" : "none",
+                        idx < users.length - 1 ? "1px solid #e5e5ea" : "none",
                     }}
                   >
                     <td className="px-6 py-4">
@@ -431,13 +431,13 @@ export default function UsersClient() {
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                           style={{
-                            background: "#f8fae8",
-                            border: "1px solid #dce7ba",
+                            background: "#f5f5f7",
+                            border: "1px solid #e5e5ea",
                           }}
                         >
                           <span
                             className="text-sm font-bold"
-                            style={{ color: "#748c2c" }}
+                            style={{ color: "#007aff" }}
                           >
                             {user.name.charAt(0)}
                           </span>
@@ -445,13 +445,13 @@ export default function UsersClient() {
                         <div>
                           <p
                             className="font-semibold"
-                            style={{ color: "#3b491e" }}
+                            style={{ color: "#1d1d1f" }}
                           >
                             {user.name}
                           </p>
                           <p
                             className="text-xs font-medium"
-                            style={{ color: "#748c2c" }}
+                            style={{ color: "#007aff" }}
                           >
                             @{user.username}
                           </p>
@@ -460,13 +460,13 @@ export default function UsersClient() {
                     </td>
                     <td
                       className="px-6 py-4 hidden lg:table-cell font-medium"
-                      style={{ color: "#586c23" }}
+                      style={{ color: "#636366" }}
                     >
                       {user.email}
                     </td>
                     <td
                       className="px-6 py-4 hidden md:table-cell font-medium"
-                      style={{ color: "#586c23" }}
+                      style={{ color: "#636366" }}
                     >
                       {user.department || "—"}
                     </td>
@@ -493,7 +493,7 @@ export default function UsersClient() {
                         <button
                           onClick={() => openEdit(user)}
                           className="p-1.5 rounded-lg transition-colors hover:bg-gray-100"
-                          style={{ color: "#748c2c" }}
+                          style={{ color: "#007aff" }}
                           title="Chỉnh sửa"
                         >
                           <Edit2 size={16} />
@@ -516,7 +516,7 @@ export default function UsersClient() {
         </div>
         {/* Pagination */}
         {!loading && total > 0 && (
-          <div className="px-6 py-4" style={{ borderTop: "1px solid #edf4dc" }}>
+          <div className="px-6 py-4" style={{ borderTop: "1px solid #e5e5ea" }}>
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

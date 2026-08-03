@@ -70,14 +70,14 @@ export default function ReservePage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Quân nhân dự bị
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             Quản lý danh sách quân nhân dự bị động viên và sẵn sàng chiến đấu
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl transition-colors text-sm font-medium">
+        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
           <Plus size={16} />
           Thêm quân nhân dự bị
         </button>
@@ -89,7 +89,7 @@ export default function ReservePage() {
           {
             label: "Tổng quân nhân dự bị",
             value: mockReserves.length,
-            color: "#3b491e",
+            color: "#1d1d1f",
           },
           {
             label: "Đang hoạt động",
@@ -104,7 +104,7 @@ export default function ReservePage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm"
+            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
           >
             <div className="flex items-center gap-2 mb-2">
               <Shield size={18} style={{ color: s.color }} />
@@ -117,8 +117,8 @@ export default function ReservePage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-        <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -127,7 +127,7 @@ export default function ReservePage() {
             <input
               type="text"
               placeholder="Tìm theo họ tên, số CCCD..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -138,7 +138,7 @@ export default function ReservePage() {
               size={18}
             />
             <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white cursor-pointer"
+              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -151,7 +151,7 @@ export default function ReservePage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-6 py-4">Họ và Tên</th>
                 <th className="px-6 py-4">Đơn vị dự bị</th>
@@ -171,8 +171,8 @@ export default function ReservePage() {
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-[#f8fae8] flex items-center justify-center shrink-0">
-                        <User2 size={14} style={{ color: "#748c2c" }} />
+                      <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
+                        <User2 size={14} style={{ color: "#007aff" }} />
                       </div>
                       <div>
                         <div className="font-medium text-gray-900">
@@ -220,7 +220,7 @@ export default function ReservePage() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button className="p-1.5 text-gray-400 hover:text-[#748c2c] hover:bg-[#f8fae8] rounded-lg transition-colors">
+                      <button className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors">
                         <Eye size={15} />
                       </button>
                       <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">

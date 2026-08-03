@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Đơn vị không hợp lệ hoặc không thuộc quyền quản lý' }, { status: 400 });
   }
 
-  const levelMap: Record<string, string> = { bo: 'tinh', tinh: 'huyen', huyen: 'xa' };
+  const levelMap: Record<string, string> = { bo: 'tinh', tinh: 'xa' };
 
   const quota = db.quotas.create({
     year: year || new Date().getFullYear(),
-    fromLevel: session.hierarchyLevel as 'bo' | 'tinh' | 'huyen' | 'xa',
+    fromLevel: session.hierarchyLevel as 'bo' | 'tinh' | 'xa',
     fromUnit: session.unitCode,
-    toLevel: levelMap[session.hierarchyLevel] as 'bo' | 'tinh' | 'huyen' | 'xa',
+    toLevel: levelMap[session.hierarchyLevel] as 'bo' | 'tinh' | 'xa',
     toUnit,
     toUnitName,
     amount: Number(amount),

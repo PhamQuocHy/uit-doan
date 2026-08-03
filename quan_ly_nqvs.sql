@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `hierarchy_units` (
   `name` VARCHAR(255) NOT NULL,
   `level` ENUM('bo', 'tinh', 'huyen', 'xa', 'donvi') NOT NULL,
   `parent_code` VARCHAR(50) DEFAULT NULL,
+  `edit_pin` VARCHAR(20) DEFAULT NULL COMMENT 'Mã PIN sửa trạng thái NVQS (cấp tỉnh/huyện/xã)',
   `is_active` TINYINT(1) DEFAULT 1,
   PRIMARY KEY (`code`),
   INDEX `idx_parent` (`parent_code`),
@@ -120,7 +121,9 @@ CREATE TABLE IF NOT EXISTS `citizens` (
   `permanent_address` VARCHAR(255) NOT NULL,
   `current_address` VARCHAR(255),
   `phone` VARCHAR(20),
-  `military_status` ENUM('chuakham', 'dangkham', 'trungtuyen', 'tamhoan', 'miengoi', 'nhapngu') NOT NULL DEFAULT 'chuakham',
+  `military_status` ENUM('chuakham', 'dangkham', 'trungtuyen', 'truottuyen', 'tamhoan', 'miengoi', 'nhapngu') NOT NULL DEFAULT 'chuakham',
+  `military_status_reason` TEXT DEFAULT NULL COMMENT 'Lý do rớt / tạm hoãn NVQS',
+  `military_status_locked` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Khóa sửa trạng thái NVQS sau khi lưu',
   `health_grade` INT(1) DEFAULT NULL, -- Loại sức khỏe 1-6
   `is_blacklisted` TINYINT(1) DEFAULT 0, -- Đối tượng cần theo dõi đặc biệt
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,

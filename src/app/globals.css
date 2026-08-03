@@ -1,59 +1,112 @@
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap");
 @import "tailwindcss";
 
+/*
+  macOS-inspired dashboard — tối ưu cho người dùng ít quen công nghệ:
+  chữ lớn, khoảng cách rộng, mục tiêu chạm rõ.
+*/
 @theme {
-  --font-sans: 'Google Sans', system-ui, sans-serif;
+  --font-sans: "Google Sans", system-ui, sans-serif;
 
-  /* Lighter Military palette */
-  --color-olive-50:  #f8fae8;
-  --color-olive-100: #edf4dc;
-  --color-olive-200: #dce7ba;
-  --color-olive-300: #c5d38c;
-  --color-olive-400: #b0c061;
-  --color-olive-500: #93a83e;
-  --color-olive-600: #748c2c;   /* Primary Lighter Olive */
-  --color-olive-700: #586c23;
-  --color-olive-800: #465620;
-  --color-olive-900: #3b491e;
+  --color-olive-50: #f5f5f7;
+  --color-olive-100: #e8e8ed;
+  --color-olive-200: #d2d2d7;
+  --color-olive-300: #a1a1a6;
+  --color-olive-400: #8e8e93;
+  --color-olive-500: #0071e3;
+  --color-olive-600: #007aff;
+  --color-olive-700: #0066d6;
+  --color-olive-800: #1d1d1f;
+  --color-olive-900: #1d1d1f;
 
-  --color-khaki-100: #fcfaf0;
-  --color-khaki-200: #f6eed7;
-  --color-khaki-300: #eedeba;
-  --color-khaki-400: #e3ca91;
-  --color-khaki-500: #caab5d;
+  --color-khaki-100: #f5f5f7;
+  --color-khaki-200: #e8e8ed;
+  --color-khaki-300: #d2d2d7;
+  --color-khaki-400: #aeaeb2;
+  --color-khaki-500: #8e8e93;
 
-  --color-militarygray-50:  #f2f2f0;
-  --color-militarygray-100: #e0e0dc;
-  --color-militarygray-200: #c8c8c0;
-  --color-militarygray-800: #2a2a25;
-  --color-militarygray-900: #1a1a16;
+  --color-militarygray-50: #f5f5f7;
+  --color-militarygray-100: #e5e5ea;
+  --color-militarygray-200: #d1d1d6;
+  --color-militarygray-800: #3a3a3c;
+  --color-militarygray-900: #1d1d1f;
+
+  --color-macos-bg: #f5f5f7;
+  --color-macos-sidebar: rgba(246, 246, 246, 0.88);
+  --color-macos-card: #ffffff;
+  --color-macos-border: rgba(0, 0, 0, 0.06);
+  --color-macos-text: #1d1d1f;
+  --color-macos-secondary: #6e6e73;
+  --color-macos-blue: #007aff;
+  --color-macos-blue-soft: rgba(0, 122, 255, 0.12);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  font-size: 17px;
+}
+
 html,
 body {
-  font-family: 'Google Sans', system-ui, sans-serif;
-  background: #f8fae8; /* Very light olive background */
-  color: #3b491e; /* Darker olive for text */
+  font-family: "Google Sans", system-ui, sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9; /* slate-100 */
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1; /* slate-300 */
+  background: rgba(0, 0, 0, 0.16);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8; /* slate-400 */
+  background: rgba(0, 0, 0, 0.28);
+  background-clip: content-box;
+}
+
+.macos-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.macos-glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* Chữ dễ đọc trên bảng / form */
+.macos-table th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6e6e73;
+}
+
+.macos-table td {
+  font-size: 0.95rem;
 }

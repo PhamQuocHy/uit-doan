@@ -7,10 +7,7 @@ import Topbar from "@/components/admin/Topbar";
 
 const pageTitles: Record<string, string> = {
   "/admin": "Tổng quan",
-  "/admin/citizens": "Quản lý Công dân",
-  "/admin/education": "Học vấn & Việc làm",
-  "/admin/health": "Hồ sơ Sức khỏe",
-  "/admin/residence": "Biến động Cư trú",
+  "/admin/citizens": "Hồ sơ công dân",
   "/admin/ai-voice": "Nhận dạng CCCD (Voice)",
   "/admin/ai-face": "Nhận dạng Khuôn mặt",
   "/admin/recruitment": "Đợt khám tuyển",
@@ -63,8 +60,8 @@ export default function AdminLayoutClient({
         userHierarchyLevel={userHierarchyLevel}
       />
       <div
-        className="transition-all duration-300 flex flex-col min-h-screen"
-        style={{ marginLeft: collapsed ? 64 : 288 }}
+        className="flex min-h-screen flex-col transition-all duration-300"
+        style={{ marginLeft: collapsed ? 84 : 300 }}
       >
         <Topbar
           title={title}
@@ -73,7 +70,9 @@ export default function AdminLayoutClient({
           onLogout={handleLogout}
           onMenuToggle={() => setCollapsed(!collapsed)}
         />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="!rounded-tl-2xl flex-1 overflow-auto bg-white">
+          {children}
+        </main>
       </div>
     </div>
   );

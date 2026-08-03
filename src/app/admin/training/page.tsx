@@ -84,7 +84,7 @@ const statusConfig: Record<
 };
 
 const typeColors: Record<string, string> = {
-  "Huấn luyện định kỳ": "#748c2c",
+  "Huấn luyện định kỳ": "#007aff",
   "Diễn tập": "#7c3aed",
   "Huấn luyện nâng cao": "#2563eb",
   "Kiểm tra y tế": "#d97706",
@@ -103,15 +103,15 @@ export default function TrainingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Huấn luyện & Diễn tập
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             Quản lý lịch huấn luyện, diễn tập và kết quả của lực lượng dân quân,
             dự bị
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl transition-colors text-sm font-medium">
+        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
           <Plus size={16} />
           Tạo đợt huấn luyện
         </button>
@@ -120,7 +120,7 @@ export default function TrainingPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng đợt", value: mockTrainings.length, color: "#3b491e" },
+          { label: "Tổng đợt", value: mockTrainings.length, color: "#1d1d1f" },
           {
             label: "Sắp diễn ra",
             value: mockTrainings.filter((t) => t.status === "upcoming").length,
@@ -139,7 +139,7 @@ export default function TrainingPage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm"
+            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
           >
             <p className="text-sm text-gray-500">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
@@ -153,7 +153,7 @@ export default function TrainingPage() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setTypeFilter("")}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!typeFilter ? "bg-[#748c2c] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#748c2c]"}`}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!typeFilter ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
         >
           Tất cả
         </button>
@@ -161,7 +161,7 @@ export default function TrainingPage() {
           <button
             key={t}
             onClick={() => setTypeFilter(t)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${typeFilter === t ? "bg-[#748c2c] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#748c2c]"}`}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${typeFilter === t ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
           >
             {t}
           </button>
@@ -179,7 +179,7 @@ export default function TrainingPage() {
           return (
             <div
               key={training.id}
-              className="bg-white rounded-2xl border border-[#edf4dc] shadow-sm p-5 space-y-4"
+              className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-5 space-y-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -234,12 +234,12 @@ export default function TrainingPage() {
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${pct}%`, background: "#748c2c" }}
+                    style={{ width: `${pct}%`, background: "#007aff" }}
                   />
                 </div>
               </div>
 
-              <button className="w-full flex items-center justify-center gap-1.5 py-2 border border-[#edf4dc] text-[#748c2c] hover:bg-[#f8fae8] rounded-xl text-sm font-medium transition-colors">
+              <button className="w-full flex items-center justify-center gap-1.5 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors">
                 <Eye size={15} />
                 Xem chi tiết
               </button>

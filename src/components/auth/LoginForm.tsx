@@ -17,7 +17,6 @@ export default function LoginForm() {
   const [step, setStep] = useState<1 | 2>(1);
   const [hierarchyLevel, setHierarchyLevel] = useState("");
   const [tinhCode, setTinhCode] = useState("");
-  const [huyenCode, setHuyenCode] = useState("");
   const [xaCode, setXaCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
 
@@ -48,12 +47,8 @@ export default function LoginForm() {
       setError("Vui lòng chọn Tỉnh/Thành phố");
       return;
     }
-    if (hierarchyLevel === "huyen" && (!tinhCode || !huyenCode)) {
-      setError("Vui lòng chọn Tỉnh và Quận/Huyện");
-      return;
-    }
-    if (hierarchyLevel === "xa" && (!tinhCode || !huyenCode || !xaCode)) {
-      setError("Vui lòng chọn đầy đủ Tỉnh, Huyện, Xã");
+    if (hierarchyLevel === "xa" && (!tinhCode || !xaCode)) {
+      setError("Vui lòng chọn Tỉnh/Thành phố và Phường/Xã");
       return;
     }
     if (hierarchyLevel === "donvi" && !donviCode) {
@@ -69,8 +64,6 @@ export default function LoginForm() {
         return "bo";
       case "tinh":
         return tinhCode;
-      case "huyen":
-        return huyenCode;
       case "xa":
         return xaCode;
       case "donvi":
@@ -125,7 +118,7 @@ export default function LoginForm() {
 
       <div
         className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full opacity-30 pointer-events-none blur-3xl"
-        style={{ background: "#c5d38c" }}
+        style={{ background: "#d1d1d6" }}
       />
       <div
         className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full opacity-30 pointer-events-none blur-3xl"
@@ -137,7 +130,7 @@ export default function LoginForm() {
           className="rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
           style={{
             background: "#ffffff",
-            border: "1px solid #edf4dc",
+            border: "1px solid #e5e5ea",
           }}
         >
           {/* Header banner */}
@@ -149,7 +142,7 @@ export default function LoginForm() {
                   setError("");
                 }}
                 className="absolute left-6 top-8 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                style={{ color: "#748c2c" }}
+                style={{ color: "#007aff" }}
               >
                 <ArrowLeft size={20} />
               </button>
@@ -166,10 +159,10 @@ export default function LoginForm() {
                 priority
               />
             </div>
-            <h1 className="text-2xl font-normal" style={{ color: "#3b491e" }}>
+            <h1 className="text-2xl font-normal" style={{ color: "#1d1d1f" }}>
               Hệ thống Quản lý Nghĩa vụ Quân sự
             </h1>
-            <p className="mt-2 text-sm" style={{ color: "#748c2c" }}>
+            <p className="mt-2 text-sm" style={{ color: "#007aff" }}>
               {step === 1
                 ? "Vui lòng chọn cấp đơn vị để tiếp tục"
                 : "Đăng nhập tài khoản của bạn"}
@@ -211,23 +204,19 @@ export default function LoginForm() {
                     onChange={(val) => {
                       setHierarchyLevel(val);
                       setTinhCode("");
-                      setHuyenCode("");
                       setXaCode("");
                       setDonviCode("");
                     }}
                     options={[
                       { value: "bo", label: "Bộ Quốc phòng" },
                       { value: "tinh", label: "Cấp Tỉnh/Thành phố" },
-                      { value: "huyen", label: "Cấp Quận/Huyện" },
                       { value: "xa", label: "Cấp Phường/Xã" },
                       { value: "donvi", label: "Đơn vị nhận quân" },
                     ]}
                   />
                 </div>
 
-                {(hierarchyLevel === "tinh" ||
-                  hierarchyLevel === "huyen" ||
-                  hierarchyLevel === "xa") && (
+                {(hierarchyLevel === "tinh" || hierarchyLevel === "xa") && (
                   <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
                     <SearchableSelect
                       label="Tỉnh/Thành phố"
@@ -235,7 +224,6 @@ export default function LoginForm() {
                       value={tinhCode}
                       onChange={(val) => {
                         setTinhCode(val);
-                        setHuyenCode("");
                         setXaCode("");
                       }}
                       options={units
@@ -245,28 +233,7 @@ export default function LoginForm() {
                   </div>
                 )}
 
-                {(hierarchyLevel === "huyen" || hierarchyLevel === "xa") &&
-                  tinhCode && (
-                    <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
-                      <SearchableSelect
-                        label="Quận/Huyện"
-                        placeholder="-- Chọn Quận/Huyện --"
-                        value={huyenCode}
-                        onChange={(val) => {
-                          setHuyenCode(val);
-                          setXaCode("");
-                        }}
-                        options={units
-                          .filter(
-                            (u) =>
-                              u.level === "huyen" && u.parentCode === tinhCode,
-                          )
-                          .map((u) => ({ value: u.code, label: u.name }))}
-                      />
-                    </div>
-                  )}
-
-                {hierarchyLevel === "xa" && huyenCode && (
+                {hierarchyLevel === "xa" && tinhCode && (
                   <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
                     <SearchableSelect
                       label="Phường/Xã"
@@ -275,7 +242,7 @@ export default function LoginForm() {
                       onChange={(val) => setXaCode(val)}
                       options={units
                         .filter(
-                          (u) => u.level === "xa" && u.parentCode === huyenCode,
+                          (u) => u.level === "xa" && u.parentCode === tinhCode,
                         )
                         .map((u) => ({ value: u.code, label: u.name }))}
                     />
@@ -301,14 +268,14 @@ export default function LoginForm() {
                   type="submit"
                   className="w-full mt-4 py-3 rounded-xl font-normal text-lg transition-all text-white"
                   style={{
-                    background: "#748c2c",
+                    background: "#007aff",
                     boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#586c23")
+                    (e.currentTarget.style.background = "#636366")
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#748c2c")
+                    (e.currentTarget.style.background = "#007aff")
                   }
                 >
                   Tiếp tục
@@ -331,8 +298,8 @@ export default function LoginForm() {
                     autoComplete="username"
                     style={{
                       background: "#fff",
-                      border: "1.5px solid #edf4dc",
-                      color: "#3b491e",
+                      border: "1.5px solid #e5e5ea",
+                      color: "#1d1d1f",
                     }}
                   />
                   <label
@@ -340,13 +307,13 @@ export default function LoginForm() {
                     className="absolute left-10 px-1 text-gray-500 transition-all duration-200 cursor-text
                                top-0 -translate-y-1/2 text-[15px] font-normal bg-white
                                peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-[16px] peer-placeholder-shown:bg-transparent
-                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#748c2c]"
+                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#007aff]"
                   >
                     Tài khoản
                   </label>
                   <div
                     className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#93a83e", zIndex: 10 }}
+                    style={{ color: "#86868b", zIndex: 10 }}
                   >
                     <User size={18} />
                   </div>
@@ -364,8 +331,8 @@ export default function LoginForm() {
                     autoComplete="current-password"
                     style={{
                       background: "#fff",
-                      border: "1.5px solid #edf4dc",
-                      color: "#3b491e",
+                      border: "1.5px solid #e5e5ea",
+                      color: "#1d1d1f",
                     }}
                   />
                   <label
@@ -373,13 +340,13 @@ export default function LoginForm() {
                     className="absolute left-10 px-1 text-gray-500 transition-all duration-200 cursor-text
                                top-0 -translate-y-1/2 text-[15px] font-normal bg-white
                                peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-[16px] peer-placeholder-shown:bg-transparent
-                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#748c2c]"
+                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#007aff]"
                   >
                     Mật khẩu
                   </label>
                   <div
                     className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#93a83e", zIndex: 10 }}
+                    style={{ color: "#86868b", zIndex: 10 }}
                   >
                     <Lock size={18} />
                   </div>
@@ -387,7 +354,7 @@ export default function LoginForm() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors p-1.5 rounded-lg hover:bg-gray-50 z-10"
-                    style={{ color: "#93a83e" }}
+                    style={{ color: "#86868b" }}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -397,7 +364,7 @@ export default function LoginForm() {
                   <button
                     type="button"
                     className="text-[15px] hover:underline transition-all"
-                    style={{ color: "#748c2c" }}
+                    style={{ color: "#007aff" }}
                   >
                     Quên mật khẩu?
                   </button>
@@ -408,7 +375,7 @@ export default function LoginForm() {
                   disabled={loading}
                   className="w-full mt-1 py-3 rounded-xl font-normal text-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed text-white"
                   style={{
-                    background: loading ? "#93a83e" : "#748c2c",
+                    background: loading ? "#86868b" : "#007aff",
                     boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
                   }}
                 >
@@ -446,7 +413,7 @@ export default function LoginForm() {
 
         <p
           className="text-center text-[16px] mt-6 font-normal"
-          style={{ color: "#93a83e" }}
+          style={{ color: "#86868b" }}
         >
           Coppyright © 2026 Ban Chỉ huy Quân sự
         </p>

@@ -167,11 +167,11 @@ export default function DepartmentsClient() {
         <div>
           <h2
             className="text-xl font-bold tracking-wide"
-            style={{ color: "#3b491e" }}
+            style={{ color: "#1d1d1f" }}
           >
             Danh sách đơn vị
           </h2>
-          <p className="text-sm font-medium mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm font-medium mt-1" style={{ color: "#007aff" }}>
             {total} đơn vị trong hệ thống
           </p>
         </div>
@@ -190,7 +190,7 @@ export default function DepartmentsClient() {
         className="rounded-3xl p-4"
         style={{
           background: "#ffffff",
-          border: "1px solid #edf4dc",
+          border: "1px solid #e5e5ea",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -199,7 +199,7 @@ export default function DepartmentsClient() {
             <Search
               size={18}
               className="absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color: "#93a83e" }}
+              style={{ color: "#86868b" }}
             />
             <input
               type="text"
@@ -211,18 +211,18 @@ export default function DepartmentsClient() {
               }}
               className="w-full pl-11 pr-4 py-2.5 rounded-xl text-sm transition-all outline-none"
               style={{
-                background: "#f8fae8",
-                border: "1px solid #dce7ba",
-                color: "#3b491e",
+                background: "#f5f5f7",
+                border: "1px solid #e5e5ea",
+                color: "#1d1d1f",
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = "#748c2c";
+                e.target.style.borderColor = "#007aff";
                 e.target.style.background = "#fff";
                 e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = "#dce7ba";
-                e.target.style.background = "#f8fae8";
+                e.target.style.borderColor = "#e5e5ea";
+                e.target.style.background = "#f5f5f7";
                 e.target.style.boxShadow = "none";
               }}
             />
@@ -235,18 +235,18 @@ export default function DepartmentsClient() {
             }}
             className="px-3 py-2.5 rounded-xl text-sm transition-all outline-none"
             style={{
-              background: "#f8fae8",
-              border: "1px solid #dce7ba",
-              color: "#3b491e",
+              background: "#f5f5f7",
+              border: "1px solid #e5e5ea",
+              color: "#1d1d1f",
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = "#748c2c";
+              e.target.style.borderColor = "#007aff";
               e.target.style.background = "#fff";
               e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "#dce7ba";
-              e.target.style.background = "#f8fae8";
+              e.target.style.borderColor = "#e5e5ea";
+              e.target.style.background = "#f5f5f7";
               e.target.style.boxShadow = "none";
             }}
           >
@@ -264,7 +264,7 @@ export default function DepartmentsClient() {
         className="rounded-3xl overflow-hidden"
         style={{
           background: "#ffffff",
-          border: "1px solid #edf4dc",
+          border: "1px solid #e5e5ea",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -273,37 +273,37 @@ export default function DepartmentsClient() {
             <thead>
               <tr
                 style={{
-                  borderBottom: "1px solid #edf4dc",
-                  background: "#f8fae8",
+                  borderBottom: "1px solid #e5e5ea",
+                  background: "#f5f5f7",
                 }}
               >
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Đơn vị
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden md:table-cell"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Chỉ huy trưởng
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden sm:table-cell"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Quân số
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Trạng thái
                 </th>
                 <th
                   className="text-right px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#586c23" }}
+                  style={{ color: "#636366" }}
                 >
                   Hành động
                 </th>
@@ -356,7 +356,7 @@ export default function DepartmentsClient() {
                     style={{
                       borderBottom:
                         idx < departments.length - 1
-                          ? "1px solid #edf4dc"
+                          ? "1px solid #e5e5ea"
                           : "none",
                     }}
                   >
@@ -365,13 +365,13 @@ export default function DepartmentsClient() {
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                           style={{
-                            background: "#f8fae8",
-                            border: "1px solid #dce7ba",
+                            background: "#f5f5f7",
+                            border: "1px solid #e5e5ea",
                           }}
                         >
                           <span
                             className="text-xs font-black"
-                            style={{ color: "#748c2c" }}
+                            style={{ color: "#007aff" }}
                           >
                             {dept.code.slice(0, 3)}
                           </span>
@@ -379,13 +379,13 @@ export default function DepartmentsClient() {
                         <div>
                           <p
                             className="font-semibold"
-                            style={{ color: "#3b491e" }}
+                            style={{ color: "#1d1d1f" }}
                           >
                             {dept.name}
                           </p>
                           <p
                             className="text-xs font-medium"
-                            style={{ color: "#748c2c" }}
+                            style={{ color: "#007aff" }}
                           >
                             {dept.description || "Chưa có mô tả"}
                           </p>
@@ -394,16 +394,16 @@ export default function DepartmentsClient() {
                     </td>
                     <td
                       className="px-6 py-4 hidden md:table-cell font-medium"
-                      style={{ color: "#586c23" }}
+                      style={{ color: "#636366" }}
                     >
                       {dept.headName || "—"}
                     </td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <div
                         className="flex items-center gap-1.5 font-bold"
-                        style={{ color: "#748c2c" }}
+                        style={{ color: "#007aff" }}
                       >
-                        <Users size={14} style={{ color: "#93a83e" }} />
+                        <Users size={14} style={{ color: "#86868b" }} />
                         {dept.memberCount}
                       </div>
                     </td>
@@ -423,7 +423,7 @@ export default function DepartmentsClient() {
                         <button
                           onClick={() => openEdit(dept)}
                           className="p-1.5 rounded-lg transition-colors hover:bg-gray-100"
-                          style={{ color: "#748c2c" }}
+                          style={{ color: "#007aff" }}
                           title="Chỉnh sửa"
                         >
                           <Edit2 size={16} />
@@ -445,7 +445,7 @@ export default function DepartmentsClient() {
           </table>
         </div>
         {!loading && total > 0 && (
-          <div className="px-6 py-4" style={{ borderTop: "1px solid #edf4dc" }}>
+          <div className="px-6 py-4" style={{ borderTop: "1px solid #e5e5ea" }}>
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

@@ -147,10 +147,10 @@ export default function QuotaPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Giao chỉ tiêu tuyển quân
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             {session && (
               <span className="font-medium">
                 Đơn vị: {unitNames[session.unitCode] || session.unitCode} (
@@ -162,7 +162,7 @@ export default function QuotaPage() {
         {session?.hierarchyLevel !== "xa" && (
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#748c2c] hover:bg-[#586c23] text-white rounded-xl transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium"
           >
             <Plus size={16} /> Giao chỉ tiêu
           </button>
@@ -174,7 +174,7 @@ export default function QuotaPage() {
         className={`grid grid-cols-1 gap-4 ${isBo ? "sm:grid-cols-1 max-w-xs" : "sm:grid-cols-3"}`}
       >
         {!isBo && (
-          <div className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm">
+          <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">Chỉ tiêu được giao</p>
               <ArrowDown size={18} className="text-blue-500" />
@@ -186,7 +186,7 @@ export default function QuotaPage() {
           </div>
         )}
         {!isBo && (
-          <div className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm">
+          <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">Đã nhập ngũ</p>
               <CheckCircle2 size={18} className="text-green-600" />
@@ -206,12 +206,12 @@ export default function QuotaPage() {
             )}
           </div>
         )}
-        <div className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm">
+        <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">Đã giao xuống</p>
-            <ArrowUp size={18} style={{ color: "#748c2c" }} />
+            <ArrowUp size={18} style={{ color: "#007aff" }} />
           </div>
-          <p className="text-3xl font-bold mt-2" style={{ color: "#748c2c" }}>
+          <p className="text-3xl font-bold mt-2" style={{ color: "#007aff" }}>
             {totalAssigned}
           </p>
           <p className="text-xs text-gray-400 mt-1">Cho đơn vị cấp dưới</p>
@@ -227,8 +227,8 @@ export default function QuotaPage() {
               onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 view === v
-                  ? "bg-[#748c2c] text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:border-[#748c2c]"
+                  ? "bg-[#007aff] text-white"
+                  : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"
               }`}
             >
               {{ all: "Tất cả", received: "Được giao", issued: "Đã giao" }[v]}
@@ -238,10 +238,10 @@ export default function QuotaPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-6 py-4">Từ đơn vị</th>
                 <th className="px-6 py-4">Đến đơn vị</th>
@@ -300,7 +300,7 @@ export default function QuotaPage() {
                               className="h-full rounded-full transition-all"
                               style={{
                                 width: `${pct}%`,
-                                background: done ? "#059669" : "#748c2c",
+                                background: done ? "#059669" : "#007aff",
                               }}
                             />
                           </div>
@@ -360,7 +360,7 @@ export default function QuotaPage() {
             </div>
             <div className="p-5 space-y-4">
               {session && (
-                <div className="p-3 rounded-xl bg-[#f8fae8] border border-[#edf4dc] text-sm text-[#586c23]">
+                <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea] text-sm text-[#636366]">
                   Giao từ:{" "}
                   <span className="font-semibold">
                     {unitNames[session.unitCode] || session.unitCode}
@@ -373,7 +373,7 @@ export default function QuotaPage() {
                 </label>
                 {childUnits.length > 0 ? (
                   <select
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c]"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
                     value={form.toUnit}
                     onChange={(e) =>
                       setForm({ ...form, toUnit: e.target.value })
@@ -399,7 +399,7 @@ export default function QuotaPage() {
                 <input
                   type="number"
                   min="1"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c]"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
                   placeholder="Ví dụ: 120"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
@@ -410,7 +410,7 @@ export default function QuotaPage() {
                   Ghi chú
                 </label>
                 <textarea
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c] resize-none"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
                   rows={2}
                   placeholder="Ghi chú thêm (nếu có)..."
                   value={form.note}
@@ -428,7 +428,7 @@ export default function QuotaPage() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !form.toUnit || !form.amount}
-                className="flex-1 py-2.5 bg-[#748c2c] hover:bg-[#586c23] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Target size={15} />
                 {submitting ? "Đang lưu..." : "Xác nhận giao"}

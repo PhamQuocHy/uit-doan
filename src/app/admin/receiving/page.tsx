@@ -303,10 +303,10 @@ function BoView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
           Đơn vị nhận quân
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
           Theo dõi tình trạng nhận quân của tất cả đơn vị
         </p>
       </div>
@@ -314,14 +314,14 @@ function BoView() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng đơn vị", value: boMockUnits.length, color: "#3b491e" },
+          { label: "Tổng đơn vị", value: boMockUnits.length, color: "#1d1d1f" },
           { label: "Đã nhận đủ quân", value: confirmedCount, color: "#059669" },
           { label: "Chờ xác nhận", value: pendingCount, color: "#d97706" },
           { label: "Cần bổ sung", value: supplementCount, color: "#dc2626" },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm"
+            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
           >
             <p className="text-xs text-gray-500">{s.label}</p>
             <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>
@@ -331,12 +331,12 @@ function BoView() {
         ))}
       </div>
       {/* Progress */}
-      <div className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm">
+      <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700">
             Tổng tiến độ nhận quân
           </p>
-          <span className="text-sm font-bold" style={{ color: "#748c2c" }}>
+          <span className="text-sm font-bold" style={{ color: "#007aff" }}>
             {totalReceived}/{totalQuota} (
             {Math.round((totalReceived / totalQuota) * 100)}%)
           </span>
@@ -346,15 +346,15 @@ function BoView() {
             className="h-full rounded-full"
             style={{
               width: `${Math.round((totalReceived / totalQuota) * 100)}%`,
-              background: "#748c2c",
+              background: "#007aff",
             }}
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-        <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -363,13 +363,13 @@ function BoView() {
             <input
               type="text"
               placeholder="Tìm đơn vị..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c]"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c] bg-white"
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] bg-white"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -381,7 +381,7 @@ function BoView() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-6 py-4">Đơn vị nhận quân</th>
                 <th className="px-6 py-4 text-center">Chỉ tiêu</th>
@@ -423,8 +423,8 @@ function BoView() {
                               </span>
                             </button>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-[#f8fae8] flex items-center justify-center">
-                              <Shield size={13} style={{ color: "#748c2c" }} />
+                            <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center">
+                              <Shield size={13} style={{ color: "#007aff" }} />
                             </div>
                           )}
                           {notePopover === u.id && (
@@ -554,7 +554,7 @@ function BoView() {
                             className="h-full rounded-full"
                             style={{
                               width: `${Math.min(pct, 100)}%`,
-                              background: pct >= 100 ? "#059669" : "#748c2c",
+                              background: pct >= 100 ? "#059669" : "#007aff",
                             }}
                           />
                         </div>
@@ -655,10 +655,10 @@ function DonViView() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#3b491e" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
             Đơn vị nhận quân
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#748c2c" }}>
+          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             Xác nhận danh sách nhận quân và báo cáo tình trạng sức khỏe
           </p>
         </div>
@@ -678,7 +678,7 @@ function DonViView() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng quân nhân", value: soldiers.length, color: "#3b491e" },
+          { label: "Tổng quân nhân", value: soldiers.length, color: "#1d1d1f" },
           { label: "Đã trình diện", value: arrivedCount, color: "#059669" },
           { label: "Báo cáo đủ SK", value: confirmedOk, color: "#2563eb" },
           {
@@ -689,7 +689,7 @@ function DonViView() {
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm"
+            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
           >
             <p className="text-xs text-gray-500">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
@@ -699,10 +699,10 @@ function DonViView() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl p-5 border border-[#edf4dc] shadow-sm">
+      <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700">Tiến độ nhận quân</p>
-          <span className="text-sm font-bold" style={{ color: "#748c2c" }}>
+          <span className="text-sm font-bold" style={{ color: "#007aff" }}>
             {arrivedCount}/{soldiers.length} (
             {Math.round((arrivedCount / soldiers.length) * 100)}%)
           </span>
@@ -712,14 +712,14 @@ function DonViView() {
             className="h-full rounded-full"
             style={{
               width: `${Math.round((arrivedCount / soldiers.length) * 100)}%`,
-              background: "#748c2c",
+              background: "#007aff",
             }}
           />
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#edf4dc] overflow-hidden">
-        <div className="p-4 border-b border-[#edf4dc] flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -728,7 +728,7 @@ function DonViView() {
             <input
               type="text"
               placeholder="Tìm họ tên, CCCD..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#748c2c]"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -739,7 +739,7 @@ function DonViView() {
               size={15}
             />
             <select
-              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#748c2c] bg-white"
+              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white"
               value={arrivalFilter}
               onChange={(e) => setArrivalFilter(e.target.value)}
             >
@@ -752,7 +752,7 @@ function DonViView() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f8fae8]/50 text-[#586c23] font-medium border-b border-[#edf4dc]">
+            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
               <tr>
                 <th className="px-5 py-3">Quân nhân</th>
                 <th className="px-5 py-3">Quê quán</th>
@@ -772,8 +772,8 @@ function DonViView() {
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-[#f8fae8] flex items-center justify-center shrink-0">
-                          <User2 size={12} style={{ color: "#748c2c" }} />
+                        <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
+                          <User2 size={12} style={{ color: "#007aff" }} />
                         </div>
                         <div>
                           <div className="font-medium text-gray-900 text-sm">
@@ -842,7 +842,7 @@ function DonViView() {
                             setReportType("health_issue");
                             setReportNote("");
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-[#748c2c] hover:bg-[#586c23] rounded-lg transition-colors flex items-center gap-1 mx-auto"
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-[#007aff] hover:bg-[#636366] rounded-lg transition-colors flex items-center gap-1 mx-auto"
                         >
                           <Send size={12} /> Báo cáo
                         </button>
@@ -886,8 +886,8 @@ function DonViView() {
             </div>
             <div className="p-5 space-y-4">
               <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-[#f8fae8] flex items-center justify-center">
-                  <Shield size={13} style={{ color: "#748c2c" }} />
+                <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center">
+                  <Shield size={13} style={{ color: "#007aff" }} />
                 </div>
                 <div>
                   <p className="font-medium text-gray-900 text-sm">
@@ -953,7 +953,7 @@ function DonViView() {
                     Mô tả *
                   </label>
                   <textarea
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#748c2c] resize-none"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
                     rows={3}
                     placeholder="Mô tả tình trạng sức khỏe..."
                     value={reportNote}
@@ -972,7 +972,7 @@ function DonViView() {
               <button
                 onClick={() => handleReport(reportModal)}
                 disabled={reportType === "health_issue" && !reportNote}
-                className="flex-1 py-2.5 bg-[#748c2c] hover:bg-[#586c23] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Send size={14} /> Gửi báo cáo
               </button>

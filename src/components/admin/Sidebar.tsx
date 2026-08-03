@@ -3,30 +3,25 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import {
-  LayoutDashboard,
-  Users,
-  ChevronUp,
-  ChevronDown,
-  GraduationCap,
-  HeartPulse,
-  CalendarClock,
-  BarChart3,
-  Mic,
-  UserCog,
-  ShieldCheck,
-  History,
-  MapPin,
-  ScanFace,
-  Target,
-  CheckSquare,
-  Shield,
-  Dumbbell,
-  FileText,
-  Archive,
-  Settings,
-  ClipboardList,
-} from "lucide-react";
+  FcHome,
+  FcConferenceCall,
+  FcVoicePresentation,
+  FcCameraIdentification,
+  FcCalendar,
+  FcBullish,
+  FcApproval,
+  FcSportsMode,
+  FcTodoList,
+  FcDocument,
+  FcFilingCabinet,
+  FcBarChart,
+  FcManager,
+  FcKey,
+  FcClock,
+  FcSettings,
+} from "react-icons/fc";
 import { clsx } from "clsx";
 
 interface NavItem {
@@ -40,140 +35,63 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const ICON = 22;
+
 const navGroups: NavGroup[] = [
   {
-    name: "Hồ sơ Thanh niên",
+    name: "Hồ sơ thanh niên",
     items: [
-      {
-        href: "/admin",
-        label: "Tổng quan",
-        icon: <LayoutDashboard size={18} />,
-      },
-      {
-        href: "/admin/citizens",
-        label: "Quản lý Công dân",
-        icon: <Users size={18} />,
-      },
-      {
-        href: "/admin/education",
-        label: "Học vấn & Việc làm",
-        icon: <GraduationCap size={18} />,
-      },
-      {
-        href: "/admin/health",
-        label: "Hồ sơ Sức khỏe",
-        icon: <HeartPulse size={18} />,
-      },
-      {
-        href: "/admin/residence",
-        label: "Biến động Cư trú",
-        icon: <MapPin size={18} />,
-      },
+      { href: "/admin", label: "Tổng quan", icon: <FcHome size={ICON} /> },
+      { href: "/admin/citizens", label: "Hồ sơ công dân", icon: <FcConferenceCall size={ICON} /> },
     ],
   },
   {
     name: "Nhận dạng AI",
     items: [
-      {
-        href: "/admin/ai-voice",
-        label: "Nhận dạng CCCD (Voice)",
-        icon: <Mic size={18} />,
-      },
-      {
-        href: "/admin/ai-face",
-        label: "Nhận dạng Khuôn mặt",
-        icon: <ScanFace size={18} />,
-      },
+      { href: "/admin/ai-voice", label: "Đọc CCCD bằng giọng nói", icon: <FcVoicePresentation size={ICON} /> },
+      { href: "/admin/ai-face", label: "Nhận diện khuôn mặt", icon: <FcCameraIdentification size={ICON} /> },
     ],
   },
   {
-    name: "Công tác Tuyển quân",
+    name: "Tuyển quân",
     items: [
-      {
-        href: "/admin/recruitment",
-        label: "Đợt khám tuyển",
-        icon: <CalendarClock size={18} />,
-      },
-      {
-        href: "/admin/quota",
-        label: "Giao chỉ tiêu",
-        icon: <Target size={18} />,
-      },
-      {
-        href: "/admin/approval",
-        label: "Xét duyệt danh sách",
-        icon: <CheckSquare size={18} />,
-      },
+      { href: "/admin/recruitment", label: "Đợt khám tuyển", icon: <FcCalendar size={ICON} /> },
+      { href: "/admin/quota", label: "Giao chỉ tiêu", icon: <FcBullish size={ICON} /> },
+      { href: "/admin/approval", label: "Xét duyệt danh sách", icon: <FcApproval size={ICON} /> },
     ],
   },
   {
-    name: "Quản lý Huấn luyện",
+    name: "Huấn luyện",
     items: [
-      {
-        href: "/admin/training",
-        label: "Huấn luyện & Diễn tập",
-        icon: <Dumbbell size={18} />,
-      },
+      { href: "/admin/training", label: "Huấn luyện & diễn tập", icon: <FcSportsMode size={ICON} /> },
     ],
   },
   {
     name: "Đơn vị nhận quân",
     items: [
-      {
-        href: "/admin/receiving",
-        label: "Nhận danh sách quân",
-        icon: <ClipboardList size={18} />,
-      },
+      { href: "/admin/receiving", label: "Nhận danh sách quân", icon: <FcTodoList size={ICON} /> },
     ],
   },
   {
-    name: "Hệ thống Văn bản",
+    name: "Văn bản",
     items: [
-      {
-        href: "/admin/documents",
-        label: "Công văn đến/đi",
-        icon: <FileText size={18} />,
-      },
-      {
-        href: "/admin/document-archive",
-        label: "Kho văn bản",
-        icon: <Archive size={18} />,
-      },
+      { href: "/admin/documents", label: "Công văn đến / đi", icon: <FcDocument size={ICON} /> },
+      { href: "/admin/document-archive", label: "Kho văn bản", icon: <FcFilingCabinet size={ICON} /> },
     ],
   },
   {
-    name: "Báo cáo & Thống kê",
+    name: "Báo cáo",
     items: [
-      {
-        href: "/admin/reports",
-        label: "Báo cáo & Thống kê",
-        icon: <BarChart3 size={18} />,
-      },
+      { href: "/admin/reports", label: "Báo cáo & thống kê", icon: <FcBarChart size={ICON} /> },
     ],
   },
   {
-    name: "Quản trị hệ thống",
+    name: "Quản trị",
     items: [
-      {
-        href: "/admin/users",
-        label: "Quản lý Thành viên",
-        icon: <UserCog size={18} />,
-      },
-      {
-        href: "/admin/roles",
-        label: "Vai trò & Quyền hạn",
-        icon: <ShieldCheck size={18} />,
-      },
-      {
-        href: "/admin/logs",
-        label: "Nhật ký hệ thống",
-        icon: <History size={18} />,
-      },
-      {
-        href: "/admin/settings",
-        label: "Cài đặt hệ thống",
-        icon: <Settings size={18} />,
-      },
+      { href: "/admin/users", label: "Thành viên", icon: <FcManager size={ICON} /> },
+      { href: "/admin/roles", label: "Vai trò & quyền", icon: <FcKey size={ICON} /> },
+      { href: "/admin/logs", label: "Nhật ký hệ thống", icon: <FcClock size={ICON} /> },
+      { href: "/admin/settings", label: "Cài đặt", icon: <FcSettings size={ICON} /> },
     ],
   },
 ];
@@ -189,23 +107,11 @@ interface SidebarProps {
 
 export default function Sidebar({
   collapsed,
-  onToggle,
-  onLogout,
-  userName,
-  userRole,
   userHierarchyLevel,
 }: SidebarProps) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
-    {
-      "Hồ sơ Thanh niên": true,
-      "Nhận dạng AI": true,
-      "Công tác Tuyển quân": true,
-      "Quản lý Dân quân": true,
-      "Hệ thống Văn bản": true,
-      "Báo cáo & Thống kê": true,
-      "Quản trị hệ thống": true,
-    },
+    Object.fromEntries(navGroups.map((g) => [g.name, false])),
   );
 
   const toggleGroup = (groupName: string) => {
@@ -218,53 +124,45 @@ export default function Sidebar({
   return (
     <aside
       className={clsx(
-        "fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300",
-        collapsed ? "w-16" : "w-72",
+        "fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-300",
+        collapsed ? "w-[84px]" : "w-[300px]",
       )}
-      style={{
-        background: "#ffffff",
-        borderRight: "1px solid #edf4dc",
-        boxShadow: "4px 0 20px rgba(0,0,0,0.02)",
-      }}
+      style={{ background: "#f8fafb" }}
     >
-      {/* Logo */}
-      <div
-        className="flex items-center h-16 px-4 shrink-0"
-        style={{ borderBottom: "1px solid #edf4dc" }}
-      >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="shrink-0 w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden">
-            <img
-              src="/images/logo_qd.png"
-              alt="Logo"
-              style={{ width: "50px", height: "50px", objectFit: "contain" }}
-            />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p
-                className="text-xs uppercase font-medium leading-[1.6]"
-                style={{ color: "#93a83e", fontSize: "14.3px" }}
-              >
-                Hệ thống quản lý <br></br>Dữ liệu Nghĩa vụ Quân Sự
-              </p>
-            </div>
-          )}
+      <div className="flex h-[64px] shrink-0 items-center gap-3 px-4">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[12px]"
+          style={{ background: "#e8f2ff" }}
+        >
+          <img
+            src="/images/logo_qd.png"
+            alt="Logo"
+            className="h-6 w-6 object-contain"
+          />
         </div>
+        {!collapsed && (
+          <div className="min-w-0">
+            <p className="truncate text-[17px] font-bold tracking-tight text-[#1f2937]">
+              YMSA
+            </p>
+            <p className="truncate text-[12px] font-medium text-[#6b7280]">
+              Nghĩa vụ quân sự
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-2.5 space-y-4 overflow-y-auto custom-scrollbar">
+      <nav className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-3 pb-5 pt-2">
         {navGroups
           .filter((group) => {
             if (userHierarchyLevel === "donvi") {
               return (
                 group.name === "Đơn vị nhận quân" ||
-                group.name === "Hệ thống Văn bản" ||
-                group.name === "Báo cáo & Thống kê"
+                group.name === "Văn bản" ||
+                group.name === "Báo cáo"
               );
             }
-            if (["tinh", "huyen", "xa"].includes(userHierarchyLevel)) {
+            if (["tinh", "xa"].includes(userHierarchyLevel)) {
               return group.name !== "Đơn vị nhận quân";
             }
             return true;
@@ -272,85 +170,66 @@ export default function Sidebar({
           .map((group) => {
             if (
               userHierarchyLevel === "donvi" &&
-              group.name === "Hệ thống Văn bản"
+              group.name === "Văn bản"
             ) {
               return {
                 ...group,
                 items: group.items.filter(
-                  (item) => item.label === "Công văn đến/đi",
+                  (item) => item.label === "Công văn đến / đi",
                 ),
               };
             }
             return group;
           })
-          .map((group, groupIndex) => {
+          .map((group) => {
             const isExpanded = expandedGroups[group.name];
 
             return (
-              <div key={groupIndex} className="space-y-1">
+              <div key={group.name} className="space-y-1">
                 {!collapsed && (
-                  <div
-                    className="px-3 pb-1 pt-2 flex items-center justify-between cursor-pointer group"
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-[10px] px-3 py-1.5"
                     onClick={() => toggleGroup(group.name)}
                   >
-                    <span className="text-lg font-base text-gray-800 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[15px] font-medium text-[#9ca3af]">
                       {group.name}
                     </span>
-                    <span className="text-gray-900 opacity-80 group-hover:opacity-100 transition-opacity">
-                      {isExpanded ? (
-                        <ChevronUp size={14} />
-                      ) : (
-                        <ChevronDown size={14} />
-                      )}
+                    <span className="text-[#c0c4cc]">
+                      {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </span>
-                  </div>
+                  </button>
                 )}
 
                 <div
                   className={clsx(
-                    "overflow-hidden transition-all duration-300 space-y-1",
+                    "space-y-0.5 overflow-hidden transition-all duration-300",
                     isExpanded || collapsed
-                      ? "max-h-[500px] opacity-100"
+                      ? "max-h-[600px] opacity-100"
                       : "max-h-0 opacity-0",
                   )}
                 >
                   {group.items.map((item) => {
                     const isActive =
                       pathname === item.href ||
-                      (item.href !== "/admin" &&
-                        pathname.startsWith(item.href));
+                      (item.href !== "/admin" && pathname.startsWith(item.href));
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={clsx(
-                          "flex items-center gap-3 px-3 py-2.5 rounded-xl text-[16px] font-base transition-all duration-150",
-                        )}
-                        style={
-                          isActive
-                            ? {
-                                background: "#f8fae8",
-                                color: "#707781",
-                                border: "1px solid #edf4dc",
-                              }
-                            : {
-                                color: "#707781",
-                                border: "1px solid transparent",
-                              }
-                        }
                         title={collapsed ? item.label : undefined}
-                      >
-                        <span className="shrink-0">{item.icon}</span>
-                        {!collapsed && (
-                          <span className="truncate tracking-wide">
-                            {item.label}
-                          </span>
+                        className={clsx(
+                          "flex min-h-[44px] items-center gap-3 rounded-[12px] px-3.5 text-[14px] font-medium transition-colors duration-150",
+                          isActive
+                            ? "bg-[#e8f2ff] text-[#007aff]"
+                            : "text-[#374151] hover:bg-white/80",
                         )}
-                        {isActive && !collapsed && (
-                          <span
-                            className="ml-auto w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ background: "#748c2c" }}
-                          />
+                      >
+                        <span className="shrink-0 text-[22px] leading-none">
+                          {item.icon}
+                        </span>
+                        {!collapsed && (
+                          <span className="truncate leading-snug">{item.label}</span>
                         )}
                       </Link>
                     );
@@ -361,20 +240,17 @@ export default function Sidebar({
           })}
       </nav>
 
-      {/* User + Logout (Removed) */}
-      <div className="px-5 pb-5 mt-auto">
-        {/* Footer Info */}
-        {!collapsed && (
-          <div className="mt-6 pt-4 border-t border-[#edf4dc] px-2">
-            <p className="text-[13px] font-medium text-[#707781]">
-              Version 1.0.0
-            </p>
-            <p className="text-[13px] font-medium text-[#707781] mt-0.5">
-              © 2026 Ban Chỉ huy Quân sự
-            </p>
+      {!collapsed && (
+        <div className="px-4 pb-5">
+          <div
+            className="rounded-[16px] px-4 py-3"
+            style={{ background: "#ffffff" }}
+          >
+            <p className="text-[13px] font-semibold text-[#6b7280]">YMSA v1.0.0</p>
+            <p className="mt-0.5 text-[12px] text-[#9ca3af]">© 2026 Ban Chỉ huy Quân sự</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

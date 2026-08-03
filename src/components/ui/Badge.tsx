@@ -17,53 +17,45 @@ export default function Badge({
 }: BadgeProps) {
   const styles = {
     success: {
-      background: "#f8fae8",
-      color: "#586c23",
-      borderColor: "#c5d38c",
-      dot: "#748c2c",
+      background: "rgba(52,199,89,0.12)",
+      color: "#248a3d",
+      dot: "#34c759",
     },
     danger: {
-      background: "#fef2f2",
-      color: "#dc2626",
-      borderColor: "#fecaca",
-      dot: "#ef4444",
+      background: "rgba(255,59,48,0.1)",
+      color: "#ff3b30",
+      dot: "#ff3b30",
     },
     warning: {
-      background: "rgba(227,202,145,0.15)",
-      color: "#a88a3e",
-      borderColor: "rgba(227,202,145,0.3)",
-      dot: "#c4a862",
+      background: "rgba(255,149,0,0.12)",
+      color: "#c93400",
+      dot: "#ff9500",
     },
     info: {
-      background: "rgba(53,90,30,0.08)",
-      color: "#465620",
-      borderColor: "rgba(53,90,30,0.15)",
-      dot: "#465620",
+      background: "rgba(0,122,255,0.1)",
+      color: "#007aff",
+      dot: "#007aff",
     },
     default: {
-      background: "#ffffff",
-      color: "#748c2c",
-      borderColor: "#edf4dc",
-      dot: "#93a83e",
+      background: "#f5f5f7",
+      color: "#636366",
+      dot: "#8e8e93",
     },
   };
   const s = styles[variant];
-
   const sizeClass = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
+
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1.5 font-semibold rounded-full ring-1 ring-inset uppercase tracking-wider",
+        "inline-flex items-center gap-1.5 rounded-[8px] font-semibold tracking-wide",
         sizeClass,
       )}
-      style={{
-        background: s.background,
-        color: s.color,
-      }}
+      style={{ background: s.background, color: s.color }}
     >
       {dot && (
         <span
-          className="h-1.5 w-1.5 rounded-full shrink-0"
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ background: s.dot }}
         />
       )}
