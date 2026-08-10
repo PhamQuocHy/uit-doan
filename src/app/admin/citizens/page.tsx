@@ -226,7 +226,7 @@ export default function CitizensPage() {
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="flex flex-col gap-4 px-7 pt-7 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-[22px] font-bold tracking-tight text-[#1d1d1f]">
             Quản lý hồ sơ công dân
@@ -257,7 +257,7 @@ export default function CitizensPage() {
         </button>
       </div>
 
-      <div className="px-7">
+      <div>
         <div className="rounded-[18px] border border-black/[0.06] bg-white p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             {(sessionLevel === "bo" || sessionLevel === "tinh") && (
@@ -332,7 +332,7 @@ export default function CitizensPage() {
         </div>
       </div>
 
-      <div className="macos-card mx-7 overflow-hidden">
+      <div className="macos-card overflow-hidden">
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-left">
             <thead className="bg-[#f5f5f7] text-[13px] font-bold uppercase tracking-wide text-[#6e6e73]">

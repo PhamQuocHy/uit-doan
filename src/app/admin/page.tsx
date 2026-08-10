@@ -73,10 +73,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       {/* Cấp hiện tại */}
-      <section
-        className="rounded-[22px] bg-[#f8fafb] px-5 py-4.5 sm:px-6 sm:py-5"
-       
-      >
+      <section className="rounded-[22px] bg-[#f8fafb] px-5 py-4.5 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[16px] bg-[#f8fafb]">

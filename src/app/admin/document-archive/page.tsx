@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   Search,
@@ -11,94 +11,109 @@ import {
   BookOpen,
   ClipboardList,
   FileCheck,
+  ExternalLink,
+  X,
+  Loader2,
 } from "lucide-react";
 
-const mockArchive = [
-  {
-    id: "1",
-    code: "TT-2025/015",
-    title: "Thông tư 15/2025/TT-BQP hướng dẫn đăng ký NVQS",
-    category: "Thông tư",
-    issuer: "Bộ Quốc phòng",
-    year: 2025,
-    tags: ["tuyển quân", "đăng ký"],
-  },
-  {
-    id: "2",
-    code: "ND-2024/132",
-    title: "Nghị định 132/2024/NĐ-CP về Luật NVQS sửa đổi",
-    category: "Nghị định",
-    issuer: "Chính phủ",
-    year: 2024,
-    tags: ["pháp lý", "nvqs"],
-  },
-  {
-    id: "3",
-    code: "QD-2025/08",
-    title: "Quyết định về chỉ tiêu tuyển quân năm 2026 toàn quốc",
-    category: "Quyết định",
-    issuer: "Bộ Quốc phòng",
-    year: 2025,
-    tags: ["chỉ tiêu", "2026"],
-  },
-  {
-    id: "4",
-    code: "HD-2026/01",
-    title: "Hướng dẫn lập hồ sơ khám sức khỏe nghĩa vụ quân sự",
-    category: "Hướng dẫn",
-    issuer: "Cục Quân y",
-    year: 2026,
-    tags: ["sức khỏe", "khám tuyển"],
-  },
-  {
-    id: "5",
-    code: "BC-2025/TQ",
-    title: "Báo cáo tổng kết công tác NVQS năm 2025",
-    category: "Báo cáo",
-    issuer: "Ban CHQS Tỉnh",
-    year: 2025,
-    tags: ["tổng kết", "2025"],
-  },
-  {
-    id: "6",
-    code: "QC-2024/05",
-    title: "Quy chế quản lý hồ sơ quân nhân dự bị",
-    category: "Quy chế",
-    issuer: "Bộ Quốc phòng",
-    year: 2024,
-    tags: ["dự bị", "hồ sơ"],
-  },
-];
+type ArchiveDoc = {
+  id: string;
+  code: string;
+  title: string;
+  issuer: string;
+  issued_date: string;
+  effective_date: string;
+  category: string;
+  year: number;
+  summary: string;
+  source_url: string;
+  public_url: string;
+  tags: string[];
+  content?: string;
+};
 
 const categoryConfig: Record<
   string,
   { color: string; bg: string; icon: React.ElementType }
 > = {
+  Luật: { color: "#dc2626", bg: "#fee2e2", icon: FileCheck },
   "Thông tư": { color: "#7c3aed", bg: "#ede9fe", icon: FileText },
-  "Nghị định": { color: "#dc2626", bg: "#fee2e2", icon: FileCheck },
+  "Văn bản hợp nhất": { color: "#059669", bg: "#d1fae5", icon: BookOpen },
+  "Nghị định": { color: "#d97706", bg: "#fef3c7", icon: ClipboardList },
   "Quyết định": { color: "#2563eb", bg: "#dbeafe", icon: ClipboardList },
-  "Hướng dẫn": { color: "#059669", bg: "#d1fae5", icon: BookOpen },
-  "Báo cáo": { color: "#d97706", bg: "#fef3c7", icon: FileText },
-  "Quy chế": { color: "#007aff", bg: "#f5f5f7", icon: Archive },
+  Khác: { color: "#007aff", bg: "#f5f5f7", icon: Archive },
 };
 
 export default function DocumentArchivePage() {
+  const [docs, setDocs] = useState<ArchiveDoc[]>([]);
+  const [source, setSource] = useState<"mysql" | "disk" | "">("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const [viewDoc, setViewDoc] = useState<ArchiveDoc | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
-  const filtered = mockArchive.filter((d) => {
-    const matchSearch =
-      d.title.toLowerCase().includes(search.toLowerCase()) ||
-      d.code.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = !categoryFilter || d.category === categoryFilter;
-    const matchYear = !yearFilter || d.year.toString() === yearFilter;
-    return matchSearch && matchCategory && matchYear;
-  });
+  const loadList = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/document-archive");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Không tải được kho văn bản");
+      setDocs(json.data || []);
+      setSource(json.source || "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const categories = Array.from(new Set(mockArchive.map((d) => d.category)));
-  const years = Array.from(new Set(mockArchive.map((d) => d.year))).sort(
-    (a, b) => b - a,
+  useEffect(() => {
+    void loadList();
+  }, [loadList]);
+
+  const openView = async (id: string) => {
+    setViewLoading(true);
+    setViewDoc(null);
+    try {
+      const res = await fetch(`/api/admin/document-archive/${encodeURIComponent(id)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Không mở được văn bản");
+      setViewDoc(json.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lỗi xem văn bản");
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    return docs.filter((d) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        d.title.toLowerCase().includes(q) ||
+        d.code.toLowerCase().includes(q) ||
+        d.summary?.toLowerCase().includes(q);
+      const matchCategory = !categoryFilter || d.category === categoryFilter;
+      const matchYear = !yearFilter || d.year.toString() === yearFilter;
+      return matchSearch && matchCategory && matchYear;
+    });
+  }, [docs, search, categoryFilter, yearFilter]);
+
+  const categories = useMemo(
+    () => Array.from(new Set(docs.map((d) => d.category))),
+    [docs],
+  );
+  const years = useMemo(
+    () =>
+      Array.from(new Set(docs.map((d) => d.year).filter(Boolean))).sort(
+        (a, b) => b - a,
+      ),
+    [docs],
   );
 
   return (
@@ -108,17 +123,28 @@ export default function DocumentArchivePage() {
           Kho văn bản
         </h1>
         <p className="text-sm mt-1" style={{ color: "#007aff" }}>
-          Lưu trữ và tra cứu thông tư, nghị định, quyết định về nghĩa vụ quân sự
+          Luật, thông tư NVQS mới nhất — lưu file + DB, phục vụ tra cứu và AI
         </p>
+        {source && (
+          <p className="text-xs mt-1 text-gray-400">
+            Nguồn: {source === "mysql" ? "MySQL" : "File trong source"} ·{" "}
+            {docs.length} văn bản
+          </p>
+        )}
       </div>
 
-      {/* Category stat chips */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setCategoryFilter("")}
           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!categoryFilter ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
         >
-          Tất cả ({mockArchive.length})
+          Tất cả ({docs.length})
         </button>
         {categories.map((cat) => {
           const cfg = categoryConfig[cat] || {
@@ -126,7 +152,7 @@ export default function DocumentArchivePage() {
             bg: "#f3f4f6",
             icon: FileText,
           };
-          const count = mockArchive.filter((d) => d.category === cat).length;
+          const count = docs.filter((d) => d.category === cat).length;
           return (
             <button
               key={cat}
@@ -141,7 +167,6 @@ export default function DocumentArchivePage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        {/* Filters */}
         <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
@@ -150,7 +175,7 @@ export default function DocumentArchivePage() {
             />
             <input
               type="text"
-              placeholder="Tìm theo tiêu đề, mã văn bản..."
+              placeholder="Tìm theo tiêu đề, số hiệu, nội dung tóm tắt..."
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -176,9 +201,13 @@ export default function DocumentArchivePage() {
           </div>
         </div>
 
-        {/* Document list */}
         <div className="divide-y divide-gray-100">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="px-6 py-12 text-center text-gray-400">
+              <Loader2 size={28} className="mx-auto mb-2 animate-spin opacity-50" />
+              <p className="text-sm">Đang tải kho văn bản...</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="px-6 py-12 text-center text-gray-400">
               <Archive size={36} className="mx-auto mb-2 opacity-30" />
               <p className="text-sm">Không tìm thấy văn bản nào.</p>
@@ -214,7 +243,7 @@ export default function DocumentArchivePage() {
                         {doc.code}
                       </span>
                       <span className="text-xs text-gray-400">
-                        • {doc.year}
+                        • {doc.year || "—"}
                       </span>
                     </div>
                     <p className="text-sm font-medium text-gray-900 leading-snug">
@@ -222,9 +251,15 @@ export default function DocumentArchivePage() {
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Ban hành bởi: {doc.issuer}
+                      {doc.issued_date ? ` · ${doc.issued_date}` : ""}
                     </p>
+                    {doc.summary && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                        {doc.summary}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {doc.tags.map((tag) => (
+                      {(doc.tags || []).map((tag) => (
                         <span
                           key={tag}
                           className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500"
@@ -236,17 +271,31 @@ export default function DocumentArchivePage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
+                      onClick={() => void openView(doc.id)}
                       className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
                       title="Xem"
                     >
                       <Eye size={16} />
                     </button>
-                    <button
+                    <a
+                      href={doc.public_url}
+                      download
                       className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Tải về"
+                      title="Tải file"
                     >
                       <Download size={16} />
-                    </button>
+                    </a>
+                    {doc.source_url && (
+                      <a
+                        href={doc.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="Nguồn chính thức"
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    )}
                   </div>
                 </div>
               );
@@ -254,6 +303,65 @@ export default function DocumentArchivePage() {
           )}
         </div>
       </div>
+
+      {(viewLoading || viewDoc) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {viewDoc?.code || "Đang tải..."}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {viewDoc?.title || ""}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setViewDoc(null);
+                  setViewLoading(false);
+                }}
+                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {viewLoading && !viewDoc ? (
+                <div className="py-16 text-center text-gray-400">
+                  <Loader2 className="mx-auto animate-spin mb-2" size={28} />
+                  <p className="text-sm">Đang mở văn bản...</p>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans leading-relaxed">
+                  {viewDoc?.content || viewDoc?.summary || "Không có nội dung."}
+                </pre>
+              )}
+            </div>
+            {viewDoc && (
+              <div className="px-5 py-3 border-t border-gray-100 flex gap-2 justify-end">
+                <a
+                  href={viewDoc.public_url}
+                  download
+                  className="px-3 py-1.5 rounded-lg text-sm bg-[#007aff] text-white hover:bg-[#0066d6]"
+                >
+                  Tải file
+                </a>
+                {viewDoc.source_url && (
+                  <a
+                    href={viewDoc.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  >
+                    Nguồn gốc
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

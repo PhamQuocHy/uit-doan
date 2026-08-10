@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/admin/Sidebar";
 import Topbar from "@/components/admin/Topbar";
+import AiChatWidget from "@/components/admin/AiChatWidget";
 
 const pageTitles: Record<string, string> = {
   "/admin": "Tổng quan",
@@ -70,10 +71,11 @@ export default function AdminLayoutClient({
           onLogout={handleLogout}
           onMenuToggle={() => setCollapsed(!collapsed)}
         />
-        <main className="!rounded-tl-2xl flex-1 overflow-auto bg-white">
+        <main className="!rounded-tl-2xl flex-1 overflow-auto bg-white px-5 pb-8 pt-6 sm:px-7 sm:pt-7">
           {children}
         </main>
       </div>
+      <AiChatWidget />
     </div>
   );
 }

@@ -57,6 +57,18 @@ export interface Quota {
   createdAt: string;
 }
 
+export interface AppNotification {
+  id: string;
+  /** Đơn vị nhận thông báo (admin đơn vị này sẽ thấy) */
+  toUnit: string;
+  title: string;
+  message: string;
+  type: 'quota_shortage' | 'quota_assigned' | 'info';
+  relatedQuotaId?: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface Citizen {
   id: string;
   fullName: string;
@@ -501,20 +513,13 @@ const militaryDocuments: MilitaryDocument[] = [
 
 // ── Quota Store ────────────────────────────────────────────────────────────
 const quotas: Quota[] = [
-  // Bộ → Tỉnh
-  { id: 'q1', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: 'tinh-hn', toUnitName: 'Tỉnh Hà Nội', amount: 500, filled: 320, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
-  { id: 'q2', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: 'tinh-hcm', toUnitName: 'Tỉnh TP. HCM', amount: 800, filled: 560, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
-  { id: 'q3', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: 'tinh-dn', toUnitName: 'Tỉnh Đà Nẵng', amount: 200, filled: 150, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
-  // Tỉnh HN → Huyện
-  { id: 'q4', year: 2026, fromLevel: 'tinh', fromUnit: 'tinh-hn', toLevel: 'huyen', toUnit: 'huyen-hk', toUnitName: 'Huyện Hoàn Kiếm', amount: 120, filled: 85, note: '', createdAt: '2026-01-12T00:00:00Z' },
-  { id: 'q5', year: 2026, fromLevel: 'tinh', fromUnit: 'tinh-hn', toLevel: 'huyen', toUnit: 'huyen-dd', toUnitName: 'Huyện Đống Đa', amount: 150, filled: 100, note: '', createdAt: '2026-01-12T00:00:00Z' },
-  // Huyện HK → Xã
-  { id: 'q6', year: 2026, fromLevel: 'huyen', fromUnit: 'huyen-hk', toLevel: 'xa', toUnit: 'xa-hb', toUnitName: 'Xã Hàng Bông', amount: 35, filled: 28, note: '', createdAt: '2026-01-18T00:00:00Z' },
-  { id: 'q7', year: 2026, fromLevel: 'huyen', fromUnit: 'huyen-hk', toLevel: 'xa', toUnit: 'xa-hd', toUnitName: 'Xã Hàng Đào', amount: 40, filled: 30, note: '', createdAt: '2026-01-18T00:00:00Z' },
-  // Huyện BC → Xã
-  { id: 'q8', year: 2026, fromLevel: 'huyen', fromUnit: 'huyen-bc', toLevel: 'xa', toUnit: 'xa-bh', toUnitName: 'Xã Bình Hưng', amount: 50, filled: 38, note: '', createdAt: '2026-01-20T00:00:00Z' },
+  // Bộ → Tỉnh (mã đơn vị mới: 1, 79, 48)
+  { id: 'q1', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '1', toUnitName: 'Thành phố Hà Nội', amount: 500, filled: 320, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
+  { id: 'q2', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '79', toUnitName: 'Thành phố Hồ Chí Minh', amount: 800, filled: 560, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
+  { id: 'q3', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '48', toUnitName: 'Thành phố Đà Nẵng', amount: 200, filled: 150, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
 ];
 
+const notifications: AppNotification[] = [];
 // Helper to get all ancestor unit codes for a unit (including itself)
 export function getUnitAncestors(unitCode: string): string[] {
   const result: string[] = [unitCode];
@@ -1363,6 +1368,36 @@ export const db = {
       };
       quotas.push(quota);
       return quota;
+    },
+  },
+  notifications: {
+    findForUnit: (unitCode: string) =>
+      notifications
+        .filter((n) => n.toUnit === unitCode)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    create: (data: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
+      const n: AppNotification = {
+        id: generateId(),
+        ...data,
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      notifications.unshift(n);
+      return n;
+    },
+    markRead: (id: string, unitCode: string) => {
+      const n = notifications.find((x) => x.id === id && x.toUnit === unitCode);
+      if (!n) return null;
+      n.read = true;
+      return n;
+    },
+    markAllRead: (unitCode: string) => {
+      notifications
+        .filter((n) => n.toUnit === unitCode && !n.read)
+        .forEach((n) => {
+          n.read = true;
+        });
+      return true;
     },
   },
 };

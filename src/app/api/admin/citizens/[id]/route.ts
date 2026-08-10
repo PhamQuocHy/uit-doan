@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, hierarchyNeedsEditPin, verifyUnitEditPin } from "@/lib/data";
+import {
+  findCitizenByIdFromDb,
+  updateCitizenInDb,
+} from "@/lib/citizens-db";
+import { pingDb, queryExecute } from "@/lib/db";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
   if (!session) {
@@ -12,7 +17,8 @@ export async function GET(
   }
 
   const { id } = await params;
-  const citizen = db.citizens.findById(id);
+  const fromDb = await findCitizenByIdFromDb(id);
+  const citizen = fromDb || db.citizens.findById(id);
   if (!citizen) {
     return NextResponse.json({ error: "Không tìm thấy công dân" }, { status: 404 });
   }
@@ -21,7 +27,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
   if (!session) {
@@ -31,7 +37,8 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await request.json();
-    const existing = db.citizens.findById(id);
+    const existing =
+      (await findCitizenByIdFromDb(id)) || db.citizens.findById(id);
     if (!existing) {
       return NextResponse.json({ error: "Không tìm thấy công dân" }, { status: 404 });
     }
@@ -67,6 +74,9 @@ export async function PUT(
       payload.militaryStatusLocked = true;
     }
 
+    const updatedDb = await updateCitizenInDb(id, payload);
+    if (updatedDb) return NextResponse.json(updatedDb);
+
     const updated = db.citizens.update(id, payload);
     if (!updated) {
       return NextResponse.json({ error: "Không tìm thấy công dân" }, { status: 404 });
@@ -79,7 +89,7 @@ export async function PUT(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
   if (!session) {
@@ -87,6 +97,18 @@ export async function DELETE(
   }
 
   const { id } = await params;
+
+  if (await pingDb()) {
+    try {
+      const result = await queryExecute("DELETE FROM citizens WHERE id = ?", [id]);
+      if (result.affectedRows > 0) {
+        return NextResponse.json({ success: true });
+      }
+    } catch (e) {
+      console.error("DELETE citizen mysql:", e);
+    }
+  }
+
   const ok = db.citizens.delete(id);
   if (!ok) {
     return NextResponse.json({ error: "Không tìm thấy công dân" }, { status: 404 });

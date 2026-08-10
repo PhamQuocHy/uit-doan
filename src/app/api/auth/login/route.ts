@@ -1,6 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/data';
-import { createSession } from '@/lib/auth';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/data";
+import { createSession } from "@/lib/auth";
+import {
+  findUserByUsernameFromDb,
+  touchLastLogin,
+  verifyPassword,
+  type AuthUser,
+} from "@/lib/auth-users";
+import { pingDb } from "@/lib/db";
+
+function fromMemory(username: string): AuthUser | null {
+  const user = db.users.findByUsername(username);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    password: user.password,
+    name: user.name,
+    role: user.role,
+    hierarchyLevel: user.hierarchyLevel,
+    unitCode: user.unitCode,
+    status: user.status,
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,30 +31,59 @@ export async function POST(request: NextRequest) {
 
     if (!username || !password) {
       return NextResponse.json(
-        { error: 'Vui lòng nhập tên đăng nhập và mật khẩu' },
-        { status: 400 }
+        { error: "Vui lòng nhập tên đăng nhập và mật khẩu" },
+        { status: 400 },
       );
     }
 
-    const user = db.users.findByUsername(username);
-    if (!user || user.password !== password) {
+    const dbOnline = await pingDb();
+    let user: AuthUser | null = null;
+    let authSource: "mysql" | "memory" = "memory";
+
+    if (dbOnline) {
+      // DB đang chạy → chỉ xác thực qua MySQL (không còn fallback 123)
+      user = await findUserByUsernameFromDb(username);
+      authSource = "mysql";
+      if (!user) {
+        return NextResponse.json(
+          {
+            error:
+              "Tài khoản không tồn tại trong database. Kiểm tra bảng users (username / password_hash).",
+          },
+          { status: 401 },
+        );
+      }
+    } else {
+      user = fromMemory(username);
+      authSource = "memory";
+    }
+
+    if (!user || !verifyPassword(password, user.password)) {
       return NextResponse.json(
-        { error: 'Tên đăng nhập hoặc mật khẩu không đúng' },
-        { status: 401 }
+        {
+          error:
+            authSource === "mysql"
+              ? "Tên đăng nhập hoặc mật khẩu không đúng"
+              : "Tên đăng nhập hoặc mật khẩu không đúng (MySQL offline — đang dùng demo in-memory)",
+        },
+        { status: 401 },
       );
     }
 
-    if (user.status !== 'active') {
+    if (user.status !== "active") {
       return NextResponse.json(
-        { error: 'Tài khoản đã bị vô hiệu hóa' },
-        { status: 403 }
+        { error: "Tài khoản đã bị vô hiệu hóa" },
+        { status: 403 },
       );
     }
 
     if (unitCode && user.unitCode !== unitCode) {
       return NextResponse.json(
-        { error: 'Tài khoản không thuộc cấp/đơn vị bạn đã chọn. Vui lòng kiểm tra lại.' },
-        { status: 403 }
+        {
+          error:
+            "Tài khoản không thuộc cấp/đơn vị bạn đã chọn. Vui lòng kiểm tra lại.",
+        },
+        { status: 403 },
       );
     }
 
@@ -45,11 +96,24 @@ export async function POST(request: NextRequest) {
       unitCode: user.unitCode,
     });
 
+    if (authSource === "mysql") {
+      await touchLastLogin(user.id);
+    }
+
     return NextResponse.json({
       success: true,
-      user: { id: user.id, username: user.username, role: user.role, name: user.name, hierarchyLevel: user.hierarchyLevel, unitCode: user.unitCode },
+      authSource,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        name: user.name,
+        hierarchyLevel: user.hierarchyLevel,
+        unitCode: user.unitCode,
+      },
     });
-  } catch {
-    return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 });
+  } catch (error) {
+    console.error("Login error:", error);
+    return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
   }
 }

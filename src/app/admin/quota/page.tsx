@@ -75,6 +75,12 @@ export default function QuotaPage() {
     amount: "",
     note: "",
   });
+  const [capacity, setCapacity] = useState<{
+    eligible: number;
+    totalCitizens: number;
+  } | null>(null);
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -98,9 +104,35 @@ export default function QuotaPage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!form.toUnit) {
+      setCapacity(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(
+        `/api/admin/quotas?capacityFor=${encodeURIComponent(form.toUnit)}`,
+      );
+      if (!res.ok || cancelled) return;
+      const d = await res.json();
+      if (!cancelled && d.capacity) {
+        setCapacity({
+          eligible: d.capacity.eligible,
+          totalCitizens: d.capacity.totalCitizens,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.toUnit]);
+
   const handleSubmit = async () => {
     if (!form.toUnit || !form.amount) return;
     setSubmitting(true);
+    setSubmitError(null);
+    setSubmitWarning(null);
     const chosen = childUnits.find((c) => c.code === form.toUnit);
     const res = await fetch("/api/admin/quotas", {
       method: "POST",
@@ -113,10 +145,26 @@ export default function QuotaPage() {
         year: new Date().getFullYear(),
       }),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      setShowModal(false);
-      setForm({ toUnit: "", toUnitName: "", amount: "", note: "" });
-      await fetchData();
+      if (data.warning?.message) {
+        setSubmitWarning(data.warning.message);
+        // giữ modal mở vài giây để đọc cảnh báo rồi đóng
+        await fetchData();
+        window.setTimeout(() => {
+          setShowModal(false);
+          setForm({ toUnit: "", toUnitName: "", amount: "", note: "" });
+          setCapacity(null);
+          setSubmitWarning(null);
+        }, 2800);
+      } else {
+        setShowModal(false);
+        setForm({ toUnit: "", toUnitName: "", amount: "", note: "" });
+        setCapacity(null);
+        await fetchData();
+      }
+    } else {
+      setSubmitError(data.error || "Không giao được chỉ tiêu");
     }
     setSubmitting(false);
   };
@@ -282,7 +330,8 @@ export default function QuotaPage() {
                       className="hover:bg-gray-50/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-gray-600 text-xs">
-                        {unitNames[q.fromUnit] || q.fromUnit}
+                        {unitNames[q.fromUnit] ||
+                          (q.fromUnit === "bo" ? "Bộ Quốc phòng" : q.fromUnit)}
                       </td>
                       <td className="px-6 py-4 font-medium text-gray-900">
                         {q.toUnitName}
@@ -391,6 +440,21 @@ export default function QuotaPage() {
                     Không có đơn vị cấp dưới để giao chỉ tiêu.
                   </p>
                 )}
+                {capacity && form.toUnit && (
+                  <p
+                    className={`mt-2 rounded-xl px-3 py-2 text-[13px] ${
+                      Number(form.amount) > capacity.eligible
+                        ? "bg-amber-50 text-amber-800"
+                        : "bg-blue-50 text-blue-800"
+                    }`}
+                  >
+                    Nguồn tại đơn vị: {capacity.eligible} hồ sơ đủ điều kiện /
+                    tổng {capacity.totalCitizens} hồ sơ
+                    {Number(form.amount) > capacity.eligible
+                      ? ` — thiếu ${Number(form.amount) - capacity.eligible}. Admin đơn vị sẽ nhận cảnh báo.`
+                      : "."}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">
@@ -417,6 +481,16 @@ export default function QuotaPage() {
                   onChange={(e) => setForm({ ...form, note: e.target.value })}
                 />
               </div>
+              {submitWarning && (
+                <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800">
+                  {submitWarning}
+                </p>
+              )}
+              {submitError && (
+                <p className="rounded-xl bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+                  {submitError}
+                </p>
+              )}
             </div>
             <div className="flex gap-2 p-5 border-t border-gray-100">
               <button

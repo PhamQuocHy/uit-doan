@@ -10,6 +10,8 @@
     "db:setup": "tsx scripts/setup-db.ts",
     "db:migrate": "tsx scripts/run-migration.ts",
     "db:seed-analytics": "tsx scripts/seed-analytics.ts",
+    "db:seed-citizens": "tsx scripts/seed-citizens-34.ts",
+    "db:seed-legal": "tsx scripts/seed-legal-docs.ts",
     "db:refresh-features": "tsx scripts/refresh-features.ts"
   },
   "dependencies": {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, getUnitDescendants } from "@/lib/data";
 import { resolveViewUnit } from "@/lib/hierarchy";
+import { findCitizensFromDb } from "@/lib/citizens-db";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
       meta: {
         requiresUnitSelection: true,
         scopeUnit: null,
+        source: null,
       },
     });
   }
@@ -39,6 +41,29 @@ export async function GET(request: NextRequest) {
     requestedUnit || session.unitCode,
   );
   const unitCodes = getUnitDescendants(scopeUnit.code);
+
+  const fromDb = await findCitizensFromDb({
+    page,
+    limit,
+    search,
+    militaryStatus,
+    unitCodes,
+  });
+
+  if (fromDb) {
+    return NextResponse.json({
+      ...fromDb,
+      meta: {
+        requiresUnitSelection: false,
+        scopeUnit: {
+          code: scopeUnit.code,
+          name: scopeUnit.name,
+          level: scopeUnit.level,
+        },
+        source: "mysql",
+      },
+    });
+  }
 
   const result = db.citizens.findAll({
     page,
@@ -57,6 +82,7 @@ export async function GET(request: NextRequest) {
         name: scopeUnit.name,
         level: scopeUnit.level,
       },
+      source: "memory",
     },
   });
 }
