@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "10", 10);
   const search = searchParams.get("search") || undefined;
   const militaryStatus = searchParams.get("militaryStatus") || undefined;
+  const callIntent = searchParams.get("callIntent") || undefined;
   const requestedUnit = searchParams.get("unitCode") || undefined;
 
   const isBo = session.hierarchyLevel === "bo";
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
     limit,
     search,
     militaryStatus,
+    callIntent,
     unitCodes,
   });
 

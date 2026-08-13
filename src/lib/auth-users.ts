@@ -1,6 +1,7 @@
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
 import type { HierarchyLevel } from "@/lib/data";
+import type { FunctionalRole } from "@/lib/functional-roles";
 
 export type AuthUser = {
   id: string;
@@ -10,6 +11,7 @@ export type AuthUser = {
   role: "admin" | "user";
   hierarchyLevel: HierarchyLevel;
   unitCode: string;
+  functionalRole: FunctionalRole;
   status: "active" | "inactive" | "locked";
 };
 
@@ -22,6 +24,7 @@ type DbUserRow = RowDataPacket & {
   unit_code: string | null;
   unit_level: HierarchyLevel | null;
   role_name: string | null;
+  functional_role: FunctionalRole | null;
 };
 
 function mapRole(roleName: string | null): "admin" | "user" {
@@ -42,6 +45,7 @@ function rowToAuthUser(row: DbUserRow): AuthUser {
     role: mapRole(row.role_name),
     hierarchyLevel: (row.unit_level || "xa") as HierarchyLevel,
     unitCode: row.unit_code || "bo",
+    functionalRole: (row.functional_role || "tuyen_quan") as FunctionalRole,
     status: row.status === "locked" ? "locked" : row.status,
   };
 }
@@ -61,6 +65,7 @@ export async function findUserByUsernameFromDb(
        u.full_name,
        u.status,
        u.unit_code,
+       u.functional_role,
        hu.level AS unit_level,
        r.role_name
      FROM users u

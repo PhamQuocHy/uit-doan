@@ -12,6 +12,7 @@
     "db:seed-analytics": "tsx scripts/seed-analytics.ts",
     "db:seed-citizens": "tsx scripts/seed-citizens-34.ts",
     "db:seed-legal": "tsx scripts/seed-legal-docs.ts",
+    "db:seed-users": "tsx scripts/seed-users.ts",
     "db:refresh-features": "tsx scripts/refresh-features.ts"
   },
   "dependencies": {

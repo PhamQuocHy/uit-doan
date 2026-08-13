@@ -2,27 +2,48 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, User, Lock, ArrowLeft } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  User,
+  Lock,
+  ArrowLeft,
+  Building2,
+  MapPin,
+  Package,
+  Stethoscope,
+} from "lucide-react";
 import Image from "next/image";
 import logoQd from "@/assets/images/logo_qd.png";
 import bg1 from "@/assets/images/bg1.png";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import type { FunctionalRole } from "@/lib/functional-roles";
+import {
+  LOGIN_PORTAL_OPTIONS,
+  portalNeedsUnitStep,
+  resolveLoginContext,
+  type LoginPortal,
+} from "@/lib/login-portals";
 
-const DONVI_OPTIONS = [{ code: "donvi-1", name: "Sư đoàn 5 – Quân khu 7" }];
+const PORTAL_ICONS: Record<LoginPortal, typeof Building2> = {
+  cap_bo: Building2,
+  dia_phuong: MapPin,
+  don_vi_nhan_quan: Package,
+  can_bo_y_te: Stethoscope,
+};
 
 export default function LoginForm() {
   const router = useRouter();
 
-  // States for Step 1 (Unit Selection)
-  const [step, setStep] = useState<1 | 2>(1);
-  const [hierarchyLevel, setHierarchyLevel] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [loginPortal, setLoginPortal] = useState<LoginPortal | "">("");
+  const [localLevel, setLocalLevel] = useState<"tinh" | "xa">("tinh");
   const [tinhCode, setTinhCode] = useState("");
   const [xaCode, setXaCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
 
   const [units, setUnits] = useState<any[]>([]);
 
-  // States for Step 2 (Credentials)
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,41 +57,72 @@ export default function LoginForm() {
       .catch(console.error);
   }, []);
 
-  const handleNextStep = (e: FormEvent) => {
+  const handlePortalStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!hierarchyLevel) {
-      setError("Vui lòng chọn cấp đơn vị");
+    if (!loginPortal) {
+      setError("Vui lòng chọn loại đăng nhập");
       return;
     }
-    if (hierarchyLevel === "tinh" && !tinhCode) {
-      setError("Vui lòng chọn Tỉnh/Thành phố");
+    if (loginPortal === "cap_bo") {
+      setStep(3);
       return;
     }
-    if (hierarchyLevel === "xa" && (!tinhCode || !xaCode)) {
-      setError("Vui lòng chọn Tỉnh/Thành phố và Phường/Xã");
-      return;
-    }
-    if (hierarchyLevel === "donvi" && !donviCode) {
-      setError("Vui lòng chọn Đơn vị nhận quân");
-      return;
-    }
+    setTinhCode("");
+    setXaCode("");
+    setDonviCode("");
+    setLocalLevel("tinh");
     setStep(2);
   };
 
-  const getSelectedUnitCode = () => {
-    switch (hierarchyLevel) {
-      case "bo":
-        return "bo";
-      case "tinh":
-        return tinhCode;
-      case "xa":
-        return xaCode;
-      case "donvi":
-        return donviCode;
-      default:
-        return "";
+  const handleUnitStep = (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!loginPortal) return;
+
+    if (loginPortal === "don_vi_nhan_quan" && !donviCode) {
+      setError("Vui lòng chọn Đơn vị nhận quân");
+      return;
     }
+    if (loginPortal === "can_bo_y_te" || loginPortal === "dia_phuong") {
+      if (!tinhCode) {
+        setError("Vui lòng chọn Tỉnh/Thành phố");
+        return;
+      }
+      if (localLevel === "xa" && !xaCode) {
+        setError("Vui lòng chọn Phường/Xã");
+        return;
+      }
+    }
+    setStep(3);
+  };
+
+  const goBack = () => {
+    setError("");
+    setStep((s) => {
+      if (s === 3) {
+        return loginPortal && portalNeedsUnitStep(loginPortal) ? 2 : 1;
+      }
+      if (s === 2) return 1;
+      return s;
+    });
+  };
+
+  const getLoginPayload = () => {
+    if (!loginPortal) {
+      return { unitCode: "", functionalRole: "tuyen_quan" as FunctionalRole };
+    }
+    const ctx = resolveLoginContext({
+      portal: loginPortal,
+      localLevel,
+      tinhCode,
+      xaCode,
+      donviCode,
+    });
+    return {
+      unitCode: ctx.unitCode,
+      functionalRole: ctx.functionalRole,
+    };
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -78,14 +130,15 @@ export default function LoginForm() {
     setError("");
     setLoading(true);
     try {
-      const selectedUnitCode = getSelectedUnitCode();
+      const { unitCode, functionalRole } = getLoginPayload();
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username,
           password,
-          unitCode: selectedUnitCode,
+          unitCode,
+          functionalRole,
         }),
       });
       const data = await res.json();
@@ -102,9 +155,18 @@ export default function LoginForm() {
     }
   };
 
+  const stepSubtitle =
+    step === 1
+      ? "Chọn đơn vị đăng nhập"
+      : step === 2
+        ? "Chọn đơn vị quản lý"
+        : "Đăng nhập tài khoản của bạn";
+
+  const cardMaxWidth =
+    step === 1 ? "max-w-[920px]" : "max-w-[500px]";
+
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-white">
-      {/* Background Image Layer */}
       <div className="absolute inset-0 z-0">
         <Image
           src={bg1}
@@ -125,7 +187,7 @@ export default function LoginForm() {
         style={{ background: "#eedeba" }}
       />
 
-      <div className="relative w-full max-w-[500px] px-4 z-10 transition-all">
+      <div className={`relative w-full px-4 z-10 transition-all ${cardMaxWidth}`}>
         <div
           className="rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
           style={{
@@ -133,14 +195,11 @@ export default function LoginForm() {
             border: "1px solid #e5e5ea",
           }}
         >
-          {/* Header banner */}
           <div className="px-8 py-8 md:py-10 pb-5! text-center flex flex-col items-center relative">
-            {step === 2 && (
+            {step > 1 && (
               <button
-                onClick={() => {
-                  setStep(1);
-                  setError("");
-                }}
+                type="button"
+                onClick={goBack}
                 className="absolute left-6 top-8 p-2 rounded-full hover:bg-gray-100 transition-colors"
                 style={{ color: "#007aff" }}
               >
@@ -163,9 +222,7 @@ export default function LoginForm() {
               Hệ thống Quản lý Nghĩa vụ Quân sự
             </h1>
             <p className="mt-2 text-sm" style={{ color: "#007aff" }}>
-              {step === 1
-                ? "Vui lòng chọn cấp đơn vị để tiếp tục"
-                : "Đăng nhập tài khoản của bạn"}
+              {stepSubtitle}
             </p>
           </div>
 
@@ -195,46 +252,108 @@ export default function LoginForm() {
             )}
 
             {step === 1 ? (
-              <form onSubmit={handleNextStep} className="space-y-4">
-                <div className="space-y-1">
-                  <SearchableSelect
-                    label="Cấp đơn vị"
-                    placeholder="-- Chọn cấp đơn vị --"
-                    value={hierarchyLevel}
-                    onChange={(val) => {
-                      setHierarchyLevel(val);
-                      setTinhCode("");
-                      setXaCode("");
-                      setDonviCode("");
-                    }}
-                    options={[
-                      { value: "bo", label: "Bộ Quốc phòng" },
-                      { value: "tinh", label: "Cấp Tỉnh/Thành phố" },
-                      { value: "xa", label: "Cấp Phường/Xã" },
-                      { value: "donvi", label: "Đơn vị nhận quân" },
-                    ]}
-                  />
+              <form
+                onSubmit={handlePortalStep}
+                className="animate-in fade-in duration-300"
+              >
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+                  {LOGIN_PORTAL_OPTIONS.map((opt) => {
+                    const selected = loginPortal === opt.value;
+                    const Icon = PORTAL_ICONS[opt.value];
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setLoginPortal(opt.value)}
+                        className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border px-2 py-4 text-center transition-all sm:min-h-[168px] sm:px-3"
+                        style={{
+                          borderColor: selected ? "#007aff" : "#e5e5ea",
+                          background: selected
+                            ? "rgba(0,122,255,0.06)"
+                            : "#fff",
+                          boxShadow: selected
+                            ? "0 4px 14px rgba(0,122,255,0.12)"
+                            : "none",
+                        }}
+                      >
+                        <div
+                          className="mb-2.5 flex h-11 w-11 items-center justify-center rounded-full sm:mb-3 sm:h-12 sm:w-12"
+                          style={{
+                            background: selected
+                              ? "rgba(0,122,255,0.12)"
+                              : "#f5f5f7",
+                            color: selected ? "#007aff" : "#636366",
+                          }}
+                        >
+                          <Icon size={22} strokeWidth={1.75} />
+                        </div>
+                        <p
+                          className="text-[13px] font-semibold leading-tight sm:text-[14px]"
+                          style={{ color: selected ? "#007aff" : "#1d1d1f" }}
+                        >
+                          {opt.label}
+                        </p>
+                        <p className="mt-1.5 hidden text-[10px] leading-snug text-[#86868b] sm:block sm:text-[11px]">
+                          {opt.description}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {(hierarchyLevel === "tinh" || hierarchyLevel === "xa") && (
-                  <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
-                    <SearchableSelect
-                      label="Tỉnh/Thành phố"
-                      placeholder="-- Chọn Tỉnh/Thành phố --"
-                      value={tinhCode}
-                      onChange={(val) => {
-                        setTinhCode(val);
-                        setXaCode("");
-                      }}
-                      options={units
-                        .filter((u) => u.level === "tinh")
-                        .map((u) => ({ value: u.code, label: u.name }))}
-                    />
-                  </div>
+                <button
+                  type="submit"
+                  className="w-full mt-5 py-3 rounded-xl font-normal text-lg transition-all text-white"
+                  style={{
+                    background: "#007aff",
+                    boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
+                  }}
+                >
+                  Tiếp tục
+                </button>
+              </form>
+            ) : step === 2 ? (
+              <form
+                onSubmit={handleUnitStep}
+                className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300"
+              >
+                {(loginPortal === "dia_phuong" ||
+                  loginPortal === "can_bo_y_te") && (
+                  <SearchableSelect
+                    label="Cấp đơn vị"
+                    placeholder="-- Chọn cấp --"
+                    value={localLevel}
+                    onChange={(val) => {
+                      setLocalLevel(val as "tinh" | "xa");
+                      setXaCode("");
+                    }}
+                    options={[
+                      { value: "tinh", label: "Cấp Tỉnh/Thành phố" },
+                      { value: "xa", label: "Cấp Phường/Xã" },
+                    ]}
+                  />
                 )}
 
-                {hierarchyLevel === "xa" && tinhCode && (
-                  <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
+                {(loginPortal === "dia_phuong" ||
+                  loginPortal === "can_bo_y_te") && (
+                  <SearchableSelect
+                    label="Tỉnh/Thành phố"
+                    placeholder="-- Chọn Tỉnh/Thành phố --"
+                    value={tinhCode}
+                    onChange={(val) => {
+                      setTinhCode(val);
+                      setXaCode("");
+                    }}
+                    options={units
+                      .filter((u) => u.level === "tinh")
+                      .map((u) => ({ value: u.code, label: u.name }))}
+                  />
+                )}
+
+                {(loginPortal === "dia_phuong" ||
+                  loginPortal === "can_bo_y_te") &&
+                  localLevel === "xa" &&
+                  tinhCode && (
                     <SearchableSelect
                       label="Phường/Xã"
                       placeholder="-- Chọn Phường/Xã --"
@@ -246,22 +365,18 @@ export default function LoginForm() {
                         )
                         .map((u) => ({ value: u.code, label: u.name }))}
                     />
-                  </div>
-                )}
+                  )}
 
-                {hierarchyLevel === "donvi" && (
-                  <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
-                    <SearchableSelect
-                      label="Đơn vị nhận quân"
-                      placeholder="-- Chọn Đơn vị nhận quân --"
-                      value={donviCode}
-                      onChange={(val) => setDonviCode(val)}
-                      options={DONVI_OPTIONS.map((u) => ({
-                        value: u.code,
-                        label: u.name,
-                      }))}
-                    />
-                  </div>
+                {loginPortal === "don_vi_nhan_quan" && (
+                  <SearchableSelect
+                    label="Đơn vị nhận quân"
+                    placeholder="-- Chọn Đơn vị nhận quân --"
+                    value={donviCode}
+                    onChange={(val) => setDonviCode(val)}
+                    options={units
+                      .filter((u) => u.level === "donvi")
+                      .map((u) => ({ value: u.code, label: u.name }))}
+                  />
                 )}
 
                 <button
@@ -271,12 +386,6 @@ export default function LoginForm() {
                     background: "#007aff",
                     boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#636366")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#007aff")
-                  }
                 >
                   Tiếp tục
                 </button>

@@ -11,6 +11,7 @@ export interface SessionPayload {
   name: string;
   hierarchyLevel: string;
   unitCode: string;
+  functionalRole: string;
   expiresAt: Date;
 }
 
@@ -33,7 +34,7 @@ export async function decrypt(session: string | undefined = '') {
   }
 }
 
-export async function createSession(user: { id: string; username: string; role: 'admin' | 'user'; name: string; hierarchyLevel: string; unitCode: string }) {
+export async function createSession(user: { id: string; username: string; role: 'admin' | 'user'; name: string; hierarchyLevel: string; unitCode: string; functionalRole?: string }) {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const session = await encrypt({
     userId: user.id,
@@ -42,6 +43,7 @@ export async function createSession(user: { id: string; username: string; role: 
     name: user.name,
     hierarchyLevel: user.hierarchyLevel,
     unitCode: user.unitCode,
+    functionalRole: user.functionalRole || 'tuyen_quan',
     expiresAt,
   });
 

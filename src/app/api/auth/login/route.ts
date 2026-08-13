@@ -8,6 +8,7 @@ import {
   type AuthUser,
 } from "@/lib/auth-users";
 import { pingDb } from "@/lib/db";
+import type { FunctionalRole } from "@/lib/functional-roles";
 
 function fromMemory(username: string): AuthUser | null {
   const user = db.users.findByUsername(username);
@@ -20,6 +21,7 @@ function fromMemory(username: string): AuthUser | null {
     role: user.role,
     hierarchyLevel: user.hierarchyLevel,
     unitCode: user.unitCode,
+    functionalRole: user.functionalRole,
     status: user.status,
   };
 }
@@ -27,7 +29,7 @@ function fromMemory(username: string): AuthUser | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, password, unitCode } = body;
+    const { username, password, unitCode, functionalRole } = body;
 
     if (!username || !password) {
       return NextResponse.json(
@@ -87,6 +89,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const selectedRole = (functionalRole || "tuyen_quan") as FunctionalRole;
+    if (
+      user.role !== "admin" &&
+      user.functionalRole &&
+      user.functionalRole !== selectedRole
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Tài khoản không có quyền chức năng bạn đã chọn. Vui lòng chọn đúng mục Tuyển quân / Nhận quân / Y tế.",
+        },
+        { status: 403 },
+      );
+    }
+
     await createSession({
       id: user.id,
       username: user.username,
@@ -94,6 +111,7 @@ export async function POST(request: NextRequest) {
       name: user.name,
       hierarchyLevel: user.hierarchyLevel,
       unitCode: user.unitCode,
+      functionalRole: selectedRole,
     });
 
     if (authSource === "mysql") {
@@ -110,6 +128,7 @@ export async function POST(request: NextRequest) {
         name: user.name,
         hierarchyLevel: user.hierarchyLevel,
         unitCode: user.unitCode,
+        functionalRole: selectedRole,
       },
     });
   } catch (error) {

@@ -6,6 +6,10 @@ import {
   updateCitizenInDb,
 } from "@/lib/citizens-db";
 import { pingDb, queryExecute } from "@/lib/db";
+import {
+  resolveCallIntentUpdate,
+  type CallIntent,
+} from "@/lib/enlistment-approval";
 
 export async function GET(
   _request: NextRequest,
@@ -44,8 +48,9 @@ export async function PUT(
     }
 
     const updatesMilitaryStatus = body.militaryStatus !== undefined;
+    const updatesCallIntent = body.callIntent !== undefined;
     const updatesReason = body.militaryStatusReason !== undefined;
-    const touchesNvqs = updatesMilitaryStatus || updatesReason;
+    const touchesNvqs = updatesMilitaryStatus || updatesCallIntent || updatesReason;
 
     if (existing.militaryStatusLocked && touchesNvqs) {
       const isBo = session.hierarchyLevel === "bo";
@@ -70,6 +75,23 @@ export async function PUT(
 
     const { editPin: _editPin, unlockViaProfile: _unlock, ...safeBody } = body;
     const payload = { ...safeBody };
+
+    if (updatesCallIntent || body.militaryStatus === "tamhoan" || body.militaryStatus === "miengoi") {
+      if (body.militaryStatus === "tamhoan" || body.militaryStatus === "miengoi") {
+        payload.callIntent = "unset";
+        payload.approvalStatus = "none";
+        payload.militaryStatus = body.militaryStatus;
+      } else {
+        const callIntent = (body.callIntent || "unset") as CallIntent;
+        const resolved = resolveCallIntentUpdate(callIntent, existing.militaryStatus);
+        payload.callIntent = resolved.callIntent;
+        payload.approvalStatus = resolved.approvalStatus;
+        if (resolved.militaryStatus) {
+          payload.militaryStatus = resolved.militaryStatus;
+        }
+      }
+    }
+
     if (touchesNvqs && body.militaryStatusLocked !== false) {
       payload.militaryStatusLocked = true;
     }

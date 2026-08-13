@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Search,
   Filter,
-  CheckSquare,
   Check,
   X,
   Eye,
@@ -12,59 +11,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-
-const mockApprovals = [
-  {
-    id: "1",
-    fullName: "Nguyễn Văn An",
-    cccd: "079300012345",
-    dob: "2002-03-14",
-    unit: "Xã Bình Hưng",
-    healthResult: "Loại 1",
-    politicalResult: "Đạt",
-    status: "pending",
-  },
-  {
-    id: "2",
-    fullName: "Trần Thị Bình",
-    cccd: "079300056789",
-    dob: "2003-07-22",
-    unit: "Xã Long Hòa",
-    healthResult: "Loại 2",
-    politicalResult: "Đạt",
-    status: "approved",
-  },
-  {
-    id: "3",
-    fullName: "Lê Minh Cường",
-    cccd: "079300098765",
-    dob: "2001-11-05",
-    unit: "Xã Hiệp Phước",
-    healthResult: "Loại 3",
-    politicalResult: "Đạt",
-    status: "rejected",
-  },
-  {
-    id: "4",
-    fullName: "Phạm Văn Dũng",
-    cccd: "079300043210",
-    dob: "2002-09-17",
-    unit: "Xã Phú Hòa Đông",
-    healthResult: "Loại 1",
-    politicalResult: "Đạt",
-    status: "pending",
-  },
-  {
-    id: "5",
-    fullName: "Hoàng Thị Em",
-    cccd: "079300011111",
-    dob: "2003-01-30",
-    unit: "Xã Tân Thạnh Tây",
-    healthResult: "Loại 2",
-    politicalResult: "Đạt",
-    status: "approved",
-  },
-];
+import type { ApprovalRow } from "@/lib/enlistment-approval";
 
 const statusConfig: Record<
   string,
@@ -86,57 +33,69 @@ const statusConfig: Record<
 };
 
 export default function ApprovalPage() {
+  const [rows, setRows] = useState<ApprovalRow[]>([]);
+  const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const filtered = mockApprovals.filter((r) => {
-    const matchSearch =
-      r.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      r.cccd.includes(search);
-    const matchStatus = !statusFilter || r.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = new URLSearchParams();
+      if (search.trim()) q.set("search", search.trim());
+      if (statusFilter) q.set("status", statusFilter);
+      const res = await fetch(`/api/admin/approval?${q.toString()}`);
+      const data = await res.json();
+      if (res.ok) {
+        setRows(data.data || []);
+        setCounts(data.counts || { pending: 0, approved: 0, rejected: 0 });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [search, statusFilter]);
 
-  const counts = {
-    pending: mockApprovals.filter((r) => r.status === "pending").length,
-    approved: mockApprovals.filter((r) => r.status === "approved").length,
-    rejected: mockApprovals.filter((r) => r.status === "rejected").length,
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleAction = async (id: string, action: "approve" | "reject") => {
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/admin/approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Không thực hiện được");
+        return;
+      }
+      await load();
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
-            Xét duyệt danh sách nhập ngũ
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
-            Phê duyệt danh sách thanh niên đủ điều kiện nhập ngũ sau khám tuyển
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          Xét duyệt danh sách nhập ngũ
+        </h1>
+        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          Chỉ hiển thị hồ sơ được đánh dấu Dự kiến gọi từ mục Hồ sơ công dân
+        </p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          {
-            label: "Chờ duyệt",
-            value: counts.pending,
-            color: "#d97706",
-            bg: "#fef3c7",
-          },
-          {
-            label: "Đã duyệt",
-            value: counts.approved,
-            color: "#059669",
-            bg: "#d1fae5",
-          },
-          {
-            label: "Không đạt",
-            value: counts.rejected,
-            color: "#dc2626",
-            bg: "#fee2e2",
-          },
+          { label: "Chờ duyệt", value: counts.pending, color: "#d97706", bg: "#fef3c7" },
+          { label: "Đã duyệt", value: counts.approved, color: "#059669", bg: "#d1fae5" },
+          { label: "Không đạt", value: counts.rejected, color: "#dc2626", bg: "#fee2e2" },
         ].map((s) => (
           <div
             key={s.label}
@@ -163,7 +122,7 @@ export default function ApprovalPage() {
             <input
               type="text"
               placeholder="Tìm theo họ tên, số CCCD..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -174,7 +133,7 @@ export default function ApprovalPage() {
               size={18}
             />
             <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
+              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none bg-white"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -194,86 +153,84 @@ export default function ApprovalPage() {
                 <th className="px-6 py-4">Đơn vị</th>
                 <th className="px-6 py-4">Kết quả SK</th>
                 <th className="px-6 py-4">Kết quả CT</th>
-                <th className="px-6 py-4">Trạng thái</th>
+                <th className="px-6 py-4">Trạng thái duyệt</th>
                 <th className="px-6 py-4 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((row) => {
-                const s = statusConfig[row.status];
-                const Icon = s.icon;
-                return (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">
-                        {row.fullName}
-                      </div>
-                      <div className="text-xs text-gray-500 font-mono mt-0.5">
-                        {row.cccd}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Sinh: {new Date(row.dob).toLocaleDateString("vi-VN")}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{row.unit}</td>
-                    <td className="px-6 py-4">
-                      <span className="font-medium text-gray-900">
-                        {row.healthResult}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium"
-                        style={
-                          row.politicalResult === "Đạt"
-                            ? { background: "#d1fae5", color: "#059669" }
-                            : { background: "#fee2e2", color: "#dc2626" }
-                        }
-                      >
-                        {row.politicalResult}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{ background: s.bg, color: s.color }}
-                      >
-                        <Icon size={12} />
-                        {s.label}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
-                          title="Xem"
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                    Đang tải...
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                    Chưa có hồ sơ dự kiến gọi. Vào Hồ sơ công dân → tab NVQS → chọn Dự kiến gọi.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => {
+                  const s = statusConfig[row.status];
+                  const Icon = s.icon;
+                  return (
+                    <tr key={row.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{row.fullName}</div>
+                        <div className="text-xs text-gray-500 font-mono mt-0.5">
+                          {row.cccd}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Sinh: {new Date(row.dateOfBirth).toLocaleDateString("vi-VN")}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{row.unitName}</td>
+                      <td className="px-6 py-4 font-medium">{row.healthResult}</td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          {row.politicalResult}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                          style={{ background: s.bg, color: s.color }}
                         >
-                          <Eye size={15} />
-                        </button>
-                        {row.status === "pending" && (
-                          <>
-                            <button
-                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Duyệt"
-                            >
-                              <Check size={15} />
-                            </button>
-                            <button
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Từ chối"
-                            >
-                              <X size={15} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          <Icon size={12} />
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-1">
+                          {row.status === "pending" && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={busyId === row.id}
+                                onClick={() => void handleAction(row.id, "approve")}
+                                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                                title="Duyệt gọi nhập ngũ"
+                              >
+                                <Check size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busyId === row.id}
+                                onClick={() => void handleAction(row.id, "reject")}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                title="Không gọi"
+                              >
+                                <X size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { buildChatKnowledgeContext } from "@/lib/analytics/chat-context";
+import { buildChatKnowledgeContext, buildDirectCitizenStatsReply } from "@/lib/analytics/chat-context";
 import {
   generateGeminiChat,
   getGeminiModel,
@@ -20,6 +20,8 @@ Tuyệt đối KHÔNG viết tiếng Việt không dấu.
 - Khi hỏi tổng hồ sơ 1 tỉnh/TP: trả lời rõ số từ mục thống kê trong ngữ cảnh.
 - Cấp Bộ xem được toàn quốc và từng tỉnh — không nói thiếu quyền nếu ngữ cảnh đã có số liệu.
 - Khi hỏi luật / thông tư / độ tuổi / tạm hoãn / miễn gọi / tuyển chọn / sức khỏe: ưu tiên Kho văn bản pháp lý trong ngữ cảnh (đặc biệt 80/VBHN-VPQH, 98/2025/QH15, 68/2025/TT-BQP, 106/2025/TT-BQP) và nêu số hiệu văn bản.
+- Khi hỏi thống kê / liệt kê hồ sơ theo trạng thái: chỉ trả SỐ HỒ SƠ (tổng và theo tỉnh/TP). Không liệt kê tên, CCCD từng công dân.
+- Khi có "Phân bố theo tỉnh/TP": nêu đủ các tỉnh có số liệu, không bỏ sót.
 
 Chỉ dùng dữ liệu ngữ cảnh. Không bịa số. Nếu ngữ cảnh đã liệt kê tỉnh đó, PHẢI trả lời đúng con số đó.`;
 
@@ -55,12 +57,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sessionScope = {
+      hierarchyLevel: session.hierarchyLevel,
+      unitCode: session.unitCode,
+      name: session.name,
+    };
+
+    // Thống kê theo trạng thái → trả lời trực tiếp số hồ sơ từ DB
+    const directStats = await buildDirectCitizenStatsReply(sessionScope, message);
+    if (directStats) {
+      return NextResponse.json({
+        reply: directStats,
+        model: getGeminiModel(),
+        dataSource: "mysql",
+        focus: [],
+        directFromDb: true,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
     const { text: knowledge, source, focus } = await buildChatKnowledgeContext(
-      {
-        hierarchyLevel: session.hierarchyLevel,
-        unitCode: session.unitCode,
-        name: session.name,
-      },
+      sessionScope,
       message,
     );
 
@@ -81,7 +98,7 @@ export async function POST(request: NextRequest) {
       ...prior,
       {
         role: "user",
-        text: `Ngữ cảnh dữ liệu hệ thống:${focusNote}\n---\n${knowledge}\n---\n\nCâu hỏi: ${message}\n\nHãy trả lời đúng số liệu trong ngữ cảnh, bằng tiếng Việt có dấu đầy đủ, không dùng ** markdown.`,
+        text: `Ngữ cảnh dữ liệu hệ thống:${focusNote}\n---\n${knowledge}\n---\n\nCâu hỏi: ${message}\n\nHãy trả lời đúng số liệu trong ngữ cảnh, bằng tiếng Việt có dấu đầy đủ, không dùng ** markdown. Chỉ nêu số hồ sơ, không liệt kê tên từng công dân.`,
       },
     ];
 

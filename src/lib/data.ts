@@ -1,6 +1,9 @@
 // In-memory data store for YMSA Management System
 // In production, replace with a real database
 import provincesData from '@/data/provinces.json';
+import type { FunctionalRole } from '@/lib/functional-roles';
+
+export type { FunctionalRole };
 
 export type HierarchyLevel = 'bo' | 'tinh' | 'huyen' | 'xa' | 'donvi';
 
@@ -22,6 +25,7 @@ export interface User {
   department: string;
   hierarchyLevel: HierarchyLevel;
   unitCode: string; // e.g. 'bo', 'tinh-hn', 'huyen-hk', 'xa-hb'
+  functionalRole: FunctionalRole;
   status: 'active' | 'inactive';
   avatar?: string;
   createdAt: string;
@@ -100,6 +104,10 @@ export interface Citizen {
     | 'tamhoan'
     | 'miengoi'
     | 'nhapngu';
+  /** DB: call_intent — dự kiến tuyển gọi */
+  callIntent?: 'unset' | 'du_kien_goi' | 'khong_goi';
+  /** DB: approval_status — xét duyệt nhập ngũ */
+  approvalStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   /** DB: military_status_reason */
   militaryStatusReason?: string;
   /** Khóa chỉnh sửa trạng thái NVQS trực tiếp sau khi đã lưu — DB: military_status_locked */
@@ -131,6 +139,7 @@ export interface HealthExamDetail {
   chestCircumference?: number;
   visionLeft?: string;
   visionRight?: string;
+  physicalDefects?: string;
   dental?: string;
   ent?: string;
   neurology?: string;
@@ -139,6 +148,12 @@ export interface HealthExamDetail {
   dermatology?: string;
   surgery?: string;
   labTests?: string;
+  bloodTest?: string;
+  urineTest?: string;
+  ultrasound?: string;
+  ecg?: string;
+  chestXray?: string;
+  drugHivScreen?: string;
 }
 
 export function isDetailedHealthPhase(phase: HealthExamPhase): boolean {
@@ -275,6 +290,11 @@ provincesData.forEach((p: any) => {
   });
 });
 
+// Đơn vị nhận quân (cấp donvi)
+hierarchyUnits.push(
+  { code: "dv-qk9", name: "Quân khu 9", level: "donvi", parentCode: "bo" },
+);
+
 export function getChildUnits(parentCode: string): HierarchyUnit[] {
   return hierarchyUnits.filter((u) => u.parentCode === parentCode);
 }
@@ -283,7 +303,7 @@ export function getChildUnits(parentCode: string): HierarchyUnit[] {
  *  DB: hierarchy_units.edit_pin */
 export const unitEditPins: Record<string, string> = {
   '92': '123456',
-  '92-31201': '654321',
+  '92-31756': '654321',
 };
 
 export function hierarchyNeedsEditPin(level: HierarchyLevel | string): boolean {
@@ -401,53 +421,85 @@ const citizens: Citizen[] = [
 ];
 
 const users: User[] = [
-  // Bộ QP
   {
-    id: '1',
+    id: 'u-bo',
     username: 'admin_bo',
     password: '123',
-    name: 'Quản trị Bộ Tham Mưu',
-    email: 'admin.bo@ymsa.edu.vn',
+    name: 'Quản trị Bộ Quốc phòng',
+    email: 'admin.bo@ymsa.vn',
     phone: '0900000001',
     role: 'admin',
     department: 'Bộ Quốc phòng',
     hierarchyLevel: 'bo',
     unitCode: 'bo',
+    functionalRole: 'tuyen_quan',
     status: 'active',
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   },
-  // TP Cần Thơ (code 92) — sau sáp nhập hành chính 2025
   {
-    id: '2',
+    id: 'u-ct',
     username: 'admin_cantho',
     password: '123',
     name: 'CHQS Thành phố Cần Thơ',
-    email: 'admin.cantho@ymsa.edu.vn',
+    email: 'admin.cantho@ymsa.vn',
     phone: '0900000002',
     role: 'user',
     department: 'Ban CHQS Thành phố Cần Thơ',
     hierarchyLevel: 'tinh',
     unitCode: '92',
+    functionalRole: 'tuyen_quan',
     status: 'active',
     createdAt: '2024-02-01T00:00:00Z',
     updatedAt: '2024-02-01T00:00:00Z',
   },
-  // Phường Hưng Phú (92-31201)
   {
-    id: '3',
-    username: 'admin_hungphu',
+    id: 'u-pl',
+    username: 'admin_phuloc',
     password: '123',
-    name: 'CHQS Phường Hưng Phú',
-    email: 'admin.hungphu@ymsa.edu.vn',
+    name: 'CHQS Xã Phú Lộc',
+    email: 'admin.phuloc@ymsa.vn',
     phone: '0900000003',
     role: 'user',
-    department: 'Ban CHQS Phường Hưng Phú',
+    department: 'Ban CHQS Xã Phú Lộc',
     hierarchyLevel: 'xa',
-    unitCode: '92-31201',
+    unitCode: '92-31756',
+    functionalRole: 'tuyen_quan',
     status: 'active',
     createdAt: '2024-04-01T00:00:00Z',
     updatedAt: '2024-04-01T00:00:00Z',
+  },
+  {
+    id: 'u-qk9',
+    username: 'admin_qk9',
+    password: '123',
+    name: 'Ban nhận quân — Quân khu 9',
+    email: 'admin.qk9@ymsa.vn',
+    phone: '0900000004',
+    role: 'user',
+    department: 'Quân khu 9',
+    hierarchyLevel: 'donvi',
+    unitCode: 'dv-qk9',
+    functionalRole: 'nhan_quan',
+    status: 'active',
+    createdAt: '2024-05-01T00:00:00Z',
+    updatedAt: '2024-05-01T00:00:00Z',
+  },
+  {
+    id: 'u-yte-ct',
+    username: 'admin_yte',
+    password: '123',
+    name: 'NV Y tế — Thành phố Cần Thơ',
+    email: 'yte.cantho@ymsa.vn',
+    phone: '0900000005',
+    role: 'user',
+    department: 'Ban CHQS Thành phố Cần Thơ',
+    hierarchyLevel: 'tinh',
+    unitCode: '92',
+    functionalRole: 'y_te',
+    status: 'active',
+    createdAt: '2024-06-01T00:00:00Z',
+    updatedAt: '2024-06-01T00:00:00Z',
   },
 ];
 

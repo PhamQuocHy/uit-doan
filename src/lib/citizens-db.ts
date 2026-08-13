@@ -20,6 +20,8 @@ type CitizenRow = RowDataPacket & {
   military_status: Citizen["militaryStatus"];
   military_status_reason: string | null;
   military_status_locked: number | null;
+  call_intent: Citizen["callIntent"] | null;
+  approval_status: Citizen["approvalStatus"] | null;
   health_grade: number | null;
   education_level: string | null;
   job: string | null;
@@ -56,6 +58,8 @@ function mapCitizen(row: CitizenRow): Citizen {
     militaryStatus: row.military_status,
     militaryStatusReason: row.military_status_reason || undefined,
     militaryStatusLocked: Boolean(row.military_status_locked),
+    callIntent: (row.call_intent || "unset") as Citizen["callIntent"],
+    approvalStatus: (row.approval_status || "none") as Citizen["approvalStatus"],
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -68,6 +72,7 @@ function placeholders(n: number) {
 export async function findCitizensFromDb(query: {
   search?: string;
   militaryStatus?: string;
+  callIntent?: string;
   unitCodes?: string[];
   page?: number;
   limit?: number;
@@ -113,6 +118,11 @@ export async function findCitizensFromDb(query: {
     params.push(query.militaryStatus);
   }
 
+  if (query.callIntent) {
+    where.push("c.call_intent = ?");
+    params.push(query.callIntent);
+  }
+
   if (query.search) {
     const s = `%${query.search}%`;
     where.push(
@@ -136,6 +146,7 @@ export async function findCitizensFromDb(query: {
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.military_status_locked,
+         c.call_intent, c.approval_status,
          c.health_grade, c.created_at, c.updated_at,
          edu.level AS education_level,
          edu.major AS job
@@ -178,6 +189,7 @@ export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null>
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.military_status_locked,
+         c.call_intent, c.approval_status,
          c.health_grade, c.created_at, c.updated_at,
          edu.level AS education_level,
          edu.major AS job
@@ -221,6 +233,8 @@ export async function updateCitizenInDb(
     current_address: data.address,
     military_status: data.militaryStatus,
     military_status_reason: data.militaryStatusReason,
+    call_intent: data.callIntent,
+    approval_status: data.approvalStatus,
     military_status_locked:
       data.militaryStatusLocked === undefined
         ? undefined

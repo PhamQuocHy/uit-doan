@@ -6,16 +6,13 @@ import type { Citizen, HierarchyUnit } from "@/lib/data";
 import { Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import CitizenFormModal from "@/components/admin/CitizenFormModal";
+import { getCallDisplayLabel } from "@/lib/enlistment-approval";
 
-const STATUS_OPTIONS = [
-  { value: "", label: "Tất cả trạng thái" },
-  { value: "chuakham", label: "Chưa khám" },
-  { value: "dangkham", label: "Đang khám" },
-  { value: "trungtuyen", label: "Đậu" },
-  { value: "truottuyen", label: "Rớt" },
-  { value: "tamhoan", label: "Tạm hoãn" },
-  { value: "miengoi", label: "Miễn gọi" },
-  { value: "nhapngu", label: "Nhập ngũ" },
+const CALL_FILTER_OPTIONS = [
+  { value: "", label: "Tất cả dự kiến" },
+  { value: "du_kien_goi", label: "Dự kiến gọi" },
+  { value: "khong_goi", label: "Không gọi" },
+  { value: "unset", label: "Chưa xác định" },
 ] as const;
 
 const SELECT_CLS =
@@ -35,7 +32,7 @@ export default function CitizensPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [militaryStatusFilter, setMilitaryStatusFilter] = useState("");
+  const [callIntentFilter, setCallIntentFilter] = useState("");
   const [viewCitizen, setViewCitizen] = useState<Citizen | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -123,7 +120,7 @@ export default function CitizensPage() {
         page: page.toString(),
         limit: "10",
         ...(search && { search }),
-        ...(militaryStatusFilter && { militaryStatus: militaryStatusFilter }),
+        ...(callIntentFilter && { callIntent: callIntentFilter }),
         ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
       });
       const res = await fetch(`/api/admin/citizens?${query.toString()}`);
@@ -149,7 +146,7 @@ export default function CitizensPage() {
   useEffect(() => {
     if (sessionLevel === null) return;
     fetchCitizens();
-  }, [page, search, militaryStatusFilter, effectiveUnitCode, sessionLevel]);
+  }, [page, search, callIntentFilter, effectiveUnitCode, sessionLevel]);
 
   const handleTinhChange = (code: string) => {
     setFilterTinh(code);
@@ -198,18 +195,7 @@ export default function CitizensPage() {
     }
   };
 
-  const getMilitaryStatusLabel = (status: string) => {
-    const map: Record<string, { label: string; color: string; bg: string }> = {
-      chuakham: { label: "Chưa khám", color: "#636366", bg: "#f5f5f7" },
-      dangkham: { label: "Đang khám", color: "#c93400", bg: "rgba(255,149,0,0.14)" },
-      trungtuyen: { label: "Đậu", color: "#248a3d", bg: "rgba(52,199,89,0.14)" },
-      truottuyen: { label: "Rớt", color: "#ff3b30", bg: "rgba(255,59,48,0.1)" },
-      tamhoan: { label: "Tạm hoãn", color: "#007aff", bg: "rgba(0,122,255,0.12)" },
-      miengoi: { label: "Miễn gọi", color: "#8944ab", bg: "rgba(175,82,222,0.12)" },
-      nhapngu: { label: "Nhập ngũ", color: "#ff3b30", bg: "rgba(255,59,48,0.1)" },
-    };
-    return map[status] || { label: status, color: "#636366", bg: "#f5f5f7" };
-  };
+  const getCallLabel = (citizen: Citizen) => getCallDisplayLabel(citizen);
 
   const getHealthStyle = (grade?: string) => {
     if (!grade) return { bg: "#f5f5f7", color: "#636366" };
@@ -315,14 +301,14 @@ export default function CitizensPage() {
 
             <select
               className={`${SELECT_CLS} w-full xl:w-[168px] xl:shrink-0`}
-              value={militaryStatusFilter}
+              value={callIntentFilter}
               onChange={(e) => {
-                setMilitaryStatusFilter(e.target.value);
+                setCallIntentFilter(e.target.value);
                 setPage(1);
               }}
-              aria-label="Lọc trạng thái NVQS"
+              aria-label="Lọc dự kiến gọi"
             >
-              {STATUS_OPTIONS.map((opt) => (
+              {CALL_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value || "all"} value={opt.value}>
                   {opt.label}
                 </option>
@@ -343,7 +329,7 @@ export default function CitizensPage() {
                 <th className="hidden px-5 py-4 lg:table-cell">Học vấn</th>
                 <th className="hidden px-5 py-4 md:table-cell min-w-[160px]">Địa chỉ</th>
                 <th className="hidden px-5 py-4 sm:table-cell">Sức khỏe</th>
-                <th className="px-5 py-4">Trạng thái</th>
+                <th className="px-5 py-4">Dự kiến gọi</th>
                 <th className="hidden px-5 py-4 xl:table-cell">Ghi chú</th>
                 <th className="w-0 p-0" aria-hidden />
               </tr>
@@ -365,7 +351,7 @@ export default function CitizensPage() {
                 </tr>
               ) : (
                 citizens.map((citizen) => {
-                  const statusInfo = getMilitaryStatusLabel(citizen.militaryStatus);
+                  const statusInfo = getCallLabel(citizen);
                   const healthStyle = getHealthStyle(citizen.healthStatus);
                   return (
                     <tr key={citizen.id} className="group relative hover:bg-[#f5f5f7]/70">

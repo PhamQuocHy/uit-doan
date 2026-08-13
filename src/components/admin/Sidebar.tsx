@@ -23,6 +23,7 @@ import {
   FcSettings,
 } from "react-icons/fc";
 import { clsx } from "clsx";
+import type { FunctionalRole } from "@/lib/functional-roles";
 
 interface NavItem {
   href: string;
@@ -103,11 +104,76 @@ interface SidebarProps {
   userName: string;
   userRole: string;
   userHierarchyLevel: string;
+  userFunctionalRole: string;
+}
+
+function filterNavGroups(
+  hierarchyLevel: string,
+  functionalRole: FunctionalRole,
+): NavGroup[] {
+  if (functionalRole === "nhan_quan") {
+    return navGroups
+      .filter((g) =>
+        ["Đơn vị nhận quân", "Văn bản", "Báo cáo"].includes(g.name),
+      )
+      .map((g) =>
+        g.name === "Văn bản"
+          ? {
+              ...g,
+              items: g.items.filter((i) => i.label === "Công văn đến / đi"),
+            }
+          : g,
+      );
+  }
+
+  if (functionalRole === "y_te") {
+    return navGroups
+      .filter((g) =>
+        ["Hồ sơ thanh niên", "Tuyển quân", "Quản trị"].includes(g.name),
+      )
+      .map((g) => {
+        if (g.name === "Tuyển quân") {
+          return {
+            ...g,
+            items: g.items.filter((i) => i.href === "/admin/recruitment"),
+          };
+        }
+        return g;
+      });
+  }
+
+  // tuyen_quan — theo cấp đơn vị hành chính
+  return navGroups
+    .filter((group) => {
+      if (hierarchyLevel === "donvi") {
+        return (
+          group.name === "Đơn vị nhận quân" ||
+          group.name === "Văn bản" ||
+          group.name === "Báo cáo"
+        );
+      }
+      if (["tinh", "xa"].includes(hierarchyLevel)) {
+        return group.name !== "Đơn vị nhận quân";
+      }
+      return true;
+    })
+    .map((group) => {
+      if (hierarchyLevel === "donvi" && group.name === "Văn bản") {
+        return {
+          ...group,
+          items: group.items.filter(
+            (item) => item.label === "Công văn đến / đi",
+          ),
+        };
+      }
+      return group;
+    });
 }
 
 export default function Sidebar({
   collapsed,
   userHierarchyLevel,
+  userFunctionalRole,
 }: SidebarProps) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
@@ -120,6 +186,11 @@ export default function Sidebar({
       [groupName]: !prev[groupName],
     }));
   };
+
+  const visibleGroups = filterNavGroups(
+    userHierarchyLevel,
+    (userFunctionalRole || "tuyen_quan") as FunctionalRole,
+  );
 
   return (
     <aside
@@ -153,34 +224,7 @@ export default function Sidebar({
       </div>
 
       <nav className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-3 pb-5 pt-2">
-        {navGroups
-          .filter((group) => {
-            if (userHierarchyLevel === "donvi") {
-              return (
-                group.name === "Đơn vị nhận quân" ||
-                group.name === "Văn bản" ||
-                group.name === "Báo cáo"
-              );
-            }
-            if (["tinh", "xa"].includes(userHierarchyLevel)) {
-              return group.name !== "Đơn vị nhận quân";
-            }
-            return true;
-          })
-          .map((group) => {
-            if (
-              userHierarchyLevel === "donvi" &&
-              group.name === "Văn bản"
-            ) {
-              return {
-                ...group,
-                items: group.items.filter(
-                  (item) => item.label === "Công văn đến / đi",
-                ),
-              };
-            }
-            return group;
-          })
+        {visibleGroups
           .map((group) => {
             const isExpanded = expandedGroups[group.name];
 

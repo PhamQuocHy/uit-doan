@@ -59,3 +59,26 @@ export async function getUnitRecruitmentCapacity(
 
   return { unitCode, totalCitizens, eligible, byStatus };
 }
+
+/** Số hồ sơ đã nhập ngũ trong phạm vi đơn vị (dùng cho tiến độ chỉ tiêu) */
+export async function getUnitEnlistedCount(unitCode: string): Promise<number> {
+  const dbOk = await pingDb();
+  if (dbOk) {
+    try {
+      const [row] = await queryRows<(RowDataPacket & { cnt: number })[]>(
+        `SELECT COUNT(*) AS cnt FROM citizens
+         WHERE military_status = 'nhapngu'
+           AND (unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))`,
+        [unitCode, unitCode],
+      );
+      return Number(row?.cnt || 0);
+    } catch (e) {
+      console.error("getUnitEnlistedCount mysql:", e);
+    }
+  }
+
+  const unitCodes = getUnitDescendants(unitCode);
+  return db.citizens
+    .findAll({ limit: 100000, unitCodes })
+    .data.filter((c) => c.militaryStatus === "nhapngu").length;
+}

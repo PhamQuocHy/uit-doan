@@ -18,6 +18,7 @@ interface Quota {
   year: number;
   fromLevel: string;
   fromUnit: string;
+  fromUnitName?: string;
   toLevel: string;
   toUnit: string;
   toUnitName: string;
@@ -64,6 +65,7 @@ export default function QuotaPage() {
   const [quotas, setQuotas] = useState<Quota[]>([]);
   const [childUnits, setChildUnits] = useState<ChildUnit[]>([]);
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionUnitName, setSessionUnitName] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -96,6 +98,7 @@ export default function QuotaPage() {
       const d = await quotaRes.json();
       setQuotas(d.data || []);
       setChildUnits(d.childUnits || []);
+      setSessionUnitName(d.sessionUnitName || "");
     }
     setLoading(false);
   }, []);
@@ -201,11 +204,16 @@ export default function QuotaPage() {
           <p className="text-sm mt-1" style={{ color: "#007aff" }}>
             {session && (
               <span className="font-medium">
-                Đơn vị: {unitNames[session.unitCode] || session.unitCode} (
+                Đơn vị: {sessionUnitName || unitNames[session.unitCode] || session.unitCode} (
                 {levelLabel[session.hierarchyLevel] || session.hierarchyLevel})
               </span>
             )}
           </p>
+          {!isBo && (
+            <p className="text-xs mt-1 text-gray-400">
+              Đã nhập ngũ / Đã hoàn thành = số hồ sơ trạng thái Nhập ngũ trong đơn vị nhận chỉ tiêu
+            </p>
+          )}
         </div>
         {session?.hierarchyLevel !== "xa" && (
           <button
@@ -330,7 +338,8 @@ export default function QuotaPage() {
                       className="hover:bg-gray-50/50 transition-colors"
                     >
                       <td className="px-6 py-4 text-gray-600 text-xs">
-                        {unitNames[q.fromUnit] ||
+                        {q.fromUnitName ||
+                          unitNames[q.fromUnit] ||
                           (q.fromUnit === "bo" ? "Bộ Quốc phòng" : q.fromUnit)}
                       </td>
                       <td className="px-6 py-4 font-medium text-gray-900">

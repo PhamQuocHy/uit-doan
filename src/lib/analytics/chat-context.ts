@@ -65,6 +65,97 @@ const ALIASES: Record<string, string> = {
   hue: "46",
 };
 
+/** Từ khóa tiếng Việt → mã trạng thái NVQS */
+const STATUS_KEYWORDS: Array<{ keys: string[]; status: string }> = [
+  { keys: ["da dau", "dau tuyen", "trung tuyen", "trungtuyen"], status: "trungtuyen" },
+  { keys: ["rot tuyen", "rot", "truot tuyen", "truottuyen"], status: "truottuyen" },
+  { keys: ["tam hoan", "tamhoan"], status: "tamhoan" },
+  { keys: ["mien goi", "miengoi"], status: "miengoi" },
+  { keys: ["nhap ngu", "nhapngu"], status: "nhapngu" },
+  { keys: ["chua kham", "chuakham"], status: "chuakham" },
+  { keys: ["dang kham", "dangkham"], status: "dangkham" },
+];
+
+export type CitizenQueryIntent = {
+  mode: "list" | "count" | "overview";
+  statuses: string[];
+};
+
+/** Nhận diện câu hỏi liệt kê / đếm theo trạng thái NVQS */
+export function detectCitizenQueryIntent(question: string): CitizenQueryIntent | null {
+  const q = normalizeVn(question);
+  if (!q) return null;
+
+  const listWords = [
+    "liet ke",
+    "danh sach",
+    "ke ten",
+    "ten nguoi",
+    "nhung nguoi",
+    "ai da",
+    "cong dan",
+    "ho so",
+  ];
+  const countWords = [
+    "bao nhieu",
+    "co may",
+    "tong so",
+    "dem",
+    "thong ke",
+    "tom tat",
+    "tinh hinh",
+  ];
+
+  const isList = listWords.some((w) => q.includes(w));
+  const isCount = countWords.some((w) => q.includes(w));
+  if (!isList && !isCount) return null;
+
+  const statuses: string[] = [];
+  for (const { keys, status } of STATUS_KEYWORDS) {
+    if (keys.some((k) => q.includes(k))) {
+      statuses.push(status);
+    }
+  }
+
+  // "đậu" đơn lẻ — tránh nhầm "đậu/không đậu" chung chung
+  if (statuses.length === 0 && (q.includes(" da dau") || q.endsWith(" dau") || q.includes("dau tuyen"))) {
+    statuses.push("trungtuyen");
+  }
+
+  if (statuses.length === 0) {
+    if (q.includes("tam hoan")) statuses.push("tamhoan");
+    if (q.includes("mien")) statuses.push("miengoi");
+  }
+
+  if (statuses.length === 0) return null;
+
+  return {
+    mode: isList ? "list" : isCount ? "count" : "overview",
+    statuses: [...new Set(statuses)],
+  };
+}
+
+function scopeWhereClause(
+  scope: SessionScope,
+  alias = "",
+): { where: string; params: string[]; label: string } {
+  const col = alias ? `${alias}.unit_code` : "unit_code";
+  if (scope.hierarchyLevel === "bo") {
+    return {
+      where: `${col} IS NOT NULL AND ${col} <> ''`,
+      params: [],
+      label: "Toàn quốc",
+    };
+  }
+  const unitName =
+    hierarchyUnits.find((u) => u.code === scope.unitCode)?.name || scope.unitCode;
+  return {
+    where: `(${col} = ? OR ${col} LIKE CONCAT(?, '-%'))`,
+    params: [scope.unitCode, scope.unitCode],
+    label: unitName,
+  };
+}
+
 /** Tìm tỉnh/TP được nhắc trong câu hỏi */
 export function detectProvincesInQuestion(question: string): ProvinceRef[] {
   const provinces = loadProvinces();
@@ -123,6 +214,203 @@ async function provinceTotalsMysql(): Promise<string[]> {
     const name = nameByCode[r.tinh] || `Mã ${r.tinh}`;
     return `- ${name} (mã ${r.tinh}): ${Number(r.cnt)} hồ sơ`;
   });
+}
+
+async function nationalStatusBreakdownMysql(): Promise<string[]> {
+  const rows = await queryRows<
+    (RowDataPacket & { military_status: string; cnt: number })[]
+  >(
+    `SELECT military_status, COUNT(*) AS cnt
+     FROM citizens
+     GROUP BY military_status
+     ORDER BY cnt DESC`,
+  );
+  const total = rows.reduce((s, r) => s + Number(r.cnt), 0);
+  return [
+    "### Phân bố trạng thái NVQS toàn quốc",
+    `Tổng: ${total} hồ sơ`,
+    ...rows.map(
+      (r) =>
+        `- ${STATUS_LABELS[r.military_status] || r.military_status}: ${Number(r.cnt)}`,
+    ),
+  ];
+}
+
+async function statusByProvinceMysql(
+  statuses: string[],
+  scope: SessionScope,
+  detectedProvinces: ProvinceRef[] = [],
+): Promise<string[]> {
+  const scopeClause = scopeWhereClause(scope);
+  const placeholders = statuses.map(() => "?").join(", ");
+  const params: string[] = [...statuses, ...scopeClause.params];
+
+  let provinceFilter = "";
+  if (detectedProvinces.length > 0) {
+    const provinceClauses = detectedProvinces.map(
+      () => "(unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))",
+    );
+    provinceFilter = ` AND (${provinceClauses.join(" OR ")})`;
+    for (const p of detectedProvinces) {
+      params.push(p.code, p.code);
+    }
+  }
+
+  const rows = await queryRows<
+    (RowDataPacket & { tinh: string; cnt: number })[]
+  >(
+    `SELECT
+       COALESCE(SUBSTRING_INDEX(unit_code, '-', 1), unit_code) AS tinh,
+       COUNT(*) AS cnt
+     FROM citizens
+     WHERE military_status IN (${placeholders})
+       AND ${scopeClause.where}${provinceFilter}
+     GROUP BY tinh
+     ORDER BY cnt DESC, tinh ASC`,
+    params,
+  );
+
+  const nameByCode = Object.fromEntries(
+    loadProvinces().map((p) => [p.code, p.name]),
+  );
+  const statusLabel = statuses
+    .map((s) => STATUS_LABELS[s] || s)
+    .join(", ");
+
+  return [
+    `### Phân bố theo tỉnh/TP — trạng thái: ${statusLabel} (${scopeClause.label})`,
+    `Số tỉnh/TP có dữ liệu: ${rows.length}`,
+    ...rows.map((r) => {
+      const name = nameByCode[r.tinh] || `Mã ${r.tinh}`;
+      return `- ${name} (mã ${r.tinh}): ${Number(r.cnt)} hồ sơ`;
+    }),
+  ];
+}
+
+async function statusTotalMysql(
+  statuses: string[],
+  scope: SessionScope,
+  detectedProvinces: ProvinceRef[] = [],
+): Promise<number> {
+  const scopeClause = scopeWhereClause(scope);
+  const placeholders = statuses.map(() => "?").join(", ");
+  const params: string[] = [...statuses, ...scopeClause.params];
+
+  let provinceFilter = "";
+  if (detectedProvinces.length > 0) {
+    const provinceClauses = detectedProvinces.map(
+      () => "(unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))",
+    );
+    provinceFilter = ` AND (${provinceClauses.join(" OR ")})`;
+    for (const p of detectedProvinces) {
+      params.push(p.code, p.code);
+    }
+  }
+
+  const [row] = await queryRows<(RowDataPacket & { cnt: number })[]>(
+    `SELECT COUNT(*) AS cnt FROM citizens
+     WHERE military_status IN (${placeholders})
+       AND ${scopeClause.where}${provinceFilter}`,
+    params,
+  );
+  return Number(row?.cnt || 0);
+}
+
+function statusByProvinceMemory(
+  statuses: string[],
+  scope: SessionScope,
+  detectedProvinces: ProvinceRef[],
+): { total: number; lines: string[] } {
+  let all = db.citizens.findAll({ limit: 10000 }).data.filter((c) =>
+    statuses.includes(c.militaryStatus),
+  );
+
+  if (scope.hierarchyLevel !== "bo") {
+    all = all.filter(
+      (c) =>
+        c.unitCode === scope.unitCode ||
+        c.unitCode?.startsWith(`${scope.unitCode}-`),
+    );
+  }
+
+  if (detectedProvinces.length > 0) {
+    const codes = new Set(detectedProvinces.map((p) => p.code));
+    all = all.filter(
+      (c) =>
+        c.unitCode &&
+        [...codes].some(
+          (code) => c.unitCode === code || c.unitCode.startsWith(`${code}-`),
+        ),
+    );
+  }
+
+  const nameByCode = Object.fromEntries(
+    loadProvinces().map((p) => [p.code, p.name]),
+  );
+  const byProvince = new Map<string, number>();
+  for (const c of all) {
+    const tinh = c.unitCode?.split("-")[0] || "unknown";
+    byProvince.set(tinh, (byProvince.get(tinh) || 0) + 1);
+  }
+
+  const lines = [...byProvince.entries()]
+    .sort(([a], [b]) =>
+      (nameByCode[a] || a).localeCompare(nameByCode[b] || b, "vi"),
+    )
+    .map(([tinh, cnt]) => {
+      const name = nameByCode[tinh] || `Mã ${tinh}`;
+      return `- ${name} (mã ${tinh}): ${cnt} hồ sơ`;
+    });
+
+  return { total: all.length, lines };
+}
+
+/** Trả lời trực tiếp chỉ số hồ sơ (không liệt kê từng người) */
+export async function buildDirectCitizenStatsReply(
+  scope: SessionScope,
+  question: string,
+): Promise<string | null> {
+  const intent = detectCitizenQueryIntent(question);
+  if (!intent) return null;
+
+  const detected = detectProvincesInQuestion(question);
+  const statusLabel = intent.statuses
+    .map((s) => STATUS_LABELS[s] || s)
+    .join(", ");
+  const scopeClause = scopeWhereClause(scope);
+  const dbOk = await pingDb();
+
+  if (dbOk) {
+    try {
+      const total = await statusTotalMysql(intent.statuses, scope, detected);
+      const byProvince = await statusByProvinceMysql(
+        intent.statuses,
+        scope,
+        detected,
+      );
+      const provinceLines = byProvince.filter((l) => l.startsWith("- "));
+      return [
+        `Thống kê hồ sơ — trạng thái: ${statusLabel}`,
+        `Phạm vi: ${scopeClause.label}`,
+        `Tổng: ${total} hồ sơ`,
+        "",
+        detected.length > 0 ? "Theo địa bàn được hỏi:" : "Theo tỉnh/thành phố:",
+        ...provinceLines,
+      ].join("\n");
+    } catch (e) {
+      console.error("buildDirectCitizenStatsReply mysql:", e);
+    }
+  }
+
+  const mem = statusByProvinceMemory(intent.statuses, scope, detected);
+  return [
+    `Thống kê hồ sơ — trạng thái: ${statusLabel}`,
+    `Phạm vi: ${scopeClause.label}`,
+    `Tổng: ${mem.total} hồ sơ`,
+    "",
+    "Theo tỉnh/thành phố:",
+    ...mem.lines,
+  ].join("\n");
 }
 
 async function scopeStatsMysql(
@@ -189,14 +477,40 @@ export async function buildChatKnowledgeContext(
   question = "",
 ): Promise<{ text: string; source: "mysql" | "memory"; focus: string[] }> {
   const detected = detectProvincesInQuestion(question);
+  const citizenIntent = detectCitizenQueryIntent(question);
   const dbOk = await pingDb();
 
   if (dbOk) {
     try {
       const parts: string[] = [
         `Người dùng: ${scope.name} | Cấp: ${scope.hierarchyLevel} | Đơn vị: ${scope.unitCode}`,
-        "Quy tắc: Cấp Bộ xem được toàn quốc. Khi hỏi 1 tỉnh/TP, dùng đúng số liệu mục chi tiết tỉnh đó bên dưới.",
       ];
+
+      // Câu hỏi thống kê theo trạng thái → chỉ số hồ sơ, không liệt kê từng người
+      if (citizenIntent) {
+        parts.push(
+          "Quy tắc: Chỉ trả lời SỐ HỒ SƠ (tổng và theo tỉnh/TP). Không liệt kê tên/CCCD từng công dân.",
+        );
+        parts.push(...(await nationalStatusBreakdownMysql()));
+        parts.push(
+          ...(await statusByProvinceMysql(
+            citizenIntent.statuses,
+            scope,
+            detected,
+          )),
+        );
+
+        return {
+          text: parts.join("\n"),
+          source: "mysql",
+          focus: detected.map((d) => d.name),
+        };
+      }
+
+      parts.push(
+        "Quy tắc: Cấp Bộ xem được toàn quốc. Khi hỏi 1 tỉnh/TP, dùng đúng số liệu mục chi tiết tỉnh đó bên dưới.",
+      );
+      parts.push(...(await nationalStatusBreakdownMysql()));
 
       if (scope.hierarchyLevel === "bo") {
         const [national] = await queryRows<(RowDataPacket & { cnt: number })[]>(
@@ -213,7 +527,7 @@ export async function buildChatKnowledgeContext(
           hierarchyUnits.find((u) => u.code === scope.unitCode)?.name ||
           scope.unitCode;
         parts.push(
-          ...(await scopeStatsMysql(`Phạm vi đơn vị: ${unitName}`, where, params)),
+          ...(await scopeStatsMysql(`Phạm vi đơn vị: ${unitName}`, where, params, 100)),
         );
       }
 
@@ -274,6 +588,33 @@ export async function buildChatKnowledgeContext(
   // Fallback memory
   const provinces = loadProvinces();
   const all = db.citizens.findAll({ limit: 10000 }).data;
+
+  if (citizenIntent) {
+    const statusCounts: Record<string, number> = {};
+    for (const c of all) {
+      statusCounts[c.militaryStatus] = (statusCounts[c.militaryStatus] || 0) + 1;
+    }
+    const mem = statusByProvinceMemory(citizenIntent.statuses, scope, detected);
+
+    const parts = [
+      `Nguồn: demo in-memory | Cấp ${scope.hierarchyLevel}`,
+      "Quy tắc: Chỉ trả lời số hồ sơ, không liệt kê tên từng người.",
+      "### Phân bố trạng thái NVQS",
+      ...Object.entries(statusCounts).map(
+        ([s, n]) => `- ${STATUS_LABELS[s] || s}: ${n}`,
+      ),
+      `Tổng theo trạng thái hỏi: ${mem.total} hồ sơ`,
+      "Theo tỉnh/TP:",
+      ...mem.lines,
+    ];
+
+    return {
+      text: parts.join("\n"),
+      source: "memory",
+      focus: detected.map((d) => d.name),
+    };
+  }
+
   const byTinh: Record<string, number> = {};
   for (const c of all) {
     const tinh = c.unitCode?.split("-")[0] || "unknown";

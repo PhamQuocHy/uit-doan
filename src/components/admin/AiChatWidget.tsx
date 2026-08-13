@@ -12,7 +12,7 @@ type ChatMsg = {
 const SUGGESTIONS = [
   "Tóm tắt tình hình NVQS hiện tại",
   "Có bao nhiêu người tạm hoãn?",
-  "Liệt kê công dân đã đậu",
+  "Có bao nhiêu công dân đã đậu?",
 ];
 
 export default function AiChatWidget() {
@@ -22,8 +22,23 @@ export default function AiChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const sync = () =>
+      setDrawerOpen(
+        document.body.hasAttribute("data-admin-drawer-open"),
+      );
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["data-admin-drawer-open"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/ai/chat")
@@ -93,21 +108,21 @@ export default function AiChatWidget() {
 
   return (
     <>
-      {!open && (
+      {!open && !drawerOpen && (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 inline-flex h-14 items-center gap-2 rounded-full bg-[#007aff] px-5 text-[15px] font-bold text-white shadow-[0_12px_40px_rgba(0,122,255,0.45)] transition hover:bg-[#0066d6] hover:shadow-[0_16px_48px_rgba(0,122,255,0.5)]"
+          title="Trợ lý AI"
+          className="fixed bottom-5 right-5 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#007aff] text-white shadow-[0_8px_24px_rgba(0,122,255,0.35)] transition hover:bg-[#0066d6] hover:shadow-[0_10px_28px_rgba(0,122,255,0.4)]"
           aria-label="Mở chat AI"
         >
-          <MessageCircle size={22} />
-          Trợ lý AI
+          <MessageCircle size={20} />
         </button>
       )}
 
       {open && (
         <div
-          className="fixed bottom-6 right-6 z-50 flex w-[min(100vw-2rem,400px)] flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)]"
+          className="fixed bottom-5 right-5 z-40 flex w-[min(100vw-2rem,400px)] flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)]"
           style={{ height: "min(560px, calc(100vh - 6rem))" }}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-[#0a84ff] to-[#5ac8fa] px-4 py-3.5 text-white">

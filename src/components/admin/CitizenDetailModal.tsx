@@ -8,6 +8,16 @@ import {
   hierarchyNeedsEditPin,
   isDetailedHealthPhase,
 } from "@/lib/data";
+import {
+  getCallDisplayLabel,
+  type CallIntent,
+} from "@/lib/enlistment-approval";
+import HealthExamWorkflow from "@/components/admin/HealthExamWorkflow";
+import HealthExamFormModal from "@/components/admin/HealthExamFormModal";
+import {
+  canEnterHealthRecords,
+  type HealthExamRound,
+} from "@/lib/health-exam";
 
 type TabId = "identity" | "education" | "health" | "residence" | "nvqs";
 
@@ -63,22 +73,30 @@ const MILITARY_STATUS: Record<string, string> = {
   nhapngu: "Nhập ngũ",
 };
 
-const NVQS_STATUS_OPTIONS: { value: Citizen["militaryStatus"]; label: string }[] = [
-  { value: "chuakham", label: "Chưa khám" },
-  { value: "dangkham", label: "Đang khám" },
-  { value: "trungtuyen", label: "Đậu" },
-  { value: "truottuyen", label: "Rớt" },
+type NvqsCallChoice = CallIntent | "tamhoan" | "miengoi";
+
+const NVQS_CALL_OPTIONS: { value: NvqsCallChoice; label: string }[] = [
+  { value: "unset", label: "Chưa xác định" },
+  { value: "du_kien_goi", label: "Dự kiến gọi (chuyển xét duyệt)" },
+  { value: "khong_goi", label: "Không gọi" },
   { value: "tamhoan", label: "Tạm hoãn" },
   { value: "miengoi", label: "Miễn gọi" },
-  { value: "nhapngu", label: "Nhập ngũ" },
 ];
+
+function citizenToNvqsChoice(c: Citizen): NvqsCallChoice {
+  if (c.militaryStatus === "tamhoan") return "tamhoan";
+  if (c.militaryStatus === "miengoi") return "miengoi";
+  if (c.callIntent === "du_kien_goi") return "du_kien_goi";
+  if (c.callIntent === "khong_goi") return "khong_goi";
+  return "unset";
+}
+
+function nvqsChoiceNeedsReason(choice: NvqsCallChoice) {
+  return choice === "tamhoan";
+}
 
 const NVQS_INPUT_CLS =
   "w-full min-h-[44px] rounded-[12px] border border-black/[0.08] bg-white px-4 text-[15px] text-[#1d1d1f] outline-none transition-colors focus:border-[#007aff]/40 focus:ring-2 focus:ring-[#007aff]/15";
-
-function nvqsStatusNeedsReason(status: Citizen["militaryStatus"]) {
-  return status === "truottuyen" || status === "tamhoan";
-}
 
 interface CitizenDetailModalProps {
   citizen: Citizen | null;
@@ -106,7 +124,7 @@ export default function CitizenDetailModal({
   const [educationLoading, setEducationLoading] = useState(false);
   const [residenceRecords, setResidenceRecords] = useState<ResidenceRecord[]>([]);
   const [residenceLoading, setResidenceLoading] = useState(false);
-  const [nvqsStatus, setNvqsStatus] = useState<Citizen["militaryStatus"]>("chuakham");
+  const [nvqsCallChoice, setNvqsCallChoice] = useState<NvqsCallChoice>("unset");
   const [nvqsReason, setNvqsReason] = useState("");
   const [nvqsSaving, setNvqsSaving] = useState(false);
   const [nvqsError, setNvqsError] = useState<string | null>(null);
@@ -116,6 +134,9 @@ export default function CitizenDetailModal({
   const [nvqsPinVerifying, setNvqsPinVerifying] = useState(false);
   const [nvqsVerifiedPin, setNvqsVerifiedPin] = useState("");
   const [sessionLevel, setSessionLevel] = useState<string | null>(null);
+  const [sessionFunctionalRole, setSessionFunctionalRole] = useState<string | null>(null);
+  const [sessionUserRole, setSessionUserRole] = useState<string | null>(null);
+  const [healthFormRound, setHealthFormRound] = useState<HealthExamRound | null>(null);
   const [open, setOpen] = useState(false);
 
   const isBoLevel = sessionLevel === "bo";
@@ -137,15 +158,28 @@ export default function CitizenDetailModal({
       setOpen(false);
       return;
     }
-    setTab(initialTab);
+    setTab(sessionFunctionalRole === "y_te" ? "health" : initialTab);
     const t = window.setTimeout(() => setOpen(true), 10);
     return () => window.clearTimeout(t);
   }, [citizen, initialTab]);
 
   useEffect(() => {
+    if (open) {
+      document.body.setAttribute("data-admin-drawer-open", "true");
+    } else {
+      document.body.removeAttribute("data-admin-drawer-open");
+    }
+    return () => document.body.removeAttribute("data-admin-drawer-open");
+  }, [open]);
+
+  useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setSessionLevel(data?.user?.hierarchyLevel ?? null))
+      .then((data) => {
+        setSessionLevel(data?.user?.hierarchyLevel ?? null);
+        setSessionFunctionalRole(data?.user?.functionalRole ?? null);
+        setSessionUserRole(data?.user?.role ?? null);
+      })
       .catch(() => setSessionLevel(null));
   }, []);
 
@@ -199,7 +233,7 @@ export default function CitizenDetailModal({
 
   useEffect(() => {
     if (!citizen) {
-      setNvqsStatus("chuakham");
+      setNvqsCallChoice("unset");
       setNvqsReason("");
       setNvqsError(null);
       setNvqsUnlocked(false);
@@ -208,14 +242,14 @@ export default function CitizenDetailModal({
       setNvqsPinError(null);
       return;
     }
-    setNvqsStatus(citizen.militaryStatus);
+    setNvqsCallChoice(citizenToNvqsChoice(citizen));
     setNvqsReason(citizen.militaryStatusReason || "");
     setNvqsError(null);
     setNvqsUnlocked(false);
     setNvqsPin("");
     setNvqsVerifiedPin("");
     setNvqsPinError(null);
-  }, [citizen?.id, citizen?.militaryStatus, citizen?.militaryStatusReason, citizen?.militaryStatusLocked]);
+  }, [citizen?.id, citizen?.militaryStatus, citizen?.militaryStatusReason, citizen?.militaryStatusLocked, citizen?.callIntent, citizen?.approvalStatus]);
 
   const handleVerifyNvqsPin = async () => {
     if (!nvqsPin.trim()) {
@@ -246,22 +280,30 @@ export default function CitizenDetailModal({
   const handleSaveNvqs = async () => {
     if (!citizen) return;
 
-    if (nvqsStatusNeedsReason(nvqsStatus) && !nvqsReason.trim()) {
-      setNvqsError("Vui lòng nhập lý do khi chọn Rớt hoặc Tạm hoãn.");
+    if (nvqsChoiceNeedsReason(nvqsCallChoice) && !nvqsReason.trim()) {
+      setNvqsError("Vui lòng nhập lý do khi chọn Tạm hoãn.");
       return;
     }
 
     setNvqsSaving(true);
     setNvqsError(null);
     try {
+      const isSpecial = nvqsCallChoice === "tamhoan" || nvqsCallChoice === "miengoi";
       const res = await fetch(`/api/admin/citizens/${citizen.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          militaryStatus: nvqsStatus,
-          militaryStatusReason: nvqsStatusNeedsReason(nvqsStatus)
-            ? nvqsReason.trim()
-            : "",
+          ...(isSpecial
+            ? {
+                militaryStatus: nvqsCallChoice,
+                callIntent: "unset",
+                militaryStatusReason:
+                  nvqsCallChoice === "tamhoan" ? nvqsReason.trim() : "",
+              }
+            : {
+                callIntent: nvqsCallChoice,
+                militaryStatusReason: "",
+              }),
           militaryStatusLocked: true,
           ...(nvqsVerifiedPin ? { editPin: nvqsVerifiedPin } : {}),
         }),
@@ -325,6 +367,27 @@ export default function CitizenDetailModal({
     );
   }, [healthRecords, healthYear]);
 
+  const examYear = healthYear ?? new Date().getFullYear();
+  const canEnterHealth = canEnterHealthRecords(
+    sessionFunctionalRole,
+    sessionUserRole ?? undefined,
+  );
+
+  const reloadHealthRecords = useCallback(() => {
+    if (!citizen) return;
+    setHealthLoading(true);
+    fetch(`/api/admin/health?citizenId=${citizen.id}&limit=50`)
+      .then((r) => r.json())
+      .then((data) => {
+        const records: HealthRecord[] = data.data || [];
+        setHealthRecords(records);
+        const years = [...new Set(records.map((r) => r.year))].sort((a, b) => b - a);
+        setHealthYear(years[0] ?? examYear);
+      })
+      .catch(() => setHealthRecords([]))
+      .finally(() => setHealthLoading(false));
+  }, [citizen, examYear]);
+
   if (!citizen) return null;
 
   const renderCell = (
@@ -386,6 +449,8 @@ export default function CitizenDetailModal({
         {renderCell("BMI", calcBmi(r.height, r.weight))}
         {renderCell("Huyết áp", r.bloodPressure)}
         {renderCell("Thị lực (sơ bộ)", r.vision, 2)}
+        {r.detail?.physicalDefects &&
+          renderCell("Dị tật / bệnh lý", r.detail.physicalDefects, 2)}
         {renderCell("Kết luận phân loại", r.conclusion, 2)}
         {renderCell(
           "Ý nghĩa",
@@ -403,7 +468,7 @@ export default function CitizenDetailModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-[60] flex justify-end">
       {/* Backdrop */}
       <button
         type="button"
@@ -446,7 +511,9 @@ export default function CitizenDetailModal({
 
         {/* Tabs */}
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/[0.06] px-4">
-          {TABS.map((t) => (
+          {TABS.filter((t) =>
+            sessionFunctionalRole !== "y_te" || t.id === "health"
+          ).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -646,6 +713,13 @@ export default function CitizenDetailModal({
 
           {tab === "health" && (
             <div className="flex flex-col gap-4">
+              <HealthExamWorkflow
+                year={examYear}
+                records={healthRecords}
+                canEnter={canEnterHealth}
+                onEnterRound={setHealthFormRound}
+              />
+
               <div className="rounded-[14px] border border-black/[0.06] bg-[#f8fafb] px-4 py-3">
                 <p className="text-[12px] font-medium text-[#8e8e93]">
                   Phân loại sức khỏe (tóm tắt)
@@ -994,21 +1068,21 @@ export default function CitizenDetailModal({
                     htmlFor="nvqs-status"
                     className="text-[14px] font-medium text-[#6e6e73]"
                   >
-                    Tình trạng NVQS
+                    Dự kiến tuyển gọi
                   </label>
                   {nvqsCanEdit ? (
                     <select
                       id="nvqs-status"
                       className={`${NVQS_INPUT_CLS} mt-1.5`}
-                      value={nvqsStatus}
+                      value={nvqsCallChoice}
                       onChange={(e) => {
-                        const next = e.target.value as Citizen["militaryStatus"];
-                        setNvqsStatus(next);
+                        const next = e.target.value as NvqsCallChoice;
+                        setNvqsCallChoice(next);
                         setNvqsError(null);
-                        if (!nvqsStatusNeedsReason(next)) setNvqsReason("");
+                        if (!nvqsChoiceNeedsReason(next)) setNvqsReason("");
                       }}
                     >
-                      {NVQS_STATUS_OPTIONS.map((opt) => (
+                      {NVQS_CALL_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -1016,13 +1090,13 @@ export default function CitizenDetailModal({
                     </select>
                   ) : (
                     <p className="mt-1.5 text-[17px] font-semibold text-[#1d1d1f]">
-                      {MILITARY_STATUS[citizen.militaryStatus] || citizen.militaryStatus}
+                      {getCallDisplayLabel(citizen).label}
                     </p>
                   )}
                 </div>
 
-                {nvqsStatusNeedsReason(
-                  nvqsCanEdit ? nvqsStatus : citizen.militaryStatus,
+                {nvqsChoiceNeedsReason(
+                  nvqsCanEdit ? nvqsCallChoice : citizenToNvqsChoice(citizen),
                 ) &&
                   (nvqsCanEdit ? (
                     <div className="min-w-0">
@@ -1037,11 +1111,7 @@ export default function CitizenDetailModal({
                         id="nvqs-reason"
                         rows={3}
                         className={`${NVQS_INPUT_CLS} mt-1.5 min-h-[88px] resize-y py-3`}
-                        placeholder={
-                          nvqsStatus === "truottuyen"
-                            ? "Nhập lý do rớt tuyển (VD: không đủ tiêu chuẩn sức khỏe...)"
-                            : "Nhập lý do tạm hoãn (VD: đang theo học đại học...)"
-                        }
+                        placeholder="Nhập lý do tạm hoãn (VD: đang theo học đại học...)"
                         value={nvqsReason}
                         onChange={(e) => {
                           setNvqsReason(e.target.value);
@@ -1069,7 +1139,7 @@ export default function CitizenDetailModal({
                     onClick={handleSaveNvqs}
                     disabled={
                       nvqsSaving ||
-                      (nvqsStatus === citizen.militaryStatus &&
+                      (nvqsCallChoice === citizenToNvqsChoice(citizen) &&
                         nvqsReason.trim() === (citizen.militaryStatusReason || "").trim())
                     }
                     className="inline-flex min-h-[44px] items-center rounded-[12px] bg-[#007aff] px-5 text-[15px] font-bold text-white transition-opacity hover:bg-[#0066d6] disabled:opacity-40"
@@ -1082,7 +1152,7 @@ export default function CitizenDetailModal({
                       onClick={() => {
                         setNvqsUnlocked(false);
                         setNvqsVerifiedPin("");
-                        setNvqsStatus(citizen.militaryStatus);
+                        setNvqsCallChoice(citizenToNvqsChoice(citizen));
                         setNvqsReason(citizen.militaryStatusReason || "");
                         setNvqsError(null);
                       }}
@@ -1097,11 +1167,11 @@ export default function CitizenDetailModal({
               <p className="mt-4 text-[13px] text-[#6e6e73]">
                 Hiện tại:{" "}
                 <strong className="text-[#1d1d1f]">
-                  {MILITARY_STATUS[citizen.militaryStatus] || citizen.militaryStatus}
+                  {getCallDisplayLabel(citizen).label}
                 </strong>
-                {citizen.militaryStatusReason &&
-                  nvqsStatusNeedsReason(citizen.militaryStatus) && (
-                    <> — {citizen.militaryStatusReason}</>
+                {citizen.approvalStatus === "pending" &&
+                  citizen.callIntent === "du_kien_goi" && (
+                    <> — đang chờ xét duyệt tại mục Xét duyệt danh sách</>
                   )}
                 {nvqsIsLocked && (
                   <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[rgba(255,149,0,0.12)] px-2 py-0.5 text-[12px] font-semibold text-[#c93400]">
@@ -1139,7 +1209,7 @@ export default function CitizenDetailModal({
             >
               Đóng
             </button>
-            {onEdit && (
+            {onEdit && sessionFunctionalRole !== "y_te" && (
               <button
                 type="button"
                 onClick={() => {
@@ -1154,6 +1224,21 @@ export default function CitizenDetailModal({
           </div>
         </div>
       </aside>
+
+      {healthFormRound && citizen && (
+        <HealthExamFormModal
+          citizenId={citizen.id}
+          citizenName={citizen.fullName}
+          round={healthFormRound}
+          hierarchyLevel={sessionLevel || "xa"}
+          year={examYear}
+          onClose={() => setHealthFormRound(null)}
+          onSaved={() => {
+            reloadHealthRecords();
+            onCitizenUpdated?.(citizen);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1291,7 +1376,14 @@ function DetailedHealthExamTabs({ record }: { record: HealthRecord }) {
             <HealthDetailField label="Kết quả khám ngoại khoa" value={d?.surgery} colSpan={2} />
           )}
           {tab === "lab" && (
-            <HealthDetailField label="Kết quả xét nghiệm" value={d?.labTests} colSpan={2} />
+            <div className="grid grid-cols-1 gap-y-3">
+              <HealthDetailField label="Xét nghiệm máu" value={d?.bloodTest || d?.labTests} colSpan={2} />
+              <HealthDetailField label="Xét nghiệm nước tiểu" value={d?.urineTest} colSpan={2} />
+              <HealthDetailField label="Siêu âm" value={d?.ultrasound} colSpan={2} />
+              <HealthDetailField label="Điện tim" value={d?.ecg} colSpan={2} />
+              <HealthDetailField label="X-quang phổi" value={d?.chestXray} colSpan={2} />
+              <HealthDetailField label="Sàng lọc ma túy / HIV" value={d?.drugHivScreen} colSpan={2} />
+            </div>
           )}
         </div>
       </div>

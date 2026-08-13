@@ -32,11 +32,13 @@ export default function AdminLayoutClient({
   userName,
   userRole,
   userHierarchyLevel,
+  userFunctionalRole,
 }: {
   children: React.ReactNode;
   userName: string;
   userRole: string;
   userHierarchyLevel: string;
+  userFunctionalRole: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
@@ -59,6 +61,7 @@ export default function AdminLayoutClient({
         userName={userName}
         userRole={userRole}
         userHierarchyLevel={userHierarchyLevel}
+        userFunctionalRole={userFunctionalRole}
       />
       <div
         className="flex min-h-screen flex-col transition-all duration-300"

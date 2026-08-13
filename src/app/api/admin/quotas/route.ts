@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, getChildUnits } from "@/lib/data";
+import { db, getChildUnits, hierarchyUnits } from "@/lib/data";
 import { getSession } from "@/lib/auth";
-import { getUnitRecruitmentCapacity } from "@/lib/quota-capacity";
+import {
+  getUnitRecruitmentCapacity,
+  getUnitEnlistedCount,
+} from "@/lib/quota-capacity";
+
+function resolveUnitName(code: string): string {
+  if (code === "bo") return "Bộ Quốc phòng";
+  return hierarchyUnits.find((u) => u.code === code)?.name || code;
+}
+
+async function enrichQuotas(quotas: ReturnType<typeof db.quotas.findForUnit>) {
+  return Promise.all(
+    quotas.map(async (q) => ({
+      ...q,
+      filled: await getUnitEnlistedCount(q.toUnit),
+      fromUnitName: resolveUnitName(q.fromUnit),
+    })),
+  );
+}
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -23,12 +41,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ capacity });
   }
 
-  const quotas = db.quotas.findForUnit(session.unitCode, session.hierarchyLevel);
+  const quotas = await enrichQuotas(
+    db.quotas.findForUnit(session.unitCode, session.hierarchyLevel),
+  );
   const children = getChildUnits(session.unitCode).sort((a, b) =>
     a.name.localeCompare(b.name, "vi"),
   );
 
-  return NextResponse.json({ data: quotas, childUnits: children });
+  return NextResponse.json({
+    data: quotas,
+    childUnits: children,
+    sessionUnitName: resolveUnitName(session.unitCode),
+  });
 }
 
 export async function POST(request: NextRequest) {
