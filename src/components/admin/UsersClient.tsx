@@ -200,11 +200,11 @@ export default function UsersClient() {
         <div>
           <h2
             className="text-xl font-bold tracking-wide"
-            style={{ color: "#1d1d1f" }}
+            style={{ color: "var(--m3-on-surface, #1b1d20)" }}
           >
             Danh sách quân nhân
           </h2>
-          <p className="text-sm font-medium mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm font-medium mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {total} tài khoản trong hệ thống
           </p>
         </div>
@@ -222,8 +222,8 @@ export default function UsersClient() {
       <div
         className="rounded-3xl p-4"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e5e5ea",
+          background: "var(--m3-surface-container-lowest, var(--m3-surface-container-lowest, #ffffff))",
+          border: "1px solid var(--m3-outline-variant, #e3e8ee)",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -232,7 +232,7 @@ export default function UsersClient() {
             <Search
               size={18}
               className="absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color: "#86868b" }}
+              style={{ color: "var(--m3-on-surface-variant, #475569)" }}
             />
             <input
               type="text"
@@ -241,18 +241,18 @@ export default function UsersClient() {
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-11 pr-4 py-2.5 rounded-xl text-sm transition-all outline-none"
               style={{
-                background: "#f5f5f7",
-                border: "1px solid #e5e5ea",
-                color: "#1d1d1f",
+                background: "var(--m3-surface-container-high, #eef1f4)",
+                border: "1px solid var(--m3-outline-variant, #e3e8ee)",
+                color: "var(--m3-on-surface, #1b1d20)",
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = "#007aff";
+                e.target.style.borderColor = "var(--m3-primary, #1a73e8)";
                 e.target.style.background = "#fff";
-                e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
+                e.target.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--m3-primary, #1a73e8) 10%, transparent)";
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = "#e5e5ea";
-                e.target.style.background = "#f5f5f7";
+                e.target.style.borderColor = "var(--m3-outline-variant, #e3e8ee)";
+                e.target.style.background = "var(--m3-surface-container-high, #eef1f4)";
                 e.target.style.boxShadow = "none";
               }}
             />
@@ -265,18 +265,18 @@ export default function UsersClient() {
             }}
             className="px-3 py-2.5 rounded-xl text-sm transition-all outline-none"
             style={{
-              background: "#f5f5f7",
-              border: "1px solid #e5e5ea",
-              color: "#1d1d1f",
+              background: "var(--m3-surface-container-high, #eef1f4)",
+              border: "1px solid var(--m3-outline-variant, #e3e8ee)",
+              color: "var(--m3-on-surface, #1b1d20)",
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = "#007aff";
+              e.target.style.borderColor = "var(--m3-primary, #1a73e8)";
               e.target.style.background = "#fff";
-              e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
+              e.target.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--m3-primary, #1a73e8) 10%, transparent)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "#e5e5ea";
-              e.target.style.background = "#f5f5f7";
+              e.target.style.borderColor = "var(--m3-outline-variant, #e3e8ee)";
+              e.target.style.background = "var(--m3-surface-container-high, #eef1f4)";
               e.target.style.boxShadow = "none";
             }}
           >
@@ -294,18 +294,18 @@ export default function UsersClient() {
             }}
             className="px-3 py-2.5 rounded-xl text-sm transition-all outline-none"
             style={{
-              background: "#f5f5f7",
-              border: "1px solid #e5e5ea",
-              color: "#1d1d1f",
+              background: "var(--m3-surface-container-high, #eef1f4)",
+              border: "1px solid var(--m3-outline-variant, #e3e8ee)",
+              color: "var(--m3-on-surface, #1b1d20)",
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = "#007aff";
+              e.target.style.borderColor = "var(--m3-primary, #1a73e8)";
               e.target.style.background = "#fff";
-              e.target.style.boxShadow = "0 0 0 3px rgba(116,140,44,0.1)";
+              e.target.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--m3-primary, #1a73e8) 10%, transparent)";
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = "#e5e5ea";
-              e.target.style.background = "#f5f5f7";
+              e.target.style.borderColor = "var(--m3-outline-variant, #e3e8ee)";
+              e.target.style.background = "var(--m3-surface-container-high, #eef1f4)";
               e.target.style.boxShadow = "none";
             }}
           >
@@ -322,8 +322,8 @@ export default function UsersClient() {
       <div
         className="rounded-3xl overflow-hidden"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e5e5ea",
+          background: "var(--m3-surface-container-lowest, var(--m3-surface-container-lowest, #ffffff))",
+          border: "1px solid var(--m3-outline-variant, #e3e8ee)",
           boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
         }}
       >
@@ -332,43 +332,43 @@ export default function UsersClient() {
             <thead>
               <tr
                 style={{
-                  borderBottom: "1px solid #e5e5ea",
-                  background: "#f5f5f7",
+                  borderBottom: "1px solid var(--m3-outline-variant, #e3e8ee)",
+                  background: "var(--m3-surface-container-high, #eef1f4)",
                 }}
               >
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Quân nhân
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden lg:table-cell"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Email
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden md:table-cell"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Đơn vị
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Vai trò
                 </th>
                 <th
                   className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Trạng thái
                 </th>
                 <th
                   className="text-right px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "#636366" }}
+                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                 >
                   Hành động
                 </th>
@@ -380,27 +380,27 @@ export default function UsersClient() {
                   <tr key={i} className="animate-pulse">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-slate-200 rounded-full" />
+                        <div className="w-8 h-8 bg-m3-surface-highest rounded-full" />
                         <div className="space-y-1.5">
-                          <div className="h-3 bg-slate-200 rounded w-28" />
-                          <div className="h-2 bg-slate-100 rounded w-20" />
+                          <div className="h-3 bg-m3-surface-highest rounded w-28" />
+                          <div className="h-2 bg-m3-surface-container rounded w-20" />
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 hidden lg:table-cell">
-                      <div className="h-3 bg-slate-200 rounded w-36" />
+                      <div className="h-3 bg-m3-surface-highest rounded w-36" />
                     </td>
                     <td className="px-6 py-4 hidden md:table-cell">
-                      <div className="h-3 bg-slate-200 rounded w-24" />
+                      <div className="h-3 bg-m3-surface-highest rounded w-24" />
                     </td>
                     <td className="px-6 py-4">
-                      <div className="h-5 bg-slate-200 rounded-full w-20" />
+                      <div className="h-5 bg-m3-surface-highest rounded-full w-20" />
                     </td>
                     <td className="px-6 py-4">
-                      <div className="h-5 bg-slate-200 rounded-full w-20" />
+                      <div className="h-5 bg-m3-surface-highest rounded-full w-20" />
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="h-7 bg-slate-200 rounded-lg w-16 ml-auto" />
+                      <div className="h-7 bg-m3-surface-highest rounded-lg w-16 ml-auto" />
                     </td>
                   </tr>
                 ))
@@ -408,10 +408,10 @@ export default function UsersClient() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-12 text-center text-slate-400"
+                    className="px-6 py-12 text-center text-m3-on-surface-variant"
                   >
                     <div className="flex flex-col items-center gap-2">
-                      <Search size={32} className="text-slate-300" />
+                      <Search size={32} className="text-m3-on-surface-variant" />
                       <p>Không tìm thấy người dùng nào</p>
                     </div>
                   </td>
@@ -420,10 +420,10 @@ export default function UsersClient() {
                 users.map((user, idx) => (
                   <tr
                     key={user.id}
-                    className="transition-colors hover:bg-gray-50 bg-white"
+                    className="transition-colors hover:bg-m3-surface-high bg-m3-surface-lowest"
                     style={{
                       borderBottom:
-                        idx < users.length - 1 ? "1px solid #e5e5ea" : "none",
+                        idx < users.length - 1 ? "1px solid var(--m3-outline-variant, #e3e8ee)" : "none",
                     }}
                   >
                     <td className="px-6 py-4">
@@ -431,13 +431,13 @@ export default function UsersClient() {
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                           style={{
-                            background: "#f5f5f7",
-                            border: "1px solid #e5e5ea",
+                            background: "var(--m3-surface-container-high, #eef1f4)",
+                            border: "1px solid var(--m3-outline-variant, #e3e8ee)",
                           }}
                         >
                           <span
                             className="text-sm font-bold"
-                            style={{ color: "#007aff" }}
+                            style={{ color: "var(--m3-primary, #1a73e8)" }}
                           >
                             {user.name.charAt(0)}
                           </span>
@@ -445,13 +445,13 @@ export default function UsersClient() {
                         <div>
                           <p
                             className="font-semibold"
-                            style={{ color: "#1d1d1f" }}
+                            style={{ color: "var(--m3-on-surface, #1b1d20)" }}
                           >
                             {user.name}
                           </p>
                           <p
                             className="text-xs font-medium"
-                            style={{ color: "#007aff" }}
+                            style={{ color: "var(--m3-primary, #1a73e8)" }}
                           >
                             @{user.username}
                           </p>
@@ -460,13 +460,13 @@ export default function UsersClient() {
                     </td>
                     <td
                       className="px-6 py-4 hidden lg:table-cell font-medium"
-                      style={{ color: "#636366" }}
+                      style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                     >
                       {user.email}
                     </td>
                     <td
                       className="px-6 py-4 hidden md:table-cell font-medium"
-                      style={{ color: "#636366" }}
+                      style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                     >
                       {user.department || "—"}
                     </td>
@@ -492,16 +492,16 @@ export default function UsersClient() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openEdit(user)}
-                          className="p-1.5 rounded-lg transition-colors hover:bg-gray-100"
-                          style={{ color: "#007aff" }}
+                          className="p-1.5 rounded-lg transition-colors hover:bg-m3-surface-container"
+                          style={{ color: "var(--m3-primary, #1a73e8)" }}
                           title="Chỉnh sửa"
                         >
                           <Edit2 size={16} />
                         </button>
                         <button
                           onClick={() => openDelete(user)}
-                          className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
-                          style={{ color: "#dc2626" }}
+                          className="p-1.5 rounded-lg transition-colors hover:bg-m3-error-container"
+                          style={{ color: "var(--m3-error, #ba1a1a)" }}
                           title="Xóa"
                         >
                           <Trash2 size={16} />
@@ -516,7 +516,7 @@ export default function UsersClient() {
         </div>
         {/* Pagination */}
         {!loading && total > 0 && (
-          <div className="px-6 py-4" style={{ borderTop: "1px solid #e5e5ea" }}>
+          <div className="px-6 py-4" style={{ borderTop: "1px solid var(--m3-outline-variant, #e3e8ee)" }}>
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -555,7 +555,7 @@ export default function UsersClient() {
       >
         <div className="space-y-4">
           {formError && (
-            <div className="bg-red-50 border border-red-100 text-red-700 text-sm px-4 py-2.5 rounded-xl">
+            <div className="bg-m3-error-container border border-m3-error text-m3-on-error-container text-sm px-4 py-2.5 rounded-xl">
               {formError}
             </div>
           )}

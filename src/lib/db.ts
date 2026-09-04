@@ -1,4 +1,5 @@
 import mysql, { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { ExecuteValues } from "mysql2";
 
 let pool: Pool | null = null;
 
@@ -17,26 +18,29 @@ export function getPool(): Pool {
   }
   return pool;
 }
-
 export async function queryRows<T extends RowDataPacket[]>(
   sql: string,
-  params?: unknown[]
+  params?: readonly unknown[]
 ): Promise<T> {
-  const [rows] = await getPool().execute<T>(sql, params);
+  // nội bộ: params luôn là mảng scalar SQL hợp lệ (gọi bởi queryRows/* callers)
+  const values = params as ExecuteValues | undefined;
+  const [rows] = await getPool().execute<T>(sql, values);
   return rows;
 }
 
 export async function queryExecute(
   sql: string,
-  params?: unknown[]
+  params?: readonly unknown[]
 ): Promise<ResultSetHeader> {
-  const [result] = await getPool().execute<ResultSetHeader>(sql, params);
+  // nội bộ: params luôn là mảng scalar SQL hợp lệ
+  const values = params as ExecuteValues | undefined;
+  const [result] = await getPool().execute<ResultSetHeader>(sql, values);
   return result;
 }
 
-export async function query(sql: string, params?: unknown[]) {
+export async function query(sql: string, params?: readonly unknown[]) {
   try {
-    const [results] = await getPool().execute(sql, params);
+    const [results] = await getPool().execute(sql, params as ExecuteValues | undefined);
     return results;
   } catch (error) {
     console.error("Database Error:", error);

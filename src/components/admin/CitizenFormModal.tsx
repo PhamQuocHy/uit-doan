@@ -105,20 +105,20 @@ export default function CitizenFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] bg-white shadow-2xl sm:rounded-[24px]">
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] bg-m3-surface-lowest shadow-2xl sm:rounded-[24px]">
         <div className="flex items-center justify-between border-b border-black/[0.06] px-5 py-4 sm:px-6">
           <div>
-            <h2 className="text-[20px] font-bold text-[#1d1d1f]">
+            <h2 className="text-[20px] font-bold text-m3-on-surface">
               {mode === "edit" ? "Sửa thông tin công dân" : "Thêm công dân mới"}
             </h2>
-            <p className="mt-0.5 text-[14px] text-[#6e6e73]">
+            <p className="mt-0.5 text-[14px] text-m3-on-surface-variant">
               Điền các ô bên dưới rồi bấm Lưu
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[12px] p-2.5 text-[#636366] hover:bg-black/[0.05]"
+            className="rounded-[12px] p-2.5 text-m3-on-surface-variant hover:bg-black/[0.05]"
           >
             <X size={22} />
           </button>
@@ -127,7 +127,7 @@ export default function CitizenFormModal({
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
             {error && (
-              <div className="rounded-[14px] bg-red-50 px-4 py-3 text-[14px] font-semibold text-[#ff3b30]">
+              <div className="rounded-[14px] bg-m3-error-container px-4 py-3 text-[14px] font-semibold text-m3-error">
                 {error}
               </div>
             )}
@@ -241,11 +241,11 @@ export default function CitizenFormModal({
             </div>
           </div>
 
-          <div className="flex gap-3 border-t border-black/[0.06] bg-[#f5f5f7]/80 px-5 py-4 sm:px-6">
+          <div className="flex gap-3 border-t border-black/[0.06] bg-m3-surface-high/80 px-5 py-4 sm:px-6">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[48px] flex-1 rounded-[14px] bg-white text-[16px] font-bold text-[#1d1d1f]"
+              className="min-h-[48px] flex-1 rounded-[14px] bg-m3-surface-lowest text-[16px] font-bold text-m3-on-surface"
               style={{ border: "1px solid rgba(0,0,0,0.08)" }}
             >
               Hủy
@@ -253,7 +253,7 @@ export default function CitizenFormModal({
             <button
               type="submit"
               disabled={saving}
-              className="min-h-[48px] flex-[1.4] rounded-[14px] bg-[#007aff] text-[16px] font-bold text-white shadow-md shadow-blue-500/25 disabled:opacity-60"
+              className="min-h-[48px] flex-[1.4] rounded-[14px] bg-m3-primary text-[16px] font-bold text-white shadow-md shadow-m3-primary-container/25 disabled:opacity-60"
             >
               {saving ? "Đang lưu..." : mode === "edit" ? "Lưu thay đổi" : "Thêm công dân"}
             </button>
@@ -273,11 +273,11 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[14px] font-bold text-[#1d1d1f]">{label}</span>
+      <span className="mb-1.5 block text-[14px] font-bold text-m3-on-surface">{label}</span>
       {children}
     </label>
   );
 }
 
 const inputCls =
-  "w-full min-h-[48px] rounded-[14px] border border-black/[0.08] bg-white px-4 text-[16px] text-[#1d1d1f] outline-none focus:border-[#007aff] focus:ring-2 focus:ring-[#007aff]/20";
+  "w-full min-h-[48px] rounded-[14px] border border-black/[0.08] bg-m3-surface-lowest px-4 text-[16px] text-m3-on-surface outline-none focus:border-m3-primary focus:ring-2 focus:ring-m3-primary/20";

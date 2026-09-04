@@ -30,6 +30,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Not implemented in DB mock yet, just returning a stub
-  return NextResponse.json({ message: "Not implemented in mock DB" }, { status: 501 });
+  const body = await request.json();
+  const name = String(body.name || "").trim();
+  const year = Number(body.year);
+  const targetQuota = Number(body.targetQuota);
+  if (!name || !year || !body.startDate || !body.endDate || !targetQuota) {
+    return NextResponse.json({ error: "Vui lòng nhập đủ thông tin đợt khám" }, { status: 400 });
+  }
+  const campaign = db.campaigns.create({
+    name,
+    year,
+    startDate: body.startDate,
+    endDate: body.endDate,
+    status: body.status || "planning",
+    targetQuota,
+  });
+  return NextResponse.json({ data: campaign }, { status: 201 });
 }

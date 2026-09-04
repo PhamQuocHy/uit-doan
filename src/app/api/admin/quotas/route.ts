@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { toUnit, toUnitName, amount, year, note } = body;
+  const { toUnit, toUnitName, amount, year, note, campaignId } = body;
 
   if (!toUnit || !toUnitName || !amount) {
     return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
   const levelMap: Record<string, string> = { bo: "tinh", tinh: "xa", huyen: "xa" };
 
   const quota = db.quotas.create({
+    campaignId: campaignId || undefined,
     year: year || new Date().getFullYear(),
     fromLevel: session.hierarchyLevel as "bo" | "tinh" | "xa",
     fromUnit: session.unitCode,

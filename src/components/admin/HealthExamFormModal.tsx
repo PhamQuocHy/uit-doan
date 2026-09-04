@@ -21,9 +21,9 @@ type Props = {
 };
 
 const inputCls =
-  "w-full rounded-[12px] border border-black/[0.08] bg-white px-3.5 py-2.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#007aff]/40 focus:ring-2 focus:ring-[#007aff]/15";
+  "w-full rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-3.5 py-2.5 text-[14px] text-m3-on-surface outline-none focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15";
 
-const labelCls = "mb-1 block text-[13px] font-medium text-[#6e6e73]";
+const labelCls = "mb-1 block text-[13px] font-medium text-m3-on-surface-variant";
 
 export default function HealthExamFormModal({
   citizenId,
@@ -157,13 +157,13 @@ export default function HealthExamFormModal({
         className="absolute inset-0 bg-black/45"
         onClick={onClose}
       />
-      <div className="relative flex max-h-[92vh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[20px] bg-white shadow-2xl sm:rounded-[20px]">
+      <div className="relative flex max-h-[92vh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[20px] bg-m3-surface-lowest shadow-2xl sm:rounded-[20px]">
         <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-4">
           <div className="min-w-0 pr-3">
-            <p className="text-[17px] font-bold text-[#1d1d1f]">
+            <p className="text-[17px] font-bold text-m3-on-surface">
               {isScreening ? "Vòng 1 — Sơ tuyển cấp xã" : "Vòng 2 — Khám chi tiết"}
             </p>
-            <p className="mt-0.5 truncate text-[13px] text-[#6e6e73]">
+            <p className="mt-0.5 truncate text-[13px] text-m3-on-surface-variant">
               {citizenName} · Đợt {year}
             </p>
           </div>
@@ -182,12 +182,12 @@ export default function HealthExamFormModal({
         >
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {error && (
-            <p className="mb-4 rounded-[12px] bg-[rgba(255,59,48,0.08)] px-3 py-2 text-[13px] text-[#ff3b30]">
+            <p className="mb-4 rounded-[12px] bg-m3-error/8 px-3 py-2 text-[13px] text-m3-error">
               {error}
             </p>
           )}
 
-          <p className="mb-4 rounded-[12px] bg-[rgba(0,122,255,0.06)] px-3 py-2 text-[12px] leading-relaxed text-[#007aff]">
+          <p className="mb-4 rounded-[12px] bg-m3-primary/6 px-3 py-2 text-[12px] leading-relaxed text-m3-primary">
             {isScreening
               ? "Khám thể lực, phát hiện dị tật hoặc bệnh lý rõ ràng tại Trạm Y tế xã. Kết quả Loại 1–3 được chuyển khám chi tiết cấp huyện/tỉnh."
               : "Khám thể lực, các chuyên khoa lâm sàng và cận lâm sàng theo quy định BQP. Phân loại sức khỏe Loại 1–6."}
@@ -268,7 +268,7 @@ export default function HealthExamFormModal({
                   <textarea className={`${inputCls} min-h-[60px]`} value={surgery} onChange={(e) => setSurgery(e.target.value)} />
                 </div>
                 <div className="sm:col-span-2 mt-1 border-t border-black/[0.06] pt-3">
-                  <p className="mb-2 text-[13px] font-bold text-[#007aff]">Cận lâm sàng</p>
+                  <p className="mb-2 text-[13px] font-bold text-m3-primary">Cận lâm sàng</p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelCls}>Xét nghiệm máu</label>
@@ -326,14 +326,14 @@ export default function HealthExamFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[44px] flex-1 rounded-[12px] border border-black/[0.1] text-[15px] font-semibold text-[#1d1d1f]"
+              className="min-h-[44px] flex-1 rounded-[12px] border border-black/[0.1] text-[15px] font-semibold text-m3-on-surface"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-[12px] bg-[#007aff] text-[15px] font-semibold text-white disabled:opacity-60"
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-[12px] bg-m3-primary text-[15px] font-semibold text-white disabled:opacity-60"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
               Lưu kết quả khám

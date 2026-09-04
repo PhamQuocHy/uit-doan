@@ -20,6 +20,13 @@
 # production
 /build
 
+# capacitor / xcode
+/ios/App/Pods
+/ios/App/Output
+/ios/DerivedData
+/ios/App/App/public
+.capacitor
+
 # misc
 .DS_Store
 *.pem

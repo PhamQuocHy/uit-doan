@@ -36,12 +36,21 @@ const mockResults = [
 
 type Tab = "face" | "nfc";
 
-type NfcStatus = "idle" | "waiting" | "connected" | "completed";
+type NfcStatus =
+  | "idle"
+  | "waiting"
+  | "connected"
+  | "scanning"
+  | "processing"
+  | "completed"
+  | "error"
+  | "expired";
 
 type NfcResult = {
   found: boolean;
   citizen?: Record<string, string>;
   prefill?: Record<string, string>;
+  verification?: { matched: boolean; mismatches: { field: string; nfc: string; ocr: string }[] };
 };
 
 export default function AiFacePage() {
@@ -60,7 +69,7 @@ export default function AiFacePage() {
   const [nfcStatus, setNfcStatus] = useState<NfcStatus>("idle");
   const [nfcResult, setNfcResult] = useState<NfcResult | null>(null);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // ─── Face recognition handlers ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,56 +99,96 @@ export default function AiFacePage() {
   };
 
   // ─── NFC handlers ────────────────────────────────────────────────────────
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+  const stopEvents = useCallback(() => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+  }, []);
+
+  const applySessionEvent = useCallback((data: Record<string, unknown>) => {
+    const status = String(data.status || "").toUpperCase();
+    if (status === "WAITING") setNfcStatus("waiting");
+    if (status === "CONNECTED") setNfcStatus("connected");
+    if (status === "SCANNING") setNfcStatus("scanning");
+    if (status === "PROCESSING") setNfcStatus("processing");
+    if (status === "ERROR") setNfcStatus("error");
+    if (status === "EXPIRED" || status === "DISCONNECTED") setNfcStatus("expired");
+    if (status === "COMPLETED") {
+      setNfcStatus("completed");
+      const result = data.result as {
+        found?: boolean;
+        nfc?: Record<string, string>;
+        ocr?: Record<string, string>;
+        citizen?: Record<string, string>;
+        verification?: NfcResult["verification"];
+        citizenId?: string;
+      } | null;
+      if (result) {
+        const nfc = result.nfc ?? {};
+        setNfcResult({
+          found: Boolean(result.found || result.citizenId || result.citizen),
+          verification: result.verification,
+          citizen: result.citizen
+            ? result.citizen
+            : result.found || result.citizenId
+            ? {
+                fullName: nfc.fullName ?? "",
+                cccd: nfc.personalId ?? "",
+                dateOfBirth: nfc.dateOfBirth ?? "",
+                address: nfc.placeOfResidence ?? "",
+                militaryStatus: "",
+              }
+            : undefined,
+          prefill:
+            result.found || result.citizenId
+              ? undefined
+              : {
+                  fullName: nfc.fullName ?? result.ocr?.fullName ?? "",
+                  cccd: nfc.personalId ?? result.ocr?.personalId ?? "",
+                  dateOfBirth: nfc.dateOfBirth ?? result.ocr?.dateOfBirth ?? "",
+                  address: nfc.placeOfResidence ?? result.ocr?.placeOfResidence ?? "",
+                },
+        });
+      }
     }
   }, []);
 
-  const startPolling = useCallback(
+  const startEvents = useCallback(
     (code: string) => {
-      stopPolling();
-      pollRef.current = setInterval(async () => {
+      stopEvents();
+      const es = new EventSource(`/api/mobile/session/events?code=${encodeURIComponent(code)}`);
+      eventSourceRef.current = es;
+      es.onmessage = (event) => {
         try {
-          const res = await fetch(`/api/nfc/session?code=${code}`);
-          if (!res.ok) {
-            stopPolling();
-            setNfcStatus("idle");
-            return;
-          }
-          const data = await res.json();
-          if (data.status === "connected") setNfcStatus("connected");
-          if (data.status === "completed" && data.result) {
-            stopPolling();
-            setNfcStatus("completed");
-            setNfcResult(data.result);
-          }
+          applySessionEvent(JSON.parse(event.data) as Record<string, unknown>);
         } catch {
-          // ignore
+          /* ignore malformed payloads */
         }
-      }, 2000);
+      };
+      es.onerror = () => {
+        // Browser reconnects EventSource automatically.
+      };
     },
-    [stopPolling],
+    [applySessionEvent, stopEvents],
   );
 
   const generateSession = useCallback(async () => {
-    stopPolling();
+    stopEvents();
     setNfcStatus("waiting");
     setNfcResult(null);
     try {
-      const res = await fetch("/api/nfc/session", { method: "POST" });
+      const res = await fetch("/api/mobile/session/create", { method: "POST" });
       const data = await res.json();
-      setNfcCode(data.code);
-      startPolling(data.code);
+      if (!res.ok) throw new Error(data.error || "create failed");
+      setNfcCode(data.connectionCode);
+      startEvents(data.connectionCode);
     } catch {
       setNfcStatus("idle");
     }
-  }, [startPolling, stopPolling]);
+  }, [startEvents, stopEvents]);
 
   useEffect(() => {
     if (activeTab === "nfc" && nfcStatus === "idle") generateSession();
-    return () => stopPolling();
+    return () => stopEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -149,20 +198,20 @@ export default function AiFacePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const [mobileUrl, setMobileUrl] = useState("/mobile/nfc");
+  const [mobileUrl, setMobileUrl] = useState("/mobile/connect");
 
   useEffect(() => {
-    setMobileUrl(`${window.location.origin}/mobile/nfc`);
+    setMobileUrl(`${window.location.origin}/mobile/connect`);
   }, []);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
           Nhận dạng AI
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
           Nhận dạng khuôn mặt và quét NFC CCCD gắn chip qua điện thoại
         </p>
       </div>
@@ -170,7 +219,7 @@ export default function AiFacePage() {
       {/* Tab switcher */}
       <div
         className="flex gap-1 p-1 rounded-xl w-fit"
-        style={{ background: "#f0f4e4" }}
+        style={{ background: "var(--m3-surface-container-high, #eef1f4)" }}
       >
         {(
           [
@@ -183,12 +232,12 @@ export default function AiFacePage() {
             onClick={() => setActiveTab(id)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === id
-                ? "bg-white shadow-sm text-olive-800"
-                : "text-gray-500 hover:text-gray-700"
+                ? "bg-m3-surface-lowest shadow-sm text-olive-800"
+                : "text-m3-on-surface-variant hover:text-m3-on-surface-variant"
             }`}
             style={
               activeTab === id
-                ? { color: "#1d1d1f", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+                ? { color: "var(--m3-on-surface, #1b1d20)", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
                 : {}
             }
           >
@@ -202,24 +251,24 @@ export default function AiFacePage() {
       {activeTab === "face" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upload Panel */}
-          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6 space-y-4">
+          <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "#f5f5f7" }}
+                style={{ background: "var(--m3-surface-container-high, #eef1f4)" }}
               >
-                <ScanFace size={20} style={{ color: "#007aff" }} />
+                <ScanFace size={20} style={{ color: "var(--m3-primary, #1a73e8)" }} />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">
+                <h2 className="font-semibold text-m3-on-surface">
                   Tải ảnh khuôn mặt
                 </h2>
-                <p className="text-xs text-gray-500">Hỗ trợ JPG, PNG, WEBP</p>
+                <p className="text-xs text-m3-on-surface-variant">Hỗ trợ JPG, PNG, WEBP</p>
               </div>
             </div>
 
             <div
-              className="border-2 border-dashed border-[#e5e5ea] rounded-xl p-6 text-center cursor-pointer hover:border-[#007aff] transition-colors"
+              className="border-2 border-dashed border-m3-outline-variant rounded-xl p-6 text-center cursor-pointer hover:border-m3-primary transition-colors"
               onClick={() => fileRef.current?.click()}
             >
               {imagePreview ? (
@@ -230,8 +279,8 @@ export default function AiFacePage() {
                 />
               ) : (
                 <div className="space-y-2">
-                  <Camera size={40} className="mx-auto text-gray-300" />
-                  <p className="text-sm text-gray-500">
+                  <Camera size={40} className="mx-auto text-m3-on-surface-variant" />
+                  <p className="text-sm text-m3-on-surface-variant">
                     Nhấn để chọn ảnh hoặc kéo thả vào đây
                   </p>
                 </div>
@@ -249,7 +298,7 @@ export default function AiFacePage() {
               <button
                 onClick={handleScan}
                 disabled={!imagePreview || isScanning}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl transition-colors font-medium text-sm"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-m3-primary hover:bg-m3-on-surface-variant disabled:opacity-50 text-white rounded-xl transition-colors font-medium text-sm"
               >
                 {isScanning ? (
                   <>
@@ -266,15 +315,15 @@ export default function AiFacePage() {
               {imagePreview && (
                 <button
                   onClick={handleReset}
-                  className="px-4 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors text-sm"
+                  className="px-4 py-2.5 border border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-high rounded-xl transition-colors text-sm"
                 >
                   Xóa
                 </button>
               )}
             </div>
 
-            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea]">
-              <p className="text-xs text-[#636366]">
+            <div className="p-3 rounded-xl bg-m3-surface-high border border-m3-outline-variant">
+              <p className="text-xs text-m3-on-surface-variant">
                 <span className="font-semibold">Lưu ý:</span> Ảnh cần rõ mặt, đủ
                 ánh sáng, không bị che khuất để đạt độ chính xác cao nhất.
               </p>
@@ -282,13 +331,13 @@ export default function AiFacePage() {
           </div>
 
           {/* Result Panel */}
-          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">
+          <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6">
+            <h2 className="font-semibold text-m3-on-surface mb-4">
               Kết quả nhận dạng
             </h2>
 
             {!result && !isScanning && (
-              <div className="h-48 flex flex-col items-center justify-center text-gray-400 space-y-2">
+              <div className="h-48 flex flex-col items-center justify-center text-m3-on-surface-variant space-y-2">
                 <ScanFace size={40} className="opacity-30" />
                 <p className="text-sm">
                   Chưa có kết quả. Tải ảnh và nhấn nhận dạng.
@@ -298,8 +347,8 @@ export default function AiFacePage() {
 
             {isScanning && (
               <div className="h-48 flex flex-col items-center justify-center space-y-3">
-                <RefreshCw size={36} className="text-[#007aff] animate-spin" />
-                <p className="text-sm text-gray-500">
+                <RefreshCw size={36} className="text-m3-primary animate-spin" />
+                <p className="text-sm text-m3-on-surface-variant">
                   Đang phân tích khuôn mặt...
                 </p>
               </div>
@@ -310,8 +359,8 @@ export default function AiFacePage() {
                 <div
                   className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium"
                   style={{
-                    background: result.matched ? "#d1fae5" : "#fee2e2",
-                    color: result.matched ? "#059669" : "#dc2626",
+                    background: result.matched ? "var(--color-m3-success-container)" : "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
+                    color: result.matched ? "var(--color-m3-success)" : "var(--m3-error, #ba1a1a)",
                   }}
                 >
                   {result.matched ? (
@@ -338,18 +387,18 @@ export default function AiFacePage() {
                   ].map((item) => (
                     <div
                       key={item.label}
-                      className="flex justify-between items-start gap-3 py-2 border-b border-gray-100 last:border-0"
+                      className="flex justify-between items-start gap-3 py-2 border-b border-m3-outline-variant last:border-0"
                     >
-                      <span className="text-sm text-gray-500 shrink-0">
+                      <span className="text-sm text-m3-on-surface-variant shrink-0">
                         {item.label}
                       </span>
-                      <span className="text-sm font-medium text-gray-900 text-right">
+                      <span className="text-sm font-medium text-m3-on-surface text-right">
                         {item.value}
                       </span>
                     </div>
                   ))}
                 </div>
-                <button className="w-full py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors">
+                <button className="w-full py-2 border border-m3-outline-variant text-m3-primary hover:bg-m3-surface-high rounded-xl text-sm font-medium transition-colors">
                   Xem hồ sơ đầy đủ
                 </button>
               </div>
@@ -362,20 +411,20 @@ export default function AiFacePage() {
       {activeTab === "nfc" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Connection panel */}
-          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6 space-y-5">
+          <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6 space-y-5">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "#f5f5f7" }}
+                style={{ background: "var(--m3-surface-container-high, #eef1f4)" }}
               >
-                <Smartphone size={20} style={{ color: "#007aff" }} />
+                <Smartphone size={20} style={{ color: "var(--m3-primary, #1a73e8)" }} />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">
+                <h2 className="font-semibold text-m3-on-surface">
                   Kết nối điện thoại
                 </h2>
-                <p className="text-xs text-gray-500">
-                  Mở trang Mobile trên điện thoại và nhập mã bên dưới
+                <p className="text-xs text-m3-on-surface-variant">
+                  Mở app iOS Nhận dạng AI (hoặc /mobile/connect) và nhập mã bên dưới
                 </p>
               </div>
             </div>
@@ -386,20 +435,24 @@ export default function AiFacePage() {
               style={{
                 background:
                   nfcStatus === "completed"
-                    ? "#d1fae5"
-                    : nfcStatus === "connected"
-                      ? "#dbeafe"
+                    ? "var(--color-m3-success-container)"
+                    : nfcStatus === "connected" || nfcStatus === "scanning" || nfcStatus === "processing"
+                      ? "var(--m3-primary-container, #dae9fb)"
                       : nfcStatus === "waiting"
                         ? "#fef9c3"
-                        : "#f3f4f6",
+                        : nfcStatus === "error" || nfcStatus === "expired"
+                          ? "var(--m3-error-container, var(--m3-error-container, #ffdad6))"
+                          : "var(--m3-surface-container-high, #eef1f4)",
                 color:
                   nfcStatus === "completed"
-                    ? "#059669"
-                    : nfcStatus === "connected"
-                      ? "#2563eb"
+                    ? "var(--color-m3-success)"
+                    : nfcStatus === "connected" || nfcStatus === "scanning" || nfcStatus === "processing"
+                      ? "var(--m3-primary, #1a73e8)"
                       : nfcStatus === "waiting"
                         ? "#92400e"
-                        : "#6b7280",
+                        : nfcStatus === "error" || nfcStatus === "expired"
+                          ? "var(--m3-error, #ba1a1a)"
+                          : "var(--m3-on-surface-variant, #475569)",
               }}
             >
               {nfcStatus === "waiting" && (
@@ -410,13 +463,32 @@ export default function AiFacePage() {
               )}
               {nfcStatus === "connected" && (
                 <>
-                  <Wifi size={14} /> Điện thoại đã kết nối – Đang chờ quét
-                  NFC...
+                  <Wifi size={14} /> ✓ Điện thoại đã kết nối
+                </>
+              )}
+              {nfcStatus === "scanning" && (
+                <>
+                  <Wifi size={14} /> Điện thoại đang quét CCCD...
+                </>
+              )}
+              {nfcStatus === "processing" && (
+                <>
+                  <RefreshCw size={14} className="animate-spin" /> Đang đối chiếu NFC/OCR...
                 </>
               )}
               {nfcStatus === "completed" && (
                 <>
-                  <CheckCircle2 size={14} /> Đã nhận dữ liệu NFC thành công!
+                  <CheckCircle2 size={14} /> Đã nhận dữ liệu CCCD
+                </>
+              )}
+              {nfcStatus === "error" && (
+                <>
+                  <AlertCircle size={14} /> Phiên gặp lỗi
+                </>
+              )}
+              {nfcStatus === "expired" && (
+                <>
+                  <WifiOff size={14} /> Phiên hết hạn hoặc đã ngắt
                 </>
               )}
               {nfcStatus === "idle" && (
@@ -429,17 +501,17 @@ export default function AiFacePage() {
             {/* Big code display */}
             {nfcCode && (
               <div className="text-center space-y-3">
-                <p className="text-xs text-gray-500">Mã kết nối</p>
+                <p className="text-xs text-m3-on-surface-variant">Mã kết nối</p>
                 <div
                   className="text-5xl font-bold tracking-[0.3em] py-4 rounded-2xl"
-                  style={{ color: "#1d1d1f", background: "#f5f5f7" }}
+                  style={{ color: "var(--m3-on-surface, #1b1d20)", background: "var(--m3-surface-container-high, #eef1f4)" }}
                 >
                   {nfcCode}
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={copyCode}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 border border-m3-outline-variant text-m3-primary hover:bg-m3-surface-high rounded-xl text-sm transition-colors"
                   >
                     {copied ? (
                       <>
@@ -453,7 +525,7 @@ export default function AiFacePage() {
                   </button>
                   <button
                     onClick={generateSession}
-                    className="flex items-center justify-center gap-2 px-4 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm transition-colors"
+                    className="flex items-center justify-center gap-2 px-4 py-2 border border-m3-outline-variant text-m3-primary hover:bg-m3-surface-high rounded-xl text-sm transition-colors"
                   >
                     <RefreshCw size={14} />
                     Tạo mã mới
@@ -463,14 +535,14 @@ export default function AiFacePage() {
             )}
 
             {/* Mobile link */}
-            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea] space-y-2">
+            <div className="p-3 rounded-xl bg-m3-surface-high border border-m3-outline-variant space-y-2">
               <div className="flex items-center gap-2">
-                <p className="text-xs font-semibold text-[#636366]">
+                <p className="text-xs font-semibold text-m3-on-surface-variant">
                   Trang quét NFC (điện thoại)
                 </p>
                 <button
                   onClick={() => window.open(mobileUrl, "_blank")}
-                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#e5e5ea] text-[#007aff] transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-m3-outline-variant text-m3-primary transition-colors"
                 >
                   <ArrowRight size={14} />
                 </button>
@@ -479,11 +551,11 @@ export default function AiFacePage() {
           </div>
 
           {/* Right: Result panel */}
-          <div className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Kết quả NFC</h2>
+          <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6">
+            <h2 className="font-semibold text-m3-on-surface mb-4">Kết quả NFC</h2>
 
             {!nfcResult && (
-              <div className="h-64 flex flex-col items-center justify-center text-gray-400 space-y-3">
+              <div className="h-64 flex flex-col items-center justify-center text-m3-on-surface-variant space-y-3">
                 <NfcIcon size={48} className="opacity-20" />
                 <p className="text-sm text-center">
                   Kết nối điện thoại và quét CCCD gắn chip
@@ -493,9 +565,25 @@ export default function AiFacePage() {
               </div>
             )}
 
+            {nfcResult && nfcResult.verification && (
+              <div
+                className={`p-3 rounded-xl text-sm mb-4 ${
+                  nfcResult.verification.matched
+                    ? "bg-m3-success-container text-m3-on-success-container"
+                    : "bg-m3-warning-container text-m3-on-warning-container"
+                }`}
+              >
+                {nfcResult.verification.matched
+                  ? "NFC và OCR khớp"
+                  : nfcResult.verification.mismatches
+                      .map((m) => `${m.field}: NFC ${m.nfc} / OCR ${m.ocr}`)
+                      .join(" · ")}
+              </div>
+            )}
+
             {nfcResult && nfcResult.found && nfcResult.citizen && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-green-50 text-green-700">
+                <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-m3-success-container text-m3-on-success-container">
                   <User size={16} />
                   Tìm thấy công dân trong hệ thống
                 </div>
@@ -509,9 +597,9 @@ export default function AiFacePage() {
                   }).map(([label, value]) => (
                     <div
                       key={label}
-                      className="flex justify-between gap-3 py-2 border-b border-gray-100 last:border-0"
+                      className="flex justify-between gap-3 py-2 border-b border-m3-outline-variant last:border-0"
                     >
-                      <span className="text-sm text-gray-500 shrink-0">
+                      <span className="text-sm text-m3-on-surface-variant shrink-0">
                         {label}
                       </span>
                       <span className="text-sm font-medium text-right">
@@ -527,7 +615,7 @@ export default function AiFacePage() {
                         `/admin/citizens?search=${encodeURIComponent(nfcResult.citizen?.cccd || "")}`,
                       )
                     }
-                    className="flex-1 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl text-sm font-medium transition-colors"
+                    className="flex-1 py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl text-sm font-medium transition-colors"
                   >
                     Hồ sơ sức khỏe
                   </button>
@@ -537,7 +625,7 @@ export default function AiFacePage() {
                         `/admin/citizens?cccd=${nfcResult.citizen?.cccd}`,
                       )
                     }
-                    className="flex-1 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors"
+                    className="flex-1 py-2 border border-m3-outline-variant text-m3-primary hover:bg-m3-surface-high rounded-xl text-sm font-medium transition-colors"
                   >
                     Thông tin chi tiết
                   </button>
@@ -547,7 +635,7 @@ export default function AiFacePage() {
 
             {nfcResult && !nfcResult.found && nfcResult.prefill && (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-amber-50 text-amber-700">
+                <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-m3-warning-container text-m3-on-warning-container">
                   <UserPlus size={16} />
                   Công dân chưa có trong hệ thống – Đã điền sẵn thông tin
                 </div>
@@ -560,9 +648,9 @@ export default function AiFacePage() {
                   }).map(([label, value]) => (
                     <div
                       key={label}
-                      className="flex justify-between gap-3 py-2 border-b border-gray-100 last:border-0"
+                      className="flex justify-between gap-3 py-2 border-b border-m3-outline-variant last:border-0"
                     >
-                      <span className="text-sm text-gray-500 shrink-0">
+                      <span className="text-sm text-m3-on-surface-variant shrink-0">
                         {label}
                       </span>
                       <span className="text-sm font-medium text-right">
@@ -578,7 +666,7 @@ export default function AiFacePage() {
                     );
                     router.push(`/admin/citizens?new=1&${params.toString()}`);
                   }}
-                  className="w-full py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   <UserPlus size={16} />
                   Thêm mới công dân

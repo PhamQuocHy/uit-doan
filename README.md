@@ -34,3 +34,23 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## iOS app (Capacitor, cùng codebase Next.js)
+
+Web desktop và app iPhone dùng chung API/MySQL. App là native shell: WebView tải UI `/mobile/*` từ server Next.js, native bridge gọi Core NFC, Camera, Vision OCR.
+
+1. Chạy migration: `npm run db:migrate`
+2. Đặt `CAPACITOR_SERVER_URL` (HTTPS production, hoặc `http://LAN_IP:5305` khi dev)
+3. Trên **macOS + Xcode**:
+
+```bash
+npx cap add ios
+npx tsx scripts/patch-ios-plist.ts
+npx cap sync ios
+npm run cap:assets
+npx cap open ios
+```
+
+Trong Xcode: bật capability **Near Field Communication Tag Reading**, chọn team signing, gắn `App.entitlements`, đặt app icon từ `resources/icon.png`.
+
+Luồng: PC **Nhận dạng AI** tạo mã → iPhone `/mobile/connect` nhập mã → quét NFC (CAN/PACE) + chụp CCCD → đối chiếu → PC nhận SSE không cần F5.

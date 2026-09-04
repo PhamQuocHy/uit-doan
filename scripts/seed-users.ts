@@ -4,7 +4,7 @@
  */
 import fs from "fs";
 import path from "path";
-import mysql from "mysql2/promise";
+import mysql, { RowDataPacket } from "mysql2/promise";
 import { loadEnv } from "./load-env";
 
 loadEnv();
@@ -37,7 +37,8 @@ async function main() {
   await conn.query(sql);
 
   const [rows] = await conn.query<
-    Array<{ username: string; full_name: string; unit_code: string; level: string }>
+    RowDataPacket[] &
+      Array<{ username: string; full_name: string; unit_code: string; level: string }>
   >(
     `SELECT u.username, u.full_name, u.unit_code, hu.level, hu.name AS unit_name
      FROM users u

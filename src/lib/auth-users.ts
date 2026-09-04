@@ -1,5 +1,6 @@
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
+import { hashPassword, isHashed, verifyPassword } from "@/lib/password";
 import type { HierarchyLevel } from "@/lib/data";
 import type { FunctionalRole } from "@/lib/functional-roles";
 
@@ -80,9 +81,18 @@ export async function findUserByUsernameFromDb(
   return rowToAuthUser(rows[0]);
 }
 
-/** So khớp mật khẩu (demo: plaintext trong password_hash; sau này thay bcrypt). */
-export function verifyPassword(plain: string, stored: string): boolean {
-  return plain === stored;
+export { isHashed, verifyPassword };
+
+/** Nâng cấp bản ghi legacy (plaintext) lên scrypt hash sau khi đăng nhập khớp. */
+export async function upgradePasswordHash(userId: string, plain: string): Promise<void> {
+  try {
+    await queryExecute("UPDATE users SET password_hash = ? WHERE id = ?", [
+      hashPassword(plain),
+      userId,
+    ]);
+  } catch {
+    // không chặn đăng nhập nếu upgrade fail
+  }
 }
 
 export async function touchLastLogin(userId: string): Promise<void> {

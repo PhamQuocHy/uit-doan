@@ -75,5 +75,5 @@ export function buildDemoAnalyticsDashboard(unitCode = "bo"): AnalyticsDashboard
       generatedAt: new Date().toISOString(),
       source: "demo",
     },
-  } as AnalyticsDashboard & { meta: { source: string } };
+  } as AnalyticsDashboard;
 }

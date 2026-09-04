@@ -43,9 +43,9 @@ const statusConfig: Record<
   string,
   { label: string; color: string; bg: string }
 > = {
-  pending: { label: "Chờ xử lý", color: "#d97706", bg: "#fef3c7" },
-  processed: { label: "Đã xử lý", color: "#059669", bg: "#d1fae5" },
-  sent: { label: "Đã gửi", color: "#2563eb", bg: "#dbeafe" },
+  pending: { label: "Chờ xử lý", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" },
+  processed: { label: "Đã xử lý", color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" },
+  sent: { label: "Đã gửi", color: "var(--m3-primary, #1a73e8)", bg: "var(--m3-primary-container, #dae9fb)" },
 };
 
 const unitNames: Record<string, string> = {
@@ -164,10 +164,10 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
             Công văn đến / đi
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {session && (
               <span className="font-medium">
                 Đơn vị: {unitNames[session.unitCode] || session.unitCode} (
@@ -178,7 +178,7 @@ export default function DocumentsPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl transition-colors text-sm font-medium"
         >
           <Plus size={16} /> Soạn công văn
         </button>
@@ -190,19 +190,19 @@ export default function DocumentsPage() {
           {
             label: "Công văn đến",
             value: incomingCount,
-            color: "#2563eb",
+            color: "var(--m3-primary, #1a73e8)",
             icon: ArrowDownCircle,
           },
           {
             label: "Công văn đi",
             value: outgoingCount,
-            color: "#007aff",
+            color: "var(--m3-primary, #1a73e8)",
             icon: ArrowUpCircle,
           },
           {
             label: "Chờ xử lý",
             value: pendingCount,
-            color: "#d97706",
+            color: "var(--color-m3-warning)",
             icon: Clock,
           },
         ].map((s) => {
@@ -210,10 +210,10 @@ export default function DocumentsPage() {
           return (
             <div
               key={s.label}
-              className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
+              className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">{s.label}</p>
+                <p className="text-sm text-m3-on-surface-variant">{s.label}</p>
                 <Icon size={18} style={{ color: s.color }} />
               </div>
               <p className="text-3xl font-bold mt-2" style={{ color: s.color }}>
@@ -225,28 +225,28 @@ export default function DocumentsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={18}
             />
             <input
               type="text"
               placeholder="Tìm theo tiêu đề, số hiệu..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary transition-colors"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="relative">
             <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={18}
             />
             <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
+              className="pl-10 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary bg-m3-surface-lowest cursor-pointer"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
@@ -259,7 +259,7 @@ export default function DocumentsPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-6 py-4">Loại</th>
                 <th className="px-6 py-4">Số hiệu</th>
@@ -271,12 +271,12 @@ export default function DocumentsPage() {
                 <th className="px-6 py-4 text-center">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {loading ? (
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-6 py-8 text-center text-gray-400"
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Đang tải...
                   </td>
@@ -285,7 +285,7 @@ export default function DocumentsPage() {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-6 py-8 text-center text-gray-400"
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Không có công văn nào.
                   </td>
@@ -294,13 +294,13 @@ export default function DocumentsPage() {
                 filtered.map((doc) => {
                   const s = statusConfig[doc.status] || {
                     label: doc.status,
-                    color: "#6b7280",
-                    bg: "#f3f4f6",
+                    color: "var(--m3-on-surface-variant, #475569)",
+                    bg: "var(--m3-surface-container-high, #eef1f4)",
                   };
                   return (
                     <tr
                       key={doc.id}
-                      className="hover:bg-gray-50/50 transition-colors"
+                      className="hover:bg-m3-surface-high/50 transition-colors"
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5">
@@ -308,8 +308,8 @@ export default function DocumentsPage() {
                             <span
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                               style={{
-                                background: "#dbeafe",
-                                color: "#2563eb",
+                                background: "var(--m3-primary-container, #dae9fb)",
+                                color: "var(--m3-primary, #1a73e8)",
                               }}
                             >
                               <ArrowDownCircle size={12} /> Đến
@@ -318,8 +318,8 @@ export default function DocumentsPage() {
                             <span
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                               style={{
-                                background: "#f5f5f7",
-                                color: "#007aff",
+                                background: "var(--m3-surface-container-high, #eef1f4)",
+                                color: "var(--m3-primary, #1a73e8)",
                               }}
                             >
                               <ArrowUpCircle size={12} /> Đi
@@ -329,8 +329,8 @@ export default function DocumentsPage() {
                             <span
                               className="px-1.5 py-0.5 rounded text-xs font-bold"
                               style={{
-                                background: "#fee2e2",
-                                color: "#dc2626",
+                                background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
+                                color: "var(--m3-error, #ba1a1a)",
                               }}
                             >
                               !
@@ -338,19 +338,19 @@ export default function DocumentsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-gray-700">
+                      <td className="px-6 py-4 font-mono text-xs text-m3-on-surface-variant">
                         {doc.code}
                       </td>
-                      <td className="px-6 py-4 text-gray-900 max-w-[240px] truncate">
+                      <td className="px-6 py-4 text-m3-on-surface max-w-[240px] truncate">
                         {doc.title}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">
+                      <td className="px-6 py-4 text-m3-on-surface-variant text-xs">
                         {unitNames[doc.fromUnit] || doc.fromUnit}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-xs max-w-[160px]">
+                      <td className="px-6 py-4 text-m3-on-surface-variant text-xs max-w-[160px]">
                         {doc.toUnits.map((u) => unitNames[u] || u).join(", ")}
                       </td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-6 py-4 text-m3-on-surface-variant">
                         {new Date(doc.date).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-6 py-4">
@@ -370,11 +370,11 @@ export default function DocumentsPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setViewDoc(doc)}
-                            className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
+                            className="p-1.5 text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-surface-high rounded-lg transition-colors"
                           >
                             <Eye size={15} />
                           </button>
-                          <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                          <button className="p-1.5 text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-primary-container rounded-lg transition-colors">
                             <Download size={15} />
                           </button>
                         </div>
@@ -391,25 +391,25 @@ export default function DocumentsPage() {
       {/* Create Document Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
+              <h2 className="text-lg font-semibold text-m3-on-surface">
                 Soạn công văn mới
               </h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 hover:bg-m3-surface-container rounded-lg"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Loại công văn
                 </label>
                 <select
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                 >
@@ -420,23 +420,23 @@ export default function DocumentsPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Tiêu đề *
                 </label>
                 <input
                   type="text"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
                   placeholder="Nhập tiêu đề công văn..."
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Nội dung tóm tắt
                 </label>
                 <textarea
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary resize-none"
                   rows={3}
                   placeholder="Tóm tắt nội dung..."
                   value={form.content}
@@ -446,10 +446,10 @@ export default function DocumentsPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-2">
                   Đơn vị nhận *
                   {childUnits.length === 0 && (
-                    <span className="ml-2 text-xs text-amber-600 font-normal">
+                    <span className="ml-2 text-xs text-m3-on-warning-container font-normal">
                       (Không có đơn vị cấp dưới)
                     </span>
                   )}
@@ -459,7 +459,7 @@ export default function DocumentsPage() {
                     {childUnits.map((unit) => (
                       <label
                         key={unit.code}
-                        className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-50"
+                        className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-m3-surface-high"
                       >
                         <input
                           type="checkbox"
@@ -472,16 +472,16 @@ export default function DocumentsPage() {
                                 );
                             setForm({ ...form, selectedUnits: next });
                           }}
-                          className="accent-[#007aff]"
+                          className="accent-m3-primary"
                         />
-                        <span className="text-sm text-gray-700">
+                        <span className="text-sm text-m3-on-surface-variant">
                           {unit.name}
                         </span>
                       </label>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 italic">
+                  <p className="text-xs text-m3-on-surface-variant italic">
                     Bạn ở cấp thấp nhất hoặc chưa có đơn vị trực thuộc.
                   </p>
                 )}
@@ -493,17 +493,17 @@ export default function DocumentsPage() {
                   onChange={(e) =>
                     setForm({ ...form, urgent: e.target.checked })
                   }
-                  className="accent-red-500"
+                  className="accent-m3-error-container"
                 />
-                <span className="text-sm text-red-600 font-medium">
+                <span className="text-sm text-m3-on-error-container font-medium">
                   Đánh dấu KHẨN
                 </span>
               </label>
             </div>
-            <div className="flex gap-2 p-5 border-t border-gray-100">
+            <div className="flex gap-2 p-5 border-t border-m3-outline-variant">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-sm"
+                className="flex-1 py-2.5 border border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-high rounded-xl text-sm"
               >
                 Hủy
               </button>
@@ -512,7 +512,7 @@ export default function DocumentsPage() {
                 disabled={
                   submitting || !form.title || form.selectedUnits.length === 0
                 }
-                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-m3-primary hover:bg-m3-on-surface-variant disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Send size={15} />
                 {submitting ? "Đang gửi..." : "Gửi công văn"}
@@ -525,50 +525,50 @@ export default function DocumentsPage() {
       {/* View Document Modal */}
       {viewDoc && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
               <div>
-                <span className="font-mono text-xs text-gray-500">
+                <span className="font-mono text-xs text-m3-on-surface-variant">
                   {viewDoc.code}
                 </span>
-                <h2 className="text-base font-semibold text-gray-900 mt-0.5">
+                <h2 className="text-base font-semibold text-m3-on-surface mt-0.5">
                   {viewDoc.title}
                 </h2>
               </div>
               <button
                 onClick={() => setViewDoc(null)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 hover:bg-m3-surface-container rounded-lg"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="p-5 space-y-3">
               {viewDoc.urgent && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-600 text-sm font-medium">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-m3-error-container text-m3-on-error-container text-sm font-medium">
                   <AlertCircle size={16} /> Công văn KHẨN
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-gray-400 text-xs">Loại</p>
+                  <p className="text-m3-on-surface-variant text-xs">Loại</p>
                   <p className="font-medium">
                     {viewDoc.type === "incoming" ? "Đến" : "Đi"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs">Ngày</p>
+                  <p className="text-m3-on-surface-variant text-xs">Ngày</p>
                   <p className="font-medium">
                     {new Date(viewDoc.date).toLocaleDateString("vi-VN")}
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs">Từ đơn vị</p>
+                  <p className="text-m3-on-surface-variant text-xs">Từ đơn vị</p>
                   <p className="font-medium">
                     {unitNames[viewDoc.fromUnit] || viewDoc.fromUnit}
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs">Đơn vị nhận</p>
+                  <p className="text-m3-on-surface-variant text-xs">Đơn vị nhận</p>
                   <p className="font-medium">
                     {viewDoc.toUnits.map((u) => unitNames[u] || u).join(", ")}
                   </p>
@@ -576,8 +576,8 @@ export default function DocumentsPage() {
               </div>
               {viewDoc.content && (
                 <div>
-                  <p className="text-gray-400 text-xs mb-1">Nội dung</p>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl">
+                  <p className="text-m3-on-surface-variant text-xs mb-1">Nội dung</p>
+                  <p className="text-sm text-m3-on-surface-variant bg-m3-surface-high p-3 rounded-xl">
                     {viewDoc.content}
                   </p>
                 </div>

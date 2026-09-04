@@ -57,15 +57,15 @@ export default function LogsPage() {
   const getTypeStyle = (type: string) => {
     switch (type) {
       case "create":
-        return "bg-green-100 text-green-700";
+        return "bg-m3-success-container text-m3-on-success-container";
       case "update":
-        return "bg-blue-100 text-blue-700";
+        return "bg-m3-primary-container text-m3-on-primary-container";
       case "delete":
-        return "bg-red-100 text-red-700";
+        return "bg-m3-error-container text-m3-on-error-container";
       case "approve":
-        return "bg-purple-100 text-purple-700";
+        return "bg-m3-secondary-container text-m3-on-secondary-container";
       default:
-        return "bg-gray-100 text-gray-700";
+        return "bg-m3-surface-container text-m3-on-surface-variant";
     }
   };
 
@@ -88,35 +88,35 @@ export default function LogsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
             Nhật ký Hệ thống (Logs)
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             Theo dõi mọi hoạt động, thay đổi dữ liệu của người dùng trên toàn hệ
             thống
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex gap-4 flex-col sm:flex-row">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+        <div className="p-4 border-b border-m3-outline-variant flex gap-4 flex-col sm:flex-row">
           <div className="relative flex-1">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={18}
             />
             <input
               type="text"
               placeholder="Tìm kiếm log theo hành động, user..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
+              className="w-full pl-10 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary transition-colors"
             />
           </div>
           <div className="relative">
             <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={18}
             />
-            <select className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] transition-colors bg-white cursor-pointer">
+            <select className="pl-10 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary transition-colors bg-m3-surface-lowest cursor-pointer">
               <option value="">Tất cả thao tác</option>
               <option value="create">Thêm mới</option>
               <option value="update">Cập nhật</option>
@@ -127,7 +127,7 @@ export default function LogsPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-6 py-4">Thời gian</th>
                 <th className="px-6 py-4">Người thực hiện</th>
@@ -136,16 +136,16 @@ export default function LogsPage() {
                 <th className="px-6 py-4">Đối tượng tác động</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {logs.map((log) => (
                 <tr
                   key={log.id}
-                  className="hover:bg-gray-50/50 transition-colors"
+                  className="hover:bg-m3-surface-high/50 transition-colors"
                 >
-                  <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">
+                  <td className="px-6 py-4 text-m3-on-surface-variant text-xs whitespace-nowrap">
                     {log.time}
                   </td>
-                  <td className="px-6 py-4 font-medium text-gray-900 border-l border-transparent hover:border-l hover:border-[#007aff]">
+                  <td className="px-6 py-4 font-medium text-m3-on-surface border-l border-transparent hover:border-l hover:border-m3-primary">
                     {log.user}
                   </td>
                   <td className="px-6 py-4">
@@ -155,8 +155,8 @@ export default function LogsPage() {
                       {getTypeLabel(log.type)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-gray-700">{log.action}</td>
-                  <td className="px-6 py-4 text-gray-500 italic">
+                  <td className="px-6 py-4 text-m3-on-surface-variant">{log.action}</td>
+                  <td className="px-6 py-4 text-m3-on-surface-variant italic">
                     {log.target}
                   </td>
                 </tr>
@@ -165,9 +165,9 @@ export default function LogsPage() {
           </table>
         </div>
 
-        <div className="p-4 border-t border-[#e5e5ea] flex items-center justify-between text-sm">
-          <span className="text-gray-500">Hiển thị 10 log gần nhất</span>
-          <button className="px-4 py-1.5 text-[#636366] bg-[#f5f5f7] hover:bg-[#e5e5ea] rounded-lg transition-colors font-medium">
+        <div className="p-4 border-t border-m3-outline-variant flex items-center justify-between text-sm">
+          <span className="text-m3-on-surface-variant">Hiển thị 10 log gần nhất</span>
+          <button className="px-4 py-1.5 text-m3-on-surface-variant bg-m3-surface-high hover:bg-m3-outline-variant rounded-lg transition-colors font-medium">
             Tải thêm...
           </button>
         </div>

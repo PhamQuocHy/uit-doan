@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/admin/Sidebar";
 import Topbar from "@/components/admin/Topbar";
 import AiChatWidget from "@/components/admin/AiChatWidget";
+import { M3ThemeProvider } from "@/components/m3";
 
 const pageTitles: Record<string, string> = {
   "/admin": "Tổng quan",
@@ -53,32 +54,34 @@ export default function AdminLayoutClient({
   };
 
   return (
-    <div className="min-h-screen" style={{ background: "#f8fafb" }}>
-      <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed(!collapsed)}
-        onLogout={handleLogout}
-        userName={userName}
-        userRole={userRole}
-        userHierarchyLevel={userHierarchyLevel}
-        userFunctionalRole={userFunctionalRole}
-      />
-      <div
-        className="flex min-h-screen flex-col transition-all duration-300"
-        style={{ marginLeft: collapsed ? 84 : 300 }}
-      >
-        <Topbar
-          title={title}
+    <M3ThemeProvider mode="light" primary="#1a73e8">
+      <div className="min-h-screen bg-m3-background text-m3-on-surface">
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(!collapsed)}
+          onLogout={handleLogout}
           userName={userName}
           userRole={userRole}
-          onLogout={handleLogout}
-          onMenuToggle={() => setCollapsed(!collapsed)}
+          userHierarchyLevel={userHierarchyLevel}
+          userFunctionalRole={userFunctionalRole}
         />
-        <main className="!rounded-tl-2xl flex-1 overflow-auto bg-white px-5 pb-8 pt-6 sm:px-7 sm:pt-7">
-          {children}
-        </main>
+        <div
+          className="flex min-h-screen flex-col transition-[margin] duration-300 ease-[cubic-bezier(0.34,0.8,0.34,1)]"
+          style={{ marginLeft: collapsed ? 84 : 300 }}
+        >
+          <Topbar
+            title={title}
+            userName={userName}
+            userRole={userRole}
+            onLogout={handleLogout}
+            onMenuToggle={() => setCollapsed(!collapsed)}
+          />
+          <main className="!rounded-tl-[28px] flex-1 overflow-auto bg-m3-surface-lowest px-5 pb-8 pt-6 sm:px-7 sm:pt-7">
+            {children}
+          </main>
+        </div>
+        <AiChatWidget />
       </div>
-      <AiChatWidget />
-    </div>
+    </M3ThemeProvider>
   );
 }

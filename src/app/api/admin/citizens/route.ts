@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const militaryStatus = searchParams.get("militaryStatus") || undefined;
   const callIntent = searchParams.get("callIntent") || undefined;
   const requestedUnit = searchParams.get("unitCode") || undefined;
+  const campaignId = searchParams.get("campaignId") || undefined;
 
   const isBo = session.hierarchyLevel === "bo";
   const requiresUnitSelection = isBo && !requestedUnit;
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     search,
     militaryStatus,
     callIntent,
+    campaignId,
     unitCodes,
   });
 
@@ -72,6 +74,7 @@ export async function GET(request: NextRequest) {
     limit,
     search,
     militaryStatus,
+    campaignId,
     unitCodes,
   });
 

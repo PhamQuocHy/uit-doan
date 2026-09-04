@@ -53,16 +53,16 @@ export default function HealthExamWorkflow({
   ];
 
   return (
-    <div className="overflow-hidden rounded-[16px] bg-[#007aff]">
+    <div className="overflow-hidden rounded-[16px] bg-m3-primary">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
         {steps.map((step, i) => (
           <div key={step.n} className="flex min-w-0 flex-1 items-center gap-3">
             <div
               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[14px] font-bold ${
                 step.done
-                  ? "bg-white text-[#248a3d]"
+                  ? "bg-m3-surface-lowest text-m3-success"
                   : step.active
-                    ? "bg-white text-[#007aff]"
+                    ? "bg-m3-surface-lowest text-m3-primary"
                     : "border-2 border-white/50 bg-transparent text-white/70"
               }`}
             >
@@ -83,19 +83,19 @@ export default function HealthExamWorkflow({
               )}
             </div>
             {i < steps.length - 1 && (
-              <div className="mx-1 hidden h-px flex-1 bg-white/35 sm:block" />
+              <div className="mx-1 hidden h-px flex-1 bg-m3-surface-lowest/35 sm:block" />
             )}
           </div>
         ))}
       </div>
 
       {canEnter && (
-        <div className="flex flex-wrap gap-2 border-t border-white/15 bg-[#0066d6]/40 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap gap-2 border-t border-white/15 bg-m3-primary/40 px-4 py-3 sm:px-5">
           <button
             type="button"
             disabled={!available.includes("screening")}
             onClick={() => onEnterRound("screening")}
-            className="min-h-[40px] rounded-[12px] bg-white px-4 text-[14px] font-semibold text-[#007aff] transition disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-h-[40px] rounded-[12px] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-primary transition disabled:cursor-not-allowed disabled:opacity-40"
           >
             Nhập vòng 1
           </button>

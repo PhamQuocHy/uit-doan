@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, getUnitDescendants } from '@/lib/data';
 import { getSession } from '@/lib/auth';
+import { hashPassword } from '@/lib/password';
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -41,9 +42,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Tên đăng nhập đã tồn tại' }, { status: 400 });
   }
 
-  const user = db.users.create({ 
-    username, 
-    password, 
+  const user = db.users.create({
+    username,
+    password: hashPassword(password),
     name, 
     email, 
     phone: phone || '', 

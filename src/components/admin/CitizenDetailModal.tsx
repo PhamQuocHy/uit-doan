@@ -33,34 +33,34 @@ const EDUCATION_STATUS: Record<
   EducationRecord["status"],
   { label: string; bg: string; color: string }
 > = {
-  completed: { label: "Đã tốt nghiệp", bg: "rgba(52,199,89,0.14)", color: "#248a3d" },
-  studying: { label: "Đang học", bg: "rgba(0,122,255,0.12)", color: "#007aff" },
-  dropped: { label: "Bỏ học", bg: "rgba(255,59,48,0.1)", color: "#ff3b30" },
+  completed: { label: "Đã tốt nghiệp", bg: "color-mix(in srgb, var(--color-m3-success) 14%, transparent)", color: "var(--color-m3-success)" },
+  studying: { label: "Đang học", bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)", color: "var(--m3-primary, #1a73e8)" },
+  dropped: { label: "Bỏ học", bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" },
 };
 
 const EDUCATION_LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-  "9/12": { bg: "#f2f4f6", color: "#636366" },
-  "12/12": { bg: "rgba(0,122,255,0.1)", color: "#007aff" },
-  "Cao đẳng": { bg: "rgba(255,149,0,0.14)", color: "#c93400" },
-  "Đại học": { bg: "rgba(52,199,89,0.14)", color: "#248a3d" },
-  "Thạc sĩ": { bg: "rgba(175,82,222,0.12)", color: "#8944ab" },
-  "Tiến sĩ": { bg: "rgba(255,59,48,0.1)", color: "#ff3b30" },
+  "9/12": { bg: "var(--m3-surface-container-high, #eef1f4)", color: "var(--m3-on-surface-variant, #475569)" },
+  "12/12": { bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 10%, transparent)", color: "var(--m3-primary, #1a73e8)" },
+  "Cao đẳng": { bg: "color-mix(in srgb, var(--color-m3-warning) 14%, transparent)", color: "var(--m3-error, #ba1a1a)" },
+  "Đại học": { bg: "color-mix(in srgb, var(--color-m3-success) 14%, transparent)", color: "var(--color-m3-success)" },
+  "Thạc sĩ": { bg: "color-mix(in srgb, var(--m3-tertiary, #5a5f6e) 12%, transparent)", color: "var(--m3-tertiary, #5a5f6e)" },
+  "Tiến sĩ": { bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" },
 };
 
 const RESIDENCE_TYPE_STYLE: Record<string, { bg: string; color: string }> = {
-  "Quê quán": { bg: "#f2f4f6", color: "#636366" },
-  "Thường trú": { bg: "rgba(0,122,255,0.1)", color: "#007aff" },
-  "Tạm trú": { bg: "rgba(255,149,0,0.14)", color: "#c93400" },
-  "Chuyển đi": { bg: "rgba(255,59,48,0.1)", color: "#ff3b30" },
+  "Quê quán": { bg: "var(--m3-surface-container-high, #eef1f4)", color: "var(--m3-on-surface-variant, #475569)" },
+  "Thường trú": { bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 10%, transparent)", color: "var(--m3-primary, #1a73e8)" },
+  "Tạm trú": { bg: "color-mix(in srgb, var(--color-m3-warning) 14%, transparent)", color: "var(--m3-error, #ba1a1a)" },
+  "Chuyển đi": { bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" },
 };
 
 const RESIDENCE_STATUS: Record<
   ResidenceRecord["status"],
   { label: string; bg: string; color: string }
 > = {
-  current: { label: "Đang cư trú", bg: "rgba(52,199,89,0.14)", color: "#248a3d" },
-  past: { label: "Đã chuyển đi", bg: "#f2f4f6", color: "#636366" },
-  pending: { label: "Chờ xác nhận", bg: "rgba(255,149,0,0.14)", color: "#c93400" },
+  current: { label: "Đang cư trú", bg: "color-mix(in srgb, var(--color-m3-success) 14%, transparent)", color: "var(--color-m3-success)" },
+  past: { label: "Đã chuyển đi", bg: "var(--m3-surface-container-high, #eef1f4)", color: "var(--m3-on-surface-variant, #475569)" },
+  pending: { label: "Chờ xác nhận", bg: "color-mix(in srgb, var(--color-m3-warning) 14%, transparent)", color: "var(--m3-error, #ba1a1a)" },
 };
 
 const MILITARY_STATUS: Record<string, string> = {
@@ -96,7 +96,7 @@ function nvqsChoiceNeedsReason(choice: NvqsCallChoice) {
 }
 
 const NVQS_INPUT_CLS =
-  "w-full min-h-[44px] rounded-[12px] border border-black/[0.08] bg-white px-4 text-[15px] text-[#1d1d1f] outline-none transition-colors focus:border-[#007aff]/40 focus:ring-2 focus:ring-[#007aff]/15";
+  "w-full min-h-[44px] rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-4 text-[15px] text-m3-on-surface outline-none transition-colors focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15";
 
 interface CitizenDetailModalProps {
   citizen: Citizen | null;
@@ -133,6 +133,8 @@ export default function CitizenDetailModal({
   const [nvqsPinError, setNvqsPinError] = useState<string | null>(null);
   const [nvqsPinVerifying, setNvqsPinVerifying] = useState(false);
   const [nvqsVerifiedPin, setNvqsVerifiedPin] = useState("");
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string; year: number }[]>([]);
+  const [campaignId, setCampaignId] = useState("");
   const [sessionLevel, setSessionLevel] = useState<string | null>(null);
   const [sessionFunctionalRole, setSessionFunctionalRole] = useState<string | null>(null);
   const [sessionUserRole, setSessionUserRole] = useState<string | null>(null);
@@ -243,6 +245,7 @@ export default function CitizenDetailModal({
       return;
     }
     setNvqsCallChoice(citizenToNvqsChoice(citizen));
+    setCampaignId(citizen.campaignId || "");
     setNvqsReason(citizen.militaryStatusReason || "");
     setNvqsError(null);
     setNvqsUnlocked(false);
@@ -250,6 +253,13 @@ export default function CitizenDetailModal({
     setNvqsVerifiedPin("");
     setNvqsPinError(null);
   }, [citizen?.id, citizen?.militaryStatus, citizen?.militaryStatusReason, citizen?.militaryStatusLocked, citizen?.callIntent, citizen?.approvalStatus]);
+
+  useEffect(() => {
+    fetch("/api/admin/recruitment?limit=100")
+      .then((res) => res.json())
+      .then((data) => setCampaigns(data.data || []))
+      .catch(() => setCampaigns([]));
+  }, []);
 
   const handleVerifyNvqsPin = async () => {
     if (!nvqsPin.trim()) {
@@ -284,6 +294,10 @@ export default function CitizenDetailModal({
       setNvqsError("Vui lòng nhập lý do khi chọn Tạm hoãn.");
       return;
     }
+    if (nvqsCallChoice === "du_kien_goi" && !campaignId) {
+      setNvqsError("Vui lòng chọn đợt khám tuyển.");
+      return;
+    }
 
     setNvqsSaving(true);
     setNvqsError(null);
@@ -302,6 +316,7 @@ export default function CitizenDetailModal({
               }
             : {
                 callIntent: nvqsCallChoice,
+                  campaignId: nvqsCallChoice === "du_kien_goi" ? campaignId : null,
                 militaryStatusReason: "",
               }),
           militaryStatusLocked: true,
@@ -396,8 +411,8 @@ export default function CitizenDetailModal({
     colSpan: 1 | 2 = 1,
   ) => (
     <div className={colSpan === 2 ? "col-span-2 min-w-0" : "min-w-0"}>
-      <p className="text-[14px] font-normal text-[#8e8e93]">{label}</p>
-      <p className="mt-0.5 text-[17px] font-medium leading-snug text-[#1d1d1f] break-words">
+      <p className="text-[14px] font-normal text-m3-on-surface-variant">{label}</p>
+      <p className="mt-0.5 text-[17px] font-medium leading-snug text-m3-on-surface break-words">
         {value || "—"}
       </p>
     </div>
@@ -405,8 +420,8 @@ export default function CitizenDetailModal({
 
   const renderSectionBlock = (title: string, children: ReactNode) => (
     <section>
-      <h3 className="mb-3 flex items-center gap-2 text-[16px] font-medium text-[#007aff]">
-        <span className="h-3.5 w-1 rounded-full bg-[#007aff]" aria-hidden />
+      <h3 className="mb-3 flex items-center gap-2 text-[16px] font-medium text-m3-primary">
+        <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
         {title}
       </h3>
       {children}
@@ -415,8 +430,8 @@ export default function CitizenDetailModal({
 
   const renderStackField = (label: string, value: string | undefined | null) => (
     <div className="min-w-0">
-      <p className="text-[14px] font-medium text-[#6e6e73]">{label}</p>
-      <p className="mt-1 text-[17px] font-semibold leading-snug text-[#1d1d1f] break-words">
+      <p className="text-[14px] font-medium text-m3-on-surface-variant">{label}</p>
+      <p className="mt-1 text-[17px] font-semibold leading-snug text-m3-on-surface break-words">
         {value || "—"}
       </p>
     </div>
@@ -424,9 +439,9 @@ export default function CitizenDetailModal({
 
   const conclusionStyle = (c: string) => {
     if (["Loại 1", "Loại 2", "Loại 3"].includes(c)) {
-      return { bg: "rgba(52,199,89,0.14)", color: "#248a3d" };
+      return { bg: "color-mix(in srgb, var(--color-m3-success) 14%, transparent)", color: "var(--color-m3-success)" };
     }
-    return { bg: "rgba(255,59,48,0.1)", color: "#ff3b30" };
+    return { bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" };
   };
 
   const calcBmi = (height: number, weight: number) =>
@@ -434,7 +449,7 @@ export default function CitizenDetailModal({
 
   const renderScreeningExam = (r: HealthRecord) => (
     <div className="flex flex-col gap-3">
-      <p className="rounded-[10px] bg-[rgba(0,122,255,0.08)] px-3 py-2 text-[13px] leading-snug text-[#007aff]">
+      <p className="rounded-[10px] bg-m3-primary/8 px-3 py-2 text-[13px] leading-snug text-m3-primary">
         <strong>Vòng 1</strong> · Sàng lọc thể lực, dị tật, dị dạng và bệnh lý thuộc
         diện miễn đăng ký NVQS tại Trạm Y tế xã.
       </p>
@@ -484,7 +499,7 @@ export default function CitizenDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="citizen-drawer-title"
-        className={`relative flex h-full w-full max-w-[820px] flex-col bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out ${
+        className={`relative flex h-full w-full max-w-[820px] flex-col bg-m3-surface-lowest shadow-[-8px_0_32px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -493,7 +508,7 @@ export default function CitizenDetailModal({
           <div className="min-w-0">
             <h2
               id="citizen-drawer-title"
-              className="truncate text-[20px] font-semibold text-[#1d1d1f]"
+              className="truncate text-[20px] font-semibold text-m3-on-surface"
             >
               Hồ sơ lý lịch
             </h2>
@@ -502,7 +517,7 @@ export default function CitizenDetailModal({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-[12px] p-2.5 text-[#636366] hover:bg-black/[0.05]"
+            className="rounded-[12px] p-2.5 text-m3-on-surface-variant hover:bg-black/[0.05]"
             aria-label="Đóng"
           >
             <X size={20} />
@@ -520,8 +535,8 @@ export default function CitizenDetailModal({
               onClick={() => setTab(t.id)}
               className={`shrink-0 border-b-2 px-3 py-3 text-[15px] font-normal transition-colors ${
                 tab === t.id
-                  ? "border-[#007aff] text-[#007aff]"
-                  : "border-transparent text-[#6e6e73] hover:text-[#1d1d1f]"
+                  ? "border-m3-primary text-m3-primary"
+                  : "border-transparent text-m3-on-surface-variant hover:text-m3-on-surface"
               }`}
             >
               {t.label}
@@ -534,15 +549,15 @@ export default function CitizenDetailModal({
           {tab === "identity" && (
             <div className="flex flex-col gap-4">
               {/* Profile banner */}
-              <div className="flex items-center gap-4 rounded-[16px] bg-gradient-to-r from-[rgba(0,122,255,0.08)] to-transparent p-4">
+              <div className="flex items-center gap-4 rounded-[16px] bg-gradient-to-r from-m3-primary/8 to-transparent p-4">
                 <img
                   src={`https://ui-avatars.com/api/?name=${encodeURIComponent(citizen.fullName)}&background=007aff&color=fff&size=128&font-size=0.33`}
                   alt=""
                   className="h-30 w-24 shrink-0 rounded-[14px] object-cover shadow-xs"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[20px] font-medium text-[#1d1d1f]">{citizen.fullName}</p>
-                  <p className="mt-1 text-[16px] text-[#6e6e73]">
+                  <p className="text-[20px] font-medium text-m3-on-surface">{citizen.fullName}</p>
+                  <p className="mt-1 text-[16px] text-m3-on-surface-variant">
                     {citizen.gender === "male" ? "Nam" : "Nữ"}
                     {" · "}
                     {new Date(citizen.dateOfBirth).toLocaleDateString("vi-VN")}
@@ -553,7 +568,7 @@ export default function CitizenDetailModal({
               </div>
 
               {/* Unified detail card */}
-              <div className="rounded-[16px] border border-black/[0.06] bg-white p-5">
+              <div className="rounded-[16px] border border-black/[0.06] bg-m3-surface-lowest p-5">
                 {renderSectionBlock(
                   "Thông tin cá nhân",
                   <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -607,42 +622,42 @@ export default function CitizenDetailModal({
 
           {tab === "education" && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-[14px] border border-black/[0.06] bg-[#f8fafb] px-4 py-3">
-                <p className="text-[12px] font-medium text-[#8e8e93]">Trình độ hiện tại</p>
-                <p className="mt-0.5 text-[16px] font-bold text-[#1d1d1f]">
+              <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
+                <p className="text-[12px] font-medium text-m3-on-surface-variant">Trình độ hiện tại</p>
+                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
                   {citizen.educationLevel}
                   {citizen.job ? (
-                    <span className="font-semibold text-[#6e6e73]"> · {citizen.job}</span>
+                    <span className="font-semibold text-m3-on-surface-variant"> · {citizen.job}</span>
                   ) : null}
                 </p>
               </div>
 
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#007aff]">
-                  <span className="h-3.5 w-1 rounded-full bg-[#007aff]" aria-hidden />
+                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
+                  <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
                   Quá trình học tập
                 </h3>
 
                 {educationLoading ? (
-                  <p className="py-6 text-center text-[14px] text-[#6e6e73]">
+                  <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
                     Đang tải lịch sử học vấn...
                   </p>
                 ) : educationRecords.length === 0 ? (
-                  <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-[#6e6e73]">
+                  <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
                     Chưa có bằng cấp / chứng chỉ nào được ghi nhận.
                   </p>
                 ) : (
                   <div className="relative">
                     <div
-                      className="absolute left-[5px] top-5 bottom-5 w-[2px] rounded-full bg-[#007aff]/25"
+                      className="absolute left-[5px] top-5 bottom-5 w-[2px] rounded-full bg-m3-primary/25"
                       aria-hidden
                     />
                     <div className="flex flex-col gap-3">
                       {educationRecords.map((record) => {
                         const levelStyle =
                           EDUCATION_LEVEL_STYLE[record.level] ?? {
-                            bg: "#f2f4f6",
-                            color: "#636366",
+                            bg: "var(--m3-surface-container-high, #eef1f4)",
+                            color: "var(--m3-on-surface-variant, #475569)",
                           };
                         const statusStyle = EDUCATION_STATUS[record.status];
                         const yearLabel =
@@ -656,11 +671,11 @@ export default function CitizenDetailModal({
                           <div key={record.id} className="flex gap-3">
                             <div className="flex w-3 shrink-0 justify-center pt-5">
                               <span
-                                className="relative z-10 h-2.5 w-2.5 rounded-full bg-[#007aff] ring-[3px] ring-white"
+                                className="relative z-10 h-2.5 w-2.5 rounded-full bg-m3-primary ring-[3px] ring-white"
                                 aria-hidden
                               />
                             </div>
-                            <div className="min-w-0 flex-1 rounded-[14px] border border-black/[0.06] bg-white px-4 py-3.5">
+                            <div className="min-w-0 flex-1 rounded-[14px] border border-black/[0.06] bg-m3-surface-lowest px-4 py-3.5">
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <span
                                   className="rounded-[8px] px-2.5 py-1 text-[13px] font-bold"
@@ -681,22 +696,22 @@ export default function CitizenDetailModal({
                                   {statusStyle.label}
                                 </span>
                               </div>
-                              <p className="mt-2 text-[15px] font-bold text-[#1d1d1f]">
+                              <p className="mt-2 text-[15px] font-bold text-m3-on-surface">
                                 {record.institution}
                               </p>
                               {record.major && (
-                                <p className="mt-0.5 text-[14px] text-[#6e6e73]">
+                                <p className="mt-0.5 text-[14px] text-m3-on-surface-variant">
                                   Ngành: {record.major}
                                 </p>
                               )}
-                              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-[#8e8e93]">
+                              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-m3-on-surface-variant">
                                 {yearLabel && <span>{yearLabel}</span>}
                                 {record.certificateNo && (
                                   <span>Số bằng: {record.certificateNo}</span>
                                 )}
                               </div>
                               {record.note && (
-                                <p className="mt-2 text-[13px] italic text-[#6e6e73]">
+                                <p className="mt-2 text-[13px] italic text-m3-on-surface-variant">
                                   {record.note}
                                 </p>
                               )}
@@ -720,36 +735,36 @@ export default function CitizenDetailModal({
                 onEnterRound={setHealthFormRound}
               />
 
-              <div className="rounded-[14px] border border-black/[0.06] bg-[#f8fafb] px-4 py-3">
-                <p className="text-[12px] font-medium text-[#8e8e93]">
+              <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
+                <p className="text-[12px] font-medium text-m3-on-surface-variant">
                   Phân loại sức khỏe (tóm tắt)
                 </p>
-                <p className="mt-0.5 text-[16px] font-bold text-[#1d1d1f]">
+                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
                   {citizen.healthStatus || "—"}
                 </p>
                 {citizen.healthStatus && (
-                  <p className="mt-1 text-[13px] font-medium text-[#248a3d]">
+                  <p className="mt-1 text-[13px] font-medium text-m3-success">
                     {getHealthConclusionMeaning(citizen.healthStatus, 'Khám tuyển cấp huyện')}
                   </p>
                 )}
               </div>
 
               {healthLoading ? (
-                <p className="py-6 text-center text-[14px] text-[#6e6e73]">
+                <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
                   Đang tải lịch sử khám...
                 </p>
               ) : healthRecords.length === 0 ? (
-                <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-[#6e6e73]">
+                <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
                   Chưa có lần khám nào trong hệ thống.
                 </p>
               ) : (
                 <>
                   {healthYears.length > 0 && (
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-[15px] font-bold text-[#1d1d1f]">
+                      <h3 className="text-[15px] font-bold text-m3-on-surface">
                         Lịch sử khám
                         {healthYear !== null && (
-                          <span className="ml-1.5 font-semibold text-[#6e6e73]">
+                          <span className="ml-1.5 font-semibold text-m3-on-surface-variant">
                             · {filteredHealthRecords.length} lần
                           </span>
                         )}
@@ -760,8 +775,8 @@ export default function CitizenDetailModal({
                           onClick={() => setHealthFilterOpen((v) => !v)}
                           className={`inline-flex min-h-[40px] items-center gap-2 rounded-full border px-3.5 text-[14px] font-semibold transition-colors ${
                             healthFilterOpen
-                              ? "border-[#007aff]/30 bg-[rgba(0,122,255,0.1)] text-[#007aff]"
-                              : "border-black/[0.08] bg-white text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                              ? "border-m3-primary/30 bg-m3-primary/10 text-m3-primary"
+                              : "border-black/[0.08] bg-m3-surface-lowest text-m3-on-surface hover:bg-m3-surface-high"
                           }`}
                         >
                           <Filter size={16} />
@@ -774,7 +789,7 @@ export default function CitizenDetailModal({
 
                         {healthFilterOpen && (
                           <div
-                            className="absolute right-0 z-20 mt-2 max-h-[240px] w-44 overflow-y-auto rounded-[14px] border border-black/[0.08] bg-white py-1.5 shadow-lg"
+                            className="absolute right-0 z-20 mt-2 max-h-[240px] w-44 overflow-y-auto rounded-[14px] border border-black/[0.08] bg-m3-surface-lowest py-1.5 shadow-lg"
                             style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.12)" }}
                           >
                             {healthYears.map((year) => {
@@ -790,14 +805,14 @@ export default function CitizenDetailModal({
                                     setExpandedHealthId(null);
                                     setHealthFilterOpen(false);
                                   }}
-                                  className={`flex w-full min-h-[42px] items-center justify-between gap-2 px-4 text-left text-[14px] font-medium transition-colors hover:bg-[#f5f5f7] ${
+                                  className={`flex w-full min-h-[42px] items-center justify-between gap-2 px-4 text-left text-[14px] font-medium transition-colors hover:bg-m3-surface-high ${
                                     healthYear === year
-                                      ? "bg-[rgba(0,122,255,0.08)] font-bold text-[#007aff]"
-                                      : "text-[#1d1d1f]"
+                                      ? "bg-m3-primary/8 font-bold text-m3-primary"
+                                      : "text-m3-on-surface"
                                   }`}
                                 >
                                   <span>{year}</span>
-                                  <span className="text-[12px] font-semibold text-[#8e8e93]">
+                                  <span className="text-[12px] font-semibold text-m3-on-surface-variant">
                                     {count} lần
                                   </span>
                                 </button>
@@ -810,7 +825,7 @@ export default function CitizenDetailModal({
                   )}
 
                   {filteredHealthRecords.length === 0 ? (
-                    <p className="py-6 text-center text-[14px] text-[#6e6e73]">
+                    <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
                       Không có lần khám nào trong năm {healthYear}.
                     </p>
                   ) : (
@@ -821,7 +836,7 @@ export default function CitizenDetailModal({
                         return (
                           <div
                             key={r.id}
-                            className="overflow-hidden rounded-[14px] border border-black/[0.06] bg-white"
+                            className="overflow-hidden rounded-[14px] border border-black/[0.06] bg-m3-surface-lowest"
                           >
                             <button
                               type="button"
@@ -833,14 +848,14 @@ export default function CitizenDetailModal({
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-[15px] font-bold text-[#1d1d1f]">
+                                    <p className="text-[15px] font-bold text-m3-on-surface">
                                       {r.year} · {r.phase}
                                     </p>
                                     <span
                                       className={`rounded-[6px] px-2 py-0.5 text-[11px] font-bold ${
                                         isDetailedHealthPhase(r.phase)
-                                          ? "bg-[rgba(255,149,0,0.14)] text-[#c93400]"
-                                          : "bg-[#f2f4f6] text-[#636366]"
+                                          ? "bg-m3-warning/14 text-m3-error"
+                                          : "bg-m3-surface-high text-m3-on-surface-variant"
                                       }`}
                                     >
                                       {isDetailedHealthPhase(r.phase) ? "Vòng 2" : "Vòng 1"}
@@ -853,7 +868,7 @@ export default function CitizenDetailModal({
                                     {r.conclusion}
                                   </span>
                                 </div>
-                                <p className="mt-1.5 text-[13px] text-[#6e6e73]">
+                                <p className="mt-1.5 text-[13px] text-m3-on-surface-variant">
                                   {isDetailedHealthPhase(r.phase)
                                     ? `Khám chi tiết · Cao ${r.height} cm · Nặng ${r.weight} kg`
                                     : `Cao ${r.height} cm · Nặng ${r.weight} kg · Huyết áp ${r.bloodPressure} · Thị lực ${r.vision}`}
@@ -862,18 +877,18 @@ export default function CitizenDetailModal({
                               {isOpen ? (
                                 <ChevronUp
                                   size={18}
-                                  className="mt-1 shrink-0 text-[#8e8e93]"
+                                  className="mt-1 shrink-0 text-m3-on-surface-variant"
                                 />
                               ) : (
                                 <ChevronDown
                                   size={18}
-                                  className="mt-1 shrink-0 text-[#8e8e93]"
+                                  className="mt-1 shrink-0 text-m3-on-surface-variant"
                                 />
                               )}
                             </button>
 
                             {isOpen && (
-                              <div className="border-t border-black/[0.06] bg-[#f8fafb] px-4 py-4">
+                              <div className="border-t border-black/[0.06] bg-m3-surface-high px-4 py-4">
                                 {isDetailedHealthPhase(r.phase)
                                   ? renderDetailedExam(r)
                                   : renderScreeningExam(r)}
@@ -891,13 +906,13 @@ export default function CitizenDetailModal({
 
           {tab === "residence" && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-[14px] border border-black/[0.06] bg-[#f8fafb] px-4 py-3">
-                <p className="text-[12px] font-medium text-[#8e8e93]">Cư trú hiện tại</p>
-                <p className="mt-0.5 text-[16px] font-bold text-[#1d1d1f]">
+              <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
+                <p className="text-[12px] font-medium text-m3-on-surface-variant">Cư trú hiện tại</p>
+                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
                   {citizen.address || "—"}
                 </p>
                 {citizen.originPlace && (
-                  <p className="mt-1 text-[13px] text-[#6e6e73]">
+                  <p className="mt-1 text-[13px] text-m3-on-surface-variant">
                     Quê quán: {citizen.originPlace}
                     {citizen.phone ? ` · ${citizen.phone}` : ""}
                   </p>
@@ -905,31 +920,31 @@ export default function CitizenDetailModal({
               </div>
 
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-[#007aff]">
-                  <span className="h-3.5 w-1 rounded-full bg-[#007aff]" aria-hidden />
+                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
+                  <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
                   Lịch sử biến động cư trú
                 </h3>
 
                 {residenceLoading ? (
-                  <p className="py-6 text-center text-[14px] text-[#6e6e73]">
+                  <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
                     Đang tải lịch sử cư trú...
                   </p>
                 ) : residenceRecords.length === 0 ? (
-                  <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-[#6e6e73]">
+                  <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
                     Chưa có biến động cư trú nào được ghi nhận.
                   </p>
                 ) : (
                   <div className="relative">
                     <div
-                      className="absolute left-[5px] top-5 bottom-5 w-[2px] rounded-full bg-[#007aff]/25"
+                      className="absolute left-[5px] top-5 bottom-5 w-[2px] rounded-full bg-m3-primary/25"
                       aria-hidden
                     />
                     <div className="flex flex-col gap-3">
                       {residenceRecords.map((record) => {
                         const typeStyle =
                           RESIDENCE_TYPE_STYLE[record.type] ?? {
-                            bg: "#f2f4f6",
-                            color: "#636366",
+                            bg: "var(--m3-surface-container-high, #eef1f4)",
+                            color: "var(--m3-on-surface-variant, #475569)",
                           };
                         const statusStyle = RESIDENCE_STATUS[record.status];
                         const periodLabel =
@@ -945,11 +960,11 @@ export default function CitizenDetailModal({
                           <div key={record.id} className="flex gap-3">
                             <div className="flex w-3 shrink-0 justify-center pt-5">
                               <span
-                                className="relative z-10 h-2.5 w-2.5 rounded-full bg-[#007aff] ring-[3px] ring-white"
+                                className="relative z-10 h-2.5 w-2.5 rounded-full bg-m3-primary ring-[3px] ring-white"
                                 aria-hidden
                               />
                             </div>
-                            <div className="min-w-0 flex-1 rounded-[14px] border border-black/[0.06] bg-white px-4 py-3.5">
+                            <div className="min-w-0 flex-1 rounded-[14px] border border-black/[0.06] bg-m3-surface-lowest px-4 py-3.5">
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <span
                                   className="rounded-[8px] px-2.5 py-1 text-[13px] font-bold"
@@ -970,17 +985,17 @@ export default function CitizenDetailModal({
                                   {statusStyle.label}
                                 </span>
                               </div>
-                              <p className="mt-2 text-[15px] font-bold text-[#1d1d1f]">
+                              <p className="mt-2 text-[15px] font-bold text-m3-on-surface">
                                 {record.address}
                               </p>
-                              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-[#8e8e93]">
+                              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-m3-on-surface-variant">
                                 {periodLabel && <span>{periodLabel}</span>}
                                 {record.decisionNo && (
                                   <span>QĐ: {record.decisionNo}</span>
                                 )}
                               </div>
                               {record.note && (
-                                <p className="mt-2 text-[13px] italic text-[#6e6e73]">
+                                <p className="mt-2 text-[13px] italic text-m3-on-surface-variant">
                                   {record.note}
                                 </p>
                               )}
@@ -996,15 +1011,15 @@ export default function CitizenDetailModal({
           )}
 
           {tab === "nvqs" && (
-            <div className="rounded-[16px] bg-[#f8fafb] p-4">
+            <div className="rounded-[16px] bg-m3-surface-high p-4">
               {nvqsIsLocked && !nvqsUnlocked && (
-                <div className="mb-4 flex items-start gap-3 rounded-[12px] border border-[rgba(255,149,0,0.25)] bg-[rgba(255,149,0,0.08)] px-3.5 py-3">
-                  <Lock size={18} className="mt-0.5 shrink-0 text-[#c93400]" />
+                <div className="mb-4 flex items-start gap-3 rounded-[12px] border border-m3-warning/25 bg-m3-warning/8 px-3.5 py-3">
+                  <Lock size={18} className="mt-0.5 shrink-0 text-m3-error" />
                   <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-[#1d1d1f]">
+                    <p className="text-[14px] font-semibold text-m3-on-surface">
                       Trạng thái NVQS đã được lưu và khóa
                     </p>
-                    <p className="mt-1 text-[13px] leading-snug text-[#6e6e73]">
+                    <p className="mt-1 text-[13px] leading-snug text-m3-on-surface-variant">
                       Không thể sửa trực tiếp. Dùng nút{" "}
                       <strong>Sửa hồ sơ</strong> bên dưới hoặc mở khóa tại đây
                       {needsPinToEdit ? " bằng mã PIN địa phương" : ""}.
@@ -1014,19 +1029,19 @@ export default function CitizenDetailModal({
               )}
 
               {nvqsIsLocked && !nvqsUnlocked && (
-                <div className="mb-4 rounded-[12px] border border-black/[0.06] bg-white p-4">
+                <div className="mb-4 rounded-[12px] border border-black/[0.06] bg-m3-surface-lowest p-4">
                   {isBoLevel ? (
                     <button
                       type="button"
                       onClick={() => setNvqsUnlocked(true)}
-                      className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] bg-[#007aff] px-5 text-[15px] font-bold text-white hover:bg-[#0066d6]"
+                      className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white hover:bg-m3-primary"
                     >
                       Chỉnh sửa trạng thái
                     </button>
                   ) : needsPinToEdit ? (
                     <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 text-[14px] font-semibold text-[#1d1d1f]">
-                        <KeyRound size={18} className="text-[#007aff]" />
+                      <div className="flex items-center gap-2 text-[14px] font-semibold text-m3-on-surface">
+                        <KeyRound size={18} className="text-m3-primary" />
                         Nhập mã PIN địa phương để sửa
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
@@ -1049,13 +1064,13 @@ export default function CitizenDetailModal({
                           type="button"
                           onClick={handleVerifyNvqsPin}
                           disabled={nvqsPinVerifying}
-                          className="inline-flex min-h-[44px] items-center justify-center rounded-[12px] bg-[#007aff] px-5 text-[15px] font-bold text-white hover:bg-[#0066d6] disabled:opacity-40"
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white hover:bg-m3-primary disabled:opacity-40"
                         >
                           {nvqsPinVerifying ? "Đang xác minh..." : "Xác nhận PIN"}
                         </button>
                       </div>
                       {nvqsPinError && (
-                        <p className="text-[13px] text-[#ff3b30]">{nvqsPinError}</p>
+                        <p className="text-[13px] text-m3-error">{nvqsPinError}</p>
                       )}
                     </div>
                   ) : null}
@@ -1066,7 +1081,7 @@ export default function CitizenDetailModal({
                 <div className="min-w-0">
                   <label
                     htmlFor="nvqs-status"
-                    className="text-[14px] font-medium text-[#6e6e73]"
+                    className="text-[14px] font-medium text-m3-on-surface-variant"
                   >
                     Dự kiến tuyển gọi
                   </label>
@@ -1089,11 +1104,35 @@ export default function CitizenDetailModal({
                       ))}
                     </select>
                   ) : (
-                    <p className="mt-1.5 text-[17px] font-semibold text-[#1d1d1f]">
+                    <p className="mt-1.5 text-[17px] font-semibold text-m3-on-surface">
                       {getCallDisplayLabel(citizen).label}
                     </p>
                   )}
                 </div>
+
+                {nvqsCanEdit && nvqsCallChoice === "du_kien_goi" && (
+                  <div className="min-w-0">
+                    <label htmlFor="nvqs-campaign" className="text-[14px] font-medium text-m3-on-surface-variant">
+                      Đợt khám tuyển <span className="text-m3-error">*</span>
+                    </label>
+                    <select
+                      id="nvqs-campaign"
+                      className={`${NVQS_INPUT_CLS} mt-1.5`}
+                      value={campaignId}
+                      onChange={(e) => {
+                        setCampaignId(e.target.value);
+                        setNvqsError(null);
+                      }}
+                    >
+                      <option value="">Chọn đợt khám tuyển...</option>
+                      {campaigns.map((campaign) => (
+                        <option key={campaign.id} value={campaign.id}>
+                          {campaign.name} ({campaign.year})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {nvqsChoiceNeedsReason(
                   nvqsCanEdit ? nvqsCallChoice : citizenToNvqsChoice(citizen),
@@ -1102,10 +1141,10 @@ export default function CitizenDetailModal({
                     <div className="min-w-0">
                       <label
                         htmlFor="nvqs-reason"
-                        className="text-[14px] font-medium text-[#6e6e73]"
+                        className="text-[14px] font-medium text-m3-on-surface-variant"
                       >
                         Lý do{" "}
-                        <span className="text-[#ff3b30]">*</span>
+                        <span className="text-m3-error">*</span>
                       </label>
                       <textarea
                         id="nvqs-reason"
@@ -1127,7 +1166,7 @@ export default function CitizenDetailModal({
               </div>
 
               {nvqsError && (
-                <p className="mt-3 rounded-[12px] bg-[rgba(255,59,48,0.08)] px-3 py-2.5 text-[13px] text-[#ff3b30]">
+                <p className="mt-3 rounded-[12px] bg-m3-error/8 px-3 py-2.5 text-[13px] text-m3-error">
                   {nvqsError}
                 </p>
               )}
@@ -1142,7 +1181,7 @@ export default function CitizenDetailModal({
                       (nvqsCallChoice === citizenToNvqsChoice(citizen) &&
                         nvqsReason.trim() === (citizen.militaryStatusReason || "").trim())
                     }
-                    className="inline-flex min-h-[44px] items-center rounded-[12px] bg-[#007aff] px-5 text-[15px] font-bold text-white transition-opacity hover:bg-[#0066d6] disabled:opacity-40"
+                    className="inline-flex min-h-[44px] items-center rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white transition-opacity hover:bg-m3-primary disabled:opacity-40"
                   >
                     {nvqsSaving ? "Đang lưu..." : "Lưu trạng thái"}
                   </button>
@@ -1156,7 +1195,7 @@ export default function CitizenDetailModal({
                         setNvqsReason(citizen.militaryStatusReason || "");
                         setNvqsError(null);
                       }}
-                      className="inline-flex min-h-[44px] items-center rounded-[12px] border border-black/[0.08] bg-white px-4 text-[14px] font-semibold text-[#6e6e73] hover:bg-black/[0.03]"
+                      className="inline-flex min-h-[44px] items-center rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.03]"
                     >
                       Hủy
                     </button>
@@ -1164,9 +1203,9 @@ export default function CitizenDetailModal({
                 </div>
               )}
 
-              <p className="mt-4 text-[13px] text-[#6e6e73]">
+              <p className="mt-4 text-[13px] text-m3-on-surface-variant">
                 Hiện tại:{" "}
-                <strong className="text-[#1d1d1f]">
+                <strong className="text-m3-on-surface">
                   {getCallDisplayLabel(citizen).label}
                 </strong>
                 {citizen.approvalStatus === "pending" &&
@@ -1174,14 +1213,14 @@ export default function CitizenDetailModal({
                     <> — đang chờ xét duyệt tại mục Xét duyệt danh sách</>
                   )}
                 {nvqsIsLocked && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[rgba(255,149,0,0.12)] px-2 py-0.5 text-[12px] font-semibold text-[#c93400]">
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-m3-warning/12 px-2 py-0.5 text-[12px] font-semibold text-m3-error">
                     <Lock size={12} />
                     Đã khóa
                   </span>
                 )}
               </p>
 
-              <p className="mt-4 rounded-[12px] bg-[rgba(0,122,255,0.08)] px-3 py-2.5 text-[13px] text-[#007aff]">
+              <p className="mt-4 rounded-[12px] bg-m3-primary/8 px-3 py-2.5 text-[13px] text-m3-primary">
                 Sau khi lưu, trạng thái sẽ bị khóa. Cấp Bộ có thể sửa trực tiếp; cấp
                 Tỉnh / Huyện / Xã cần mã PIN địa phương hoặc dùng{" "}
                 <strong>Sửa hồ sơ</strong>.
@@ -1191,11 +1230,11 @@ export default function CitizenDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/[0.06] bg-[#f8fafb]/80 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/[0.06] bg-m3-surface-high/80 px-5 py-4">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-[#6e6e73] hover:bg-black/[0.05]"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
           >
             <Printer size={18} />
             In hồ sơ
@@ -1204,7 +1243,7 @@ export default function CitizenDetailModal({
             <button
               type="button"
               onClick={handleClose}
-              className="min-h-[44px] rounded-[12px] bg-white px-5 text-[15px] font-bold text-[#1d1d1f]"
+              className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface"
               style={{ border: "1px solid rgba(0,0,0,0.1)" }}
             >
               Đóng
@@ -1216,7 +1255,7 @@ export default function CitizenDetailModal({
                   onEdit(citizen);
                   handleClose();
                 }}
-                className="min-h-[44px] rounded-[12px] bg-[#007aff] px-5 text-[15px] font-bold text-white"
+                className="min-h-[44px] rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white"
               >
                 Sửa hồ sơ
               </button>
@@ -1277,8 +1316,8 @@ function HealthDetailField({
 }) {
   return (
     <div className={colSpan === 2 ? "col-span-2 min-w-0" : "min-w-0"}>
-      <p className="text-[12px] font-medium text-[#8e8e93]">{label}</p>
-      <p className="mt-0.5 text-[14px] font-semibold leading-snug text-[#1d1d1f] break-words">
+      <p className="text-[12px] font-medium text-m3-on-surface-variant">{label}</p>
+      <p className="mt-0.5 text-[14px] font-semibold leading-snug text-m3-on-surface break-words">
         {value || "—"}
       </p>
     </div>
@@ -1292,7 +1331,7 @@ function DetailedHealthExamTabs({ record }: { record: HealthRecord }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="rounded-[10px] bg-[rgba(0,122,255,0.08)] px-3 py-2 text-[13px] leading-snug text-[#007aff]">
+      <p className="rounded-[10px] bg-m3-primary/8 px-3 py-2 text-[13px] leading-snug text-m3-primary">
         <strong>Vòng 2</strong> · Khám sức khỏe chi tiết tại TTYT huyện / tỉnh.
       </p>
       <div className="grid grid-cols-2 gap-x-5 gap-y-3">
@@ -1312,7 +1351,7 @@ function DetailedHealthExamTabs({ record }: { record: HealthRecord }) {
         <HealthDetailField label="Bác sĩ phụ trách" value={record.doctor} />
       </div>
 
-      <div className="overflow-hidden rounded-[12px] border border-black/[0.06] bg-white">
+      <div className="overflow-hidden rounded-[12px] border border-black/[0.06] bg-m3-surface-lowest">
         <div className="flex gap-1 overflow-x-auto border-b border-black/[0.06] px-2">
           {HEALTH_DETAIL_TABS.map((t) => (
             <button
@@ -1321,8 +1360,8 @@ function DetailedHealthExamTabs({ record }: { record: HealthRecord }) {
               onClick={() => setTab(t.id)}
               className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors ${
                 tab === t.id
-                  ? "border-[#007aff] text-[#007aff]"
-                  : "border-transparent text-[#6e6e73] hover:text-[#1d1d1f]"
+                  ? "border-m3-primary text-m3-primary"
+                  : "border-transparent text-m3-on-surface-variant hover:text-m3-on-surface"
               }`}
             >
               {t.label}
@@ -1389,7 +1428,7 @@ function DetailedHealthExamTabs({ record }: { record: HealthRecord }) {
       </div>
 
       {record.note && (
-        <div className="rounded-[12px] border border-black/[0.05] bg-white p-3.5">
+        <div className="rounded-[12px] border border-black/[0.05] bg-m3-surface-lowest p-3.5">
           <HealthDetailField label="Ghi chú" value={record.note} colSpan={2} />
         </div>
       )}

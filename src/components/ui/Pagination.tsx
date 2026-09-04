@@ -46,33 +46,33 @@ export default function Pagination({
     return pages;
   };
 
+  const navBtn =
+    "rounded-full p-2 text-m3-on-surface transition-colors duration-200 " +
+    "hover:bg-m3-on-surface/8 disabled:cursor-not-allowed disabled:opacity-30";
+
   return (
     <div className="flex items-center justify-between px-1 py-1">
-      <p className="text-[14px] font-medium text-[#6e6e73]">
+      <p className="text-[14px] font-medium text-m3-on-surface-variant">
         Hiển thị{" "}
-        <span className="font-bold text-[#1d1d1f]">
+        <span className="font-bold text-m3-on-surface">
           {start}-{end}
         </span>{" "}
-        trong <span className="font-bold text-[#1d1d1f]">{total}</span> kết quả
+        trong <span className="font-bold text-m3-on-surface">{total}</span> kết quả
       </p>
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onPageChange(1)}
-          disabled={currentPage === 1}
-          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
-        >
+        <button onClick={() => onPageChange(1)} disabled={currentPage === 1} className={navBtn}>
           <ChevronsLeft size={20} />
         </button>
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
+          className={navBtn}
         >
           <ChevronLeft size={20} />
         </button>
         {getPages().map((page, idx) =>
           page === "..." ? (
-            <span key={`dot-${idx}`} className="px-2 py-1 text-[15px] text-[#aeaeb2]">
+            <span key={`dot-${idx}`} className="px-2 py-1 text-[15px] text-m3-outline">
               ...
             </span>
           ) : (
@@ -80,10 +80,10 @@ export default function Pagination({
               key={page}
               onClick={() => onPageChange(page as number)}
               className={clsx(
-                "h-10 w-10 rounded-[12px] text-[15px] font-bold transition-colors",
+                "h-10 min-w-10 rounded-full px-2 text-[15px] font-bold transition-[background-color,color] duration-200 ease-[cubic-bezier(0.34,0.8,0.34,1)]",
                 currentPage === page
-                  ? "bg-[#007aff] text-white shadow-sm shadow-blue-500/25"
-                  : "text-[#1d1d1f] hover:bg-black/[0.04]",
+                  ? "bg-m3-primary text-m3-on-primary"
+                  : "text-m3-on-surface hover:bg-m3-on-surface/8",
               )}
             >
               {page}
@@ -93,14 +93,14 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
+          className={navBtn}
         >
           <ChevronRight size={20} />
         </button>
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="rounded-[12px] p-2 text-[#1d1d1f] transition-colors hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-30"
+          className={navBtn}
         >
           <ChevronsRight size={20} />
         </button>

@@ -6,7 +6,6 @@ import {
   Plus,
   Edit2,
   CheckCircle2,
-  Clock,
   TrendingUp,
   X,
   ArrowDown,
@@ -15,6 +14,7 @@ import {
 
 interface Quota {
   id: string;
+  campaignId?: string;
   year: number;
   fromLevel: string;
   fromUnit: string;
@@ -36,6 +36,12 @@ interface Session {
   unitCode: string;
   hierarchyLevel: string;
   name: string;
+}
+interface RecruitmentCampaignOption {
+  id: string;
+  name: string;
+  year: number;
+  status: string;
 }
 
 const levelLabel: Record<string, string> = {
@@ -66,12 +72,16 @@ export default function QuotaPage() {
   const [childUnits, setChildUnits] = useState<ChildUnit[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [sessionUnitName, setSessionUnitName] = useState("");
+  const [campaigns, setCampaigns] = useState<RecruitmentCampaignOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingQuota, setEditingQuota] = useState<Quota | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [view, setView] = useState<"received" | "issued" | "all">("issued");
 
   const [form, setForm] = useState({
+    campaignId: "",
+    year: new Date().getFullYear(),
     toUnit: "",
     toUnitName: "",
     amount: "",
@@ -86,9 +96,10 @@ export default function QuotaPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [meRes, quotaRes] = await Promise.all([
+    const [meRes, quotaRes, campaignRes] = await Promise.all([
       fetch("/api/auth/me"),
       fetch("/api/admin/quotas"),
+      fetch("/api/admin/recruitment?limit=100"),
     ]);
     if (meRes.ok) {
       const d = await meRes.json();
@@ -100,16 +111,20 @@ export default function QuotaPage() {
       setChildUnits(d.childUnits || []);
       setSessionUnitName(d.sessionUnitName || "");
     }
+    if (campaignRes.ok) {
+      const d = await campaignRes.json();
+      setCampaigns(d.data || []);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
+    void Promise.resolve().then(fetchData);
   }, [fetchData]);
 
   useEffect(() => {
     if (!form.toUnit) {
-      setCapacity(null);
+      void Promise.resolve().then(() => setCapacity(null));
       return;
     }
     let cancelled = false;
@@ -137,15 +152,16 @@ export default function QuotaPage() {
     setSubmitError(null);
     setSubmitWarning(null);
     const chosen = childUnits.find((c) => c.code === form.toUnit);
-    const res = await fetch("/api/admin/quotas", {
-      method: "POST",
+    const res = await fetch(editingQuota ? `/api/admin/quotas/${editingQuota.id}` : "/api/admin/quotas", {
+      method: editingQuota ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         toUnit: form.toUnit,
         toUnitName: chosen?.name || form.toUnit,
         amount: Number(form.amount),
         note: form.note,
-        year: new Date().getFullYear(),
+        year: form.year,
+        campaignId: form.campaignId,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -156,13 +172,15 @@ export default function QuotaPage() {
         await fetchData();
         window.setTimeout(() => {
           setShowModal(false);
-          setForm({ toUnit: "", toUnitName: "", amount: "", note: "" });
+          setEditingQuota(null);
+          setForm({ campaignId: "", year: new Date().getFullYear(), toUnit: "", toUnitName: "", amount: "", note: "" });
           setCapacity(null);
           setSubmitWarning(null);
         }, 2800);
       } else {
         setShowModal(false);
-        setForm({ toUnit: "", toUnitName: "", amount: "", note: "" });
+        setEditingQuota(null);
+        setForm({ campaignId: "", year: new Date().getFullYear(), toUnit: "", toUnitName: "", amount: "", note: "" });
         setCapacity(null);
         await fetchData();
       }
@@ -170,6 +188,19 @@ export default function QuotaPage() {
       setSubmitError(data.error || "Không giao được chỉ tiêu");
     }
     setSubmitting(false);
+  };
+
+  const openEditQuota = (quota: Quota) => {
+    setEditingQuota(quota);
+    setForm({ campaignId: quota.campaignId || "", year: quota.year, toUnit: quota.toUnit, toUnitName: quota.toUnitName, amount: String(quota.amount), note: quota.note });
+    setShowModal(true);
+  };
+
+  const deleteQuota = async (quota: Quota) => {
+    if (!window.confirm(`Xóa chỉ tiêu giao cho ${quota.toUnitName}?`)) return;
+    const res = await fetch(`/api/admin/quotas/${quota.id}`, { method: "DELETE" });
+    if (res.ok) await fetchData();
+    else setSubmitError((await res.json()).error || "Không thể xóa chỉ tiêu");
   };
 
   // Partition quotas
@@ -198,10 +229,10 @@ export default function QuotaPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
             Giao chỉ tiêu tuyển quân
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {session && (
               <span className="font-medium">
                 Đơn vị: {sessionUnitName || unitNames[session.unitCode] || session.unitCode} (
@@ -210,15 +241,15 @@ export default function QuotaPage() {
             )}
           </p>
           {!isBo && (
-            <p className="text-xs mt-1 text-gray-400">
+            <p className="text-xs mt-1 text-m3-on-surface-variant">
               Đã nhập ngũ / Đã hoàn thành = số hồ sơ trạng thái Nhập ngũ trong đơn vị nhận chỉ tiêu
             </p>
           )}
         </div>
         {session?.hierarchyLevel !== "xa" && (
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium"
+            onClick={() => { setEditingQuota(null); setShowModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl transition-colors text-sm font-medium"
           >
             <Plus size={16} /> Giao chỉ tiêu
           </button>
@@ -230,30 +261,30 @@ export default function QuotaPage() {
         className={`grid grid-cols-1 gap-4 ${isBo ? "sm:grid-cols-1 max-w-xs" : "sm:grid-cols-3"}`}
       >
         {!isBo && (
-          <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
+          <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Chỉ tiêu được giao</p>
-              <ArrowDown size={18} className="text-blue-500" />
+              <p className="text-sm text-m3-on-surface-variant">Chỉ tiêu được giao</p>
+              <ArrowDown size={18} className="text-m3-primary" />
             </div>
-            <p className="text-3xl font-bold mt-2 text-blue-600">
+            <p className="text-3xl font-bold mt-2 text-m3-primary">
               {totalReceived}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Từ cấp trên</p>
+            <p className="text-xs text-m3-on-surface-variant mt-1">Từ cấp trên</p>
           </div>
         )}
         {!isBo && (
-          <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
+          <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Đã nhập ngũ</p>
-              <CheckCircle2 size={18} className="text-green-600" />
+              <p className="text-sm text-m3-on-surface-variant">Đã nhập ngũ</p>
+              <CheckCircle2 size={18} className="text-m3-on-success-container" />
             </div>
-            <p className="text-3xl font-bold mt-2 text-green-600">
+            <p className="text-3xl font-bold mt-2 text-m3-on-success-container">
               {totalFilled}
             </p>
             {totalReceived > 0 && (
-              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="mt-2 h-1.5 bg-m3-surface-container rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500 rounded-full"
+                  className="h-full bg-m3-success-container rounded-full"
                   style={{
                     width: `${Math.min(100, Math.round((totalFilled / totalReceived) * 100))}%`,
                   }}
@@ -262,15 +293,15 @@ export default function QuotaPage() {
             )}
           </div>
         )}
-        <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
+        <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Đã giao xuống</p>
-            <ArrowUp size={18} style={{ color: "#007aff" }} />
+            <p className="text-sm text-m3-on-surface-variant">Đã giao xuống</p>
+            <ArrowUp size={18} style={{ color: "var(--m3-primary, #1a73e8)" }} />
           </div>
-          <p className="text-3xl font-bold mt-2" style={{ color: "#007aff" }}>
+          <p className="text-3xl font-bold mt-2" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {totalAssigned}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Cho đơn vị cấp dưới</p>
+          <p className="text-xs text-m3-on-surface-variant mt-1">Cho đơn vị cấp dưới</p>
         </div>
       </div>
 
@@ -283,8 +314,8 @@ export default function QuotaPage() {
               onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 view === v
-                  ? "bg-[#007aff] text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"
+                  ? "bg-m3-primary text-white"
+                  : "bg-m3-surface-lowest border border-m3-outline-variant text-m3-on-surface-variant hover:border-m3-primary"
               }`}
             >
               {{ all: "Tất cả", received: "Được giao", issued: "Đã giao" }[v]}
@@ -294,10 +325,10 @@ export default function QuotaPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-6 py-4">Từ đơn vị</th>
                 <th className="px-6 py-4">Đến đơn vị</th>
@@ -306,14 +337,15 @@ export default function QuotaPage() {
                 <th className="px-6 py-4">Tiến độ</th>
                 <th className="px-6 py-4">Ghi chú</th>
                 <th className="px-6 py-4">Trạng thái</th>
+                <th className="px-6 py-4 text-center">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {loading ? (
                 <tr>
                   <td
-                    colSpan={7}
-                    className="px-6 py-8 text-center text-gray-400"
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Đang tải...
                   </td>
@@ -321,8 +353,8 @@ export default function QuotaPage() {
               ) : displayQuotas.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
-                    className="px-6 py-8 text-center text-gray-400"
+                    colSpan={8}
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Chưa có chỉ tiêu nào.
                   </td>
@@ -335,39 +367,44 @@ export default function QuotaPage() {
                   return (
                     <tr
                       key={q.id}
-                      className="hover:bg-gray-50/50 transition-colors"
+                      className="hover:bg-m3-surface-high/50 transition-colors"
                     >
-                      <td className="px-6 py-4 text-gray-600 text-xs">
+                      <td className="px-6 py-4 text-m3-on-surface-variant text-xs">
                         {q.fromUnitName ||
                           unitNames[q.fromUnit] ||
                           (q.fromUnit === "bo" ? "Bộ Quốc phòng" : q.fromUnit)}
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        {q.toUnitName}
+                      <td className="px-6 py-4 font-medium text-m3-on-surface">
+                        <div>{q.toUnitName}</div>
+                        {q.campaignId && (
+                          <div className="mt-0.5 text-xs font-normal text-m3-primary">
+                            {campaigns.find((campaign) => campaign.id === q.campaignId)?.name || "Đợt tuyển quân"}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-center font-semibold text-gray-900">
+                      <td className="px-6 py-4 text-center font-semibold text-m3-on-surface">
                         {q.amount}
                       </td>
-                      <td className="px-6 py-4 text-center font-semibold text-green-600">
+                      <td className="px-6 py-4 text-center font-semibold text-m3-on-success-container">
                         {q.filled}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-m3-surface-container rounded-full overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all"
                               style={{
                                 width: `${pct}%`,
-                                background: done ? "#059669" : "#007aff",
+                                background: done ? "var(--color-m3-success)" : "var(--m3-primary, #1a73e8)",
                               }}
                             />
                           </div>
-                          <span className="text-xs text-gray-500 w-8">
+                          <span className="text-xs text-m3-on-surface-variant w-8">
                             {pct}%
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-500 text-xs">
+                      <td className="px-6 py-4 text-m3-on-surface-variant text-xs">
                         {q.note || "—"}
                       </td>
                       <td className="px-6 py-4">
@@ -375,8 +412,8 @@ export default function QuotaPage() {
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                           style={
                             done
-                              ? { background: "#d1fae5", color: "#059669" }
-                              : { background: "#fef3c7", color: "#d97706" }
+                              ? { background: "var(--color-m3-success-container)", color: "var(--color-m3-success)" }
+                              : { background: "var(--color-m3-warning-container)", color: "var(--color-m3-warning)" }
                           }
                         >
                           {done ? (
@@ -392,6 +429,14 @@ export default function QuotaPage() {
                           )}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-center">
+                        {q.fromUnit === session?.unitCode && (
+                          <div className="flex justify-center gap-1">
+                            <button type="button" onClick={() => openEditQuota(q)} className="rounded-lg p-1.5 text-m3-on-surface-variant hover:bg-m3-primary-container hover:text-m3-primary" title="Sửa chỉ tiêu"><Edit2 size={16} /></button>
+                            <button type="button" onClick={() => void deleteQuota(q)} className="rounded-lg p-1.5 text-m3-on-surface-variant hover:bg-m3-error-container hover:text-m3-error" title="Xóa chỉ tiêu"><X size={16} /></button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -404,21 +449,21 @@ export default function QuotaPage() {
       {/* Create Quota Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Giao chỉ tiêu
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
+              <h2 className="text-lg font-semibold text-m3-on-surface">
+                {editingQuota ? "Sửa chỉ tiêu" : "Giao chỉ tiêu"}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 hover:bg-m3-surface-container rounded-lg"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="p-5 space-y-4">
               {session && (
-                <div className="p-3 rounded-xl bg-[#f5f5f7] border border-[#e5e5ea] text-sm text-[#636366]">
+                <div className="p-3 rounded-xl bg-m3-surface-high border border-m3-outline-variant text-sm text-m3-on-surface-variant">
                   Giao từ:{" "}
                   <span className="font-semibold">
                     {unitNames[session.unitCode] || session.unitCode}
@@ -426,12 +471,33 @@ export default function QuotaPage() {
                 </div>
               )}
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
+                  Đợt khám tuyển *
+                </label>
+                <select
+                  required
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
+                  value={form.campaignId}
+                  onChange={(e) => {
+                    const campaign = campaigns.find((item) => item.id === e.target.value);
+                    setForm({ ...form, campaignId: e.target.value, year: campaign?.year || form.year });
+                  }}
+                >
+                  <option value="">Chọn đợt khám tuyển...</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name} ({campaign.year})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Đơn vị nhận *
                 </label>
                 {childUnits.length > 0 ? (
                   <select
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
+                    className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
                     value={form.toUnit}
                     onChange={(e) =>
                       setForm({ ...form, toUnit: e.target.value })
@@ -445,7 +511,7 @@ export default function QuotaPage() {
                     ))}
                   </select>
                 ) : (
-                  <p className="text-sm text-amber-600 p-2 rounded-lg bg-amber-50">
+                  <p className="text-sm text-m3-on-warning-container p-2 rounded-lg bg-m3-warning-container">
                     Không có đơn vị cấp dưới để giao chỉ tiêu.
                   </p>
                 )}
@@ -453,8 +519,8 @@ export default function QuotaPage() {
                   <p
                     className={`mt-2 rounded-xl px-3 py-2 text-[13px] ${
                       Number(form.amount) > capacity.eligible
-                        ? "bg-amber-50 text-amber-800"
-                        : "bg-blue-50 text-blue-800"
+                        ? "bg-m3-warning-container text-m3-on-warning-container"
+                        : "bg-m3-primary-container text-m3-on-primary-container"
                     }`}
                   >
                     Nguồn tại đơn vị: {capacity.eligible} hồ sơ đủ điều kiện /
@@ -466,24 +532,24 @@ export default function QuotaPage() {
                 )}
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Số lượng chỉ tiêu *
                 </label>
                 <input
                   type="number"
                   min="1"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff]"
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
                   placeholder="Ví dụ: 120"
                   value={form.amount}
                   onChange={(e) => setForm({ ...form, amount: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                   Ghi chú
                 </label>
                 <textarea
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
+                  className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary resize-none"
                   rows={2}
                   placeholder="Ghi chú thêm (nếu có)..."
                   value={form.note}
@@ -491,27 +557,27 @@ export default function QuotaPage() {
                 />
               </div>
               {submitWarning && (
-                <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800">
+                <p className="rounded-xl bg-m3-warning-container px-3 py-2.5 text-[13px] text-m3-on-warning-container">
                   {submitWarning}
                 </p>
               )}
               {submitError && (
-                <p className="rounded-xl bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+                <p className="rounded-xl bg-m3-error-container px-3 py-2.5 text-[13px] text-m3-on-error-container">
                   {submitError}
                 </p>
               )}
             </div>
-            <div className="flex gap-2 p-5 border-t border-gray-100">
+            <div className="flex gap-2 p-5 border-t border-m3-outline-variant">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-sm"
+                className="flex-1 py-2.5 border border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-high rounded-xl text-sm"
               >
                 Hủy
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || !form.toUnit || !form.amount}
-                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                disabled={submitting || !form.campaignId || !form.toUnit || !form.amount}
+                className="flex-1 py-2.5 bg-m3-primary hover:bg-m3-on-surface-variant disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Target size={15} />
                 {submitting ? "Đang lưu..." : "Xác nhận giao"}

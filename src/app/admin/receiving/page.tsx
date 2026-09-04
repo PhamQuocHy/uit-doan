@@ -160,9 +160,9 @@ const mockSoldiers: Soldier[] = [
 ];
 
 const arrivalConfig = {
-  arrived: { label: "Đã trình diện", color: "#059669", bg: "#d1fae5" },
-  pending: { label: "Chưa lên", color: "#d97706", bg: "#fef3c7" },
-  absent: { label: "Vắng mặt", color: "#dc2626", bg: "#fee2e2" },
+  arrived: { label: "Đã trình diện", color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" },
+  pending: { label: "Chưa lên", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" },
+  absent: { label: "Vắng mặt", color: "var(--m3-error, #ba1a1a)", bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" },
 };
 
 // \u2500\u2500 BO VIEW: read-only unit overview \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -282,20 +282,20 @@ function BoView() {
   const statusConf = {
     confirmed: {
       label: "\u0110\u00e3 nh\u1eadn \u0111\u1ee7",
-      color: "#059669",
-      bg: "#d1fae5",
+      color: "var(--color-m3-success)",
+      bg: "var(--color-m3-success-container)",
       Icon: CheckCircle2,
     },
     pending: {
       label: "Ch\u1edd x\u00e1c nh\u1eadn",
-      color: "#d97706",
-      bg: "#fef3c7",
+      color: "var(--color-m3-warning)",
+      bg: "var(--color-m3-warning-container)",
       Icon: Clock,
     },
     supplement_needed: {
       label: "C\u1ea7n b\u1ed5 sung",
-      color: "#dc2626",
-      bg: "#fee2e2",
+      color: "var(--m3-error, #ba1a1a)",
+      bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
       Icon: AlertTriangle,
     },
   };
@@ -303,10 +303,10 @@ function BoView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+        <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
           Đơn vị nhận quân
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
           Theo dõi tình trạng nhận quân của tất cả đơn vị
         </p>
       </div>
@@ -314,16 +314,16 @@ function BoView() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng đơn vị", value: boMockUnits.length, color: "#1d1d1f" },
-          { label: "Đã nhận đủ quân", value: confirmedCount, color: "#059669" },
-          { label: "Chờ xác nhận", value: pendingCount, color: "#d97706" },
-          { label: "Cần bổ sung", value: supplementCount, color: "#dc2626" },
+          { label: "Tổng đơn vị", value: boMockUnits.length, color: "var(--m3-on-surface, #1b1d20)" },
+          { label: "Đã nhận đủ quân", value: confirmedCount, color: "var(--color-m3-success)" },
+          { label: "Chờ xác nhận", value: pendingCount, color: "var(--color-m3-warning)" },
+          { label: "Cần bổ sung", value: supplementCount, color: "var(--m3-error, #ba1a1a)" },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
+            className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
           >
-            <p className="text-xs text-gray-500">{s.label}</p>
+            <p className="text-xs text-m3-on-surface-variant">{s.label}</p>
             <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>
               {s.value}
             </p>
@@ -331,45 +331,45 @@ function BoView() {
         ))}
       </div>
       {/* Progress */}
-      <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
+      <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-700">
+          <p className="text-sm font-medium text-m3-on-surface-variant">
             Tổng tiến độ nhận quân
           </p>
-          <span className="text-sm font-bold" style={{ color: "#007aff" }}>
+          <span className="text-sm font-bold" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {totalReceived}/{totalQuota} (
             {Math.round((totalReceived / totalQuota) * 100)}%)
           </span>
         </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-3 bg-m3-surface-container rounded-full overflow-hidden">
           <div
             className="h-full rounded-full"
             style={{
               width: `${Math.round((totalReceived / totalQuota) * 100)}%`,
-              background: "#007aff",
+              background: "var(--m3-primary, #1a73e8)",
             }}
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={16}
             />
             <input
               type="text"
               placeholder="Tìm đơn vị..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
+              className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] bg-white"
+            className="px-3 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary bg-m3-surface-lowest"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -381,7 +381,7 @@ function BoView() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-6 py-4">Đơn vị nhận quân</th>
                 <th className="px-6 py-4 text-center">Chỉ tiêu</th>
@@ -391,7 +391,7 @@ function BoView() {
                 <th className="px-6 py-4">Cập nhật</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {filtered.map((u) => {
                 const pct = Math.round((u.received / u.quota) * 100);
                 const sc = statusConf[u.status];
@@ -400,8 +400,8 @@ function BoView() {
                     key={u.id}
                     className={`transition-colors ${
                       u.status === "supplement_needed"
-                        ? "bg-red-50/50 hover:bg-red-100/50"
-                        : "hover:bg-gray-50/50"
+                        ? "bg-m3-error-container/50 hover:bg-m3-error-container/50"
+                        : "hover:bg-m3-surface-high/50"
                     }`}
                   >
                     <td className="px-6 py-4">
@@ -414,55 +414,55 @@ function BoView() {
                                   notePopover === u.id ? null : u.id,
                                 )
                               }
-                              className="w-8 h-8 rounded-full flex items-center justify-center bg-red-100 hover:bg-red-200 ring-2 ring-red-400 transition-colors"
+                              className="w-8 h-8 rounded-full flex items-center justify-center bg-m3-error-container hover:bg-m3-error-container ring-2 ring-m3-error transition-colors"
                               title="Xem lý do cần bổ sung"
                             >
-                              <Shield size={13} className="text-red-500" />
-                              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                              <Shield size={13} className="text-m3-error" />
+                              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-m3-error-container text-white text-[10px] font-bold flex items-center justify-center leading-none">
                                 !
                               </span>
                             </button>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center">
-                              <Shield size={13} style={{ color: "#007aff" }} />
+                            <div className="w-8 h-8 rounded-full bg-m3-surface-high flex items-center justify-center">
+                              <Shield size={13} style={{ color: "var(--m3-primary, #1a73e8)" }} />
                             </div>
                           )}
                           {notePopover === u.id && (
                             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                              <div className="bg-m3-surface-lowest rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
                                 <div className="p-6">
                                   <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
+                                    <div className="w-12 h-12 rounded-2xl bg-m3-error-container flex items-center justify-center shrink-0">
                                       <AlertTriangle
                                         size={24}
-                                        className="text-red-500"
+                                        className="text-m3-error"
                                       />
                                     </div>
                                     <div>
-                                      <h3 className="text-lg font-bold text-gray-900">
+                                      <h3 className="text-lg font-bold text-m3-on-surface">
                                         Chi tiết lý do bổ sung
                                       </h3>
-                                      <p className="text-sm text-gray-500">
+                                      <p className="text-sm text-m3-on-surface-variant">
                                         {u.name}
                                       </p>
                                     </div>
                                     <button
                                       onClick={() => setNotePopover(null)}
-                                      className="ml-auto p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400"
+                                      className="ml-auto p-2 hover:bg-m3-surface-container rounded-xl transition-colors text-m3-on-surface-variant"
                                     >
                                       <X size={20} />
                                     </button>
                                   </div>
 
-                                  <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 mb-6">
-                                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                  <div className="bg-m3-error-container/50 border border-m3-error rounded-2xl p-4 mb-6">
+                                    <p className="text-sm text-m3-on-surface-variant leading-relaxed whitespace-pre-wrap">
                                       {u.note}
                                     </p>
                                   </div>
 
-                                  <div className="border border-gray-200 rounded-xl overflow-hidden mb-6">
+                                  <div className="border border-m3-outline-variant rounded-xl overflow-hidden mb-6">
                                     <table className="w-full text-left text-sm">
-                                      <thead className="bg-gray-50 font-medium text-gray-600 border-b border-gray-200">
+                                      <thead className="bg-m3-surface-high font-medium text-m3-on-surface-variant border-b border-m3-outline-variant">
                                         <tr>
                                           <th className="px-4 py-3">
                                             Quân nhân
@@ -478,7 +478,7 @@ function BoView() {
                                           </th>
                                         </tr>
                                       </thead>
-                                      <tbody className="divide-y divide-gray-100">
+                                      <tbody className="divide-y divide-m3-outline-variant">
                                         {mockUnqualifiedSoldiers
                                           .filter(
                                             (s) => s.unitReceived === u.name,
@@ -486,23 +486,23 @@ function BoView() {
                                           .map((soldier) => (
                                             <tr
                                               key={soldier.id}
-                                              className="hover:bg-gray-50"
+                                              className="hover:bg-m3-surface-high"
                                             >
                                               <td className="px-4 py-3">
-                                                <div className="font-medium text-gray-900">
+                                                <div className="font-medium text-m3-on-surface">
                                                   {soldier.fullName}
                                                 </div>
-                                                <div className="text-xs text-gray-500 font-mono mt-0.5">
+                                                <div className="text-xs text-m3-on-surface-variant font-mono mt-0.5">
                                                   {soldier.cccd}
                                                 </div>
                                               </td>
-                                              <td className="px-4 py-3 text-gray-600">
+                                              <td className="px-4 py-3 text-m3-on-surface-variant">
                                                 {soldier.origin}
                                               </td>
-                                              <td className="px-4 py-3 text-red-600 font-medium italic">
+                                              <td className="px-4 py-3 text-m3-on-error-container font-medium italic">
                                                 {soldier.reason}
                                               </td>
-                                              <td className="px-4 py-3 text-center text-gray-500">
+                                              <td className="px-4 py-3 text-center text-m3-on-surface-variant">
                                                 {new Date(
                                                   soldier.reportDate,
                                                 ).toLocaleDateString("vi-VN")}
@@ -515,7 +515,7 @@ function BoView() {
                                           <tr>
                                             <td
                                               colSpan={4}
-                                              className="px-4 py-6 text-center text-gray-400"
+                                              className="px-4 py-6 text-center text-m3-on-surface-variant"
                                             >
                                               Không có dữ liệu chi tiết báo cáo
                                             </td>
@@ -527,7 +527,7 @@ function BoView() {
 
                                   <button
                                     onClick={() => setNotePopover(null)}
-                                    className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-2xl text-sm font-semibold transition-all shadow-lg active:scale-95"
+                                    className="w-full py-3 bg-m3-surface-highest hover:bg-black text-white rounded-2xl text-sm font-semibold transition-all shadow-lg active:scale-95"
                                   >
                                     Đã hiểu
                                   </button>
@@ -536,29 +536,29 @@ function BoView() {
                             </div>
                           )}
                         </div>
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-m3-on-surface">
                           {u.name}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center font-semibold text-gray-700">
+                    <td className="px-6 py-4 text-center font-semibold text-m3-on-surface-variant">
                       {u.quota}
                     </td>
-                    <td className="px-6 py-4 text-center font-semibold text-gray-900">
+                    <td className="px-6 py-4 text-center font-semibold text-m3-on-surface">
                       {u.received}
                     </td>
                     <td className="px-6 py-4 min-w-[130px]">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-m3-surface-container rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{
                               width: `${Math.min(pct, 100)}%`,
-                              background: pct >= 100 ? "#059669" : "#007aff",
+                              background: pct >= 100 ? "var(--color-m3-success)" : "var(--m3-primary, #1a73e8)",
                             }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500 w-7">
+                        <span className="text-xs text-m3-on-surface-variant w-7">
                           {pct}%
                         </span>
                       </div>
@@ -571,7 +571,7 @@ function BoView() {
                         <sc.Icon size={11} /> {sc.label}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs text-gray-400">
+                    <td className="px-6 py-4 text-xs text-m3-on-surface-variant">
                       {new Date(u.lastUpdate).toLocaleDateString("vi-VN")}
                     </td>
                   </tr>
@@ -581,7 +581,7 @@ function BoView() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-8 text-center text-gray-400"
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Không có kết quả
                   </td>
@@ -655,22 +655,22 @@ function DonViView() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
             Đơn vị nhận quân
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             Xác nhận danh sách nhận quân và báo cáo tình trạng sức khỏe
           </p>
         </div>
         {!confirmAll ? (
           <button
             onClick={handleConfirmAll}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-m3-success-container hover:bg-m3-success-container text-white rounded-xl text-sm font-medium transition-colors"
           >
             <CheckCircle2 size={16} /> Xác nhận đủ quân
           </button>
         ) : (
-          <span className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-xl text-sm font-medium">
+          <span className="flex items-center gap-2 px-4 py-2 bg-m3-success-container text-m3-on-success-container border border-m3-success rounded-xl text-sm font-medium">
             <CheckCircle2 size={16} /> Đã xác nhận đủ quân
           </span>
         )}
@@ -678,20 +678,20 @@ function DonViView() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng quân nhân", value: soldiers.length, color: "#1d1d1f" },
-          { label: "Đã trình diện", value: arrivedCount, color: "#059669" },
-          { label: "Báo cáo đủ SK", value: confirmedOk, color: "#2563eb" },
+          { label: "Tổng quân nhân", value: soldiers.length, color: "var(--m3-on-surface, #1b1d20)" },
+          { label: "Đã trình diện", value: arrivedCount, color: "var(--color-m3-success)" },
+          { label: "Báo cáo đủ SK", value: confirmedOk, color: "var(--m3-primary, #1a73e8)" },
           {
             label: "SK không đảm bảo",
             value: reportedIssues,
-            color: "#dc2626",
+            color: "var(--m3-error, #ba1a1a)",
           },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
+            className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
           >
-            <p className="text-xs text-gray-500">{s.label}</p>
+            <p className="text-xs text-m3-on-surface-variant">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
               {s.value}
             </p>
@@ -699,47 +699,47 @@ function DonViView() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm">
+      <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-gray-700">Tiến độ nhận quân</p>
-          <span className="text-sm font-bold" style={{ color: "#007aff" }}>
+          <p className="text-sm font-medium text-m3-on-surface-variant">Tiến độ nhận quân</p>
+          <span className="text-sm font-bold" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             {arrivedCount}/{soldiers.length} (
             {Math.round((arrivedCount / soldiers.length) * 100)}%)
           </span>
         </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-3 bg-m3-surface-container rounded-full overflow-hidden">
           <div
             className="h-full rounded-full"
             style={{
               width: `${Math.round((arrivedCount / soldiers.length) * 100)}%`,
-              background: "#007aff",
+              background: "var(--m3-primary, #1a73e8)",
             }}
           />
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={16}
             />
             <input
               type="text"
               placeholder="Tìm họ tên, CCCD..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
+              className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="relative">
             <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={15}
             />
             <select
-              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white"
+              className="pl-9 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary bg-m3-surface-lowest"
               value={arrivalFilter}
               onChange={(e) => setArrivalFilter(e.target.value)}
             >
@@ -752,7 +752,7 @@ function DonViView() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-5 py-3">Quân nhân</th>
                 <th className="px-5 py-3">Quê quán</th>
@@ -762,36 +762,36 @@ function DonViView() {
                 <th className="px-5 py-3 text-center">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {filtered.map((s) => {
                 const ac = arrivalConfig[s.arrivalStatus];
                 return (
                   <tr
                     key={s.id}
-                    className="hover:bg-gray-50/50 transition-colors"
+                    className="hover:bg-m3-surface-high/50 transition-colors"
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
-                          <User2 size={12} style={{ color: "#007aff" }} />
+                        <div className="w-7 h-7 rounded-full bg-m3-surface-high flex items-center justify-center shrink-0">
+                          <User2 size={12} style={{ color: "var(--m3-primary, #1a73e8)" }} />
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900 text-sm">
+                          <div className="font-medium text-m3-on-surface text-sm">
                             {s.fullName}
                           </div>
-                          <div className="text-xs text-gray-400 font-mono">
+                          <div className="text-xs text-m3-on-surface-variant font-mono">
                             {s.cccd}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-xs text-gray-500 max-w-[160px]">
+                    <td className="px-5 py-3 text-xs text-m3-on-surface-variant max-w-[160px]">
                       {s.origin}
                     </td>
                     <td className="px-5 py-3 text-center">
                       <span
                         className="px-2 py-1 rounded-full text-xs font-bold"
-                        style={{ background: "#dbeafe", color: "#2563eb" }}
+                        style={{ background: "var(--m3-primary-container, #dae9fb)", color: "var(--m3-primary, #1a73e8)" }}
                       >
                         {s.healthClass}
                       </span>
@@ -808,7 +808,7 @@ function DonViView() {
                       {s.unitReport === "ok" && (
                         <span
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ background: "#d1fae5", color: "#059669" }}
+                          style={{ background: "var(--color-m3-success-container)", color: "var(--color-m3-success)" }}
                         >
                           <CheckCircle2 size={11} /> Đủ SK
                         </span>
@@ -817,19 +817,19 @@ function DonViView() {
                         <div>
                           <span
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                            style={{ background: "#fee2e2", color: "#dc2626" }}
+                            style={{ background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))", color: "var(--m3-error, #ba1a1a)" }}
                           >
                             <AlertTriangle size={11} /> SK không đảm bảo
                           </span>
                           {s.reportNote && (
-                            <p className="text-xs text-gray-400 mt-0.5 italic">
+                            <p className="text-xs text-m3-on-surface-variant mt-0.5 italic">
                               {s.reportNote}
                             </p>
                           )}
                         </div>
                       )}
                       {!s.unitReport && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-m3-on-surface-variant">
                           Chưa báo cáo
                         </span>
                       )}
@@ -842,12 +842,12 @@ function DonViView() {
                             setReportType("health_issue");
                             setReportNote("");
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-[#007aff] hover:bg-[#636366] rounded-lg transition-colors flex items-center gap-1 mx-auto"
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-m3-primary hover:bg-m3-on-surface-variant rounded-lg transition-colors flex items-center gap-1 mx-auto"
                         >
                           <Send size={12} /> Báo cáo
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400 italic">
+                        <span className="text-xs text-m3-on-surface-variant italic">
                           {s.unitReport ? "Đã BÁO" : "—"}
                         </span>
                       )}
@@ -859,7 +859,7 @@ function DonViView() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-5 py-8 text-center text-gray-400"
+                    className="px-5 py-8 text-center text-m3-on-surface-variant"
                   >
                     Không có kết quả
                   </td>
@@ -872,34 +872,34 @@ function DonViView() {
 
       {reportModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
+              <h2 className="text-base font-semibold text-m3-on-surface">
                 Báo cáo tình trạng quân nhân
               </h2>
               <button
                 onClick={() => setReportModal(null)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 hover:bg-m3-surface-container rounded-lg"
               >
                 <X size={16} />
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center">
-                  <Shield size={13} style={{ color: "#007aff" }} />
+              <div className="flex items-center gap-2 p-3 bg-m3-surface-high rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-m3-surface-high flex items-center justify-center">
+                  <Shield size={13} style={{ color: "var(--m3-primary, #1a73e8)" }} />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 text-sm">
+                  <p className="font-medium text-m3-on-surface text-sm">
                     {reportModal.fullName}
                   </p>
-                  <p className="text-xs text-gray-400 font-mono">
+                  <p className="text-xs text-m3-on-surface-variant font-mono">
                     {reportModal.cccd}
                   </p>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">
+                <label className="text-sm font-medium text-m3-on-surface-variant block mb-2">
                   Kết quả *
                 </label>
                 <div className="flex gap-3">
@@ -907,8 +907,8 @@ function DonViView() {
                     className="flex-1 flex items-center gap-2 p-3 border-2 rounded-xl cursor-pointer"
                     style={
                       reportType === "ok"
-                        ? { borderColor: "#059669", background: "#f0fdf4" }
-                        : { borderColor: "#e5e7eb" }
+                        ? { borderColor: "var(--color-m3-success)", background: "var(--color-m3-success-container)" }
+                        : { borderColor: "var(--m3-outline-variant, #e3e8ee)" }
                     }
                   >
                     <input
@@ -916,10 +916,10 @@ function DonViView() {
                       value="ok"
                       checked={reportType === "ok"}
                       onChange={() => setReportType("ok")}
-                      className="accent-green-600"
+                      className="accent-m3-success-container"
                     />
                     <div>
-                      <p className="text-sm font-medium text-green-700">
+                      <p className="text-sm font-medium text-m3-on-success-container">
                         ✅ Đủ sức khỏe
                       </p>
                     </div>
@@ -928,8 +928,8 @@ function DonViView() {
                     className="flex-1 flex items-center gap-2 p-3 border-2 rounded-xl cursor-pointer"
                     style={
                       reportType === "health_issue"
-                        ? { borderColor: "#dc2626", background: "#fff5f5" }
-                        : { borderColor: "#e5e7eb" }
+                        ? { borderColor: "var(--m3-error, #ba1a1a)", background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" }
+                        : { borderColor: "var(--m3-outline-variant, #e3e8ee)" }
                     }
                   >
                     <input
@@ -937,10 +937,10 @@ function DonViView() {
                       value="health_issue"
                       checked={reportType === "health_issue"}
                       onChange={() => setReportType("health_issue")}
-                      className="accent-red-600"
+                      className="accent-m3-error-container"
                     />
                     <div>
-                      <p className="text-sm font-medium text-red-700">
+                      <p className="text-sm font-medium text-m3-on-error-container">
                         ⚠️ SK không đảm bảo
                       </p>
                     </div>
@@ -949,11 +949,11 @@ function DonViView() {
               </div>
               {reportType === "health_issue" && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">
+                  <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
                     Mô tả *
                   </label>
                   <textarea
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#007aff] resize-none"
+                    className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary resize-none"
                     rows={3}
                     placeholder="Mô tả tình trạng sức khỏe..."
                     value={reportNote}
@@ -962,17 +962,17 @@ function DonViView() {
                 </div>
               )}
             </div>
-            <div className="flex gap-2 p-5 border-t border-gray-100">
+            <div className="flex gap-2 p-5 border-t border-m3-outline-variant">
               <button
                 onClick={() => setReportModal(null)}
-                className="flex-1 py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-sm"
+                className="flex-1 py-2.5 border border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-high rounded-xl text-sm"
               >
                 Hủy
               </button>
               <button
                 onClick={() => handleReport(reportModal)}
                 disabled={reportType === "health_issue" && !reportNote}
-                className="flex-1 py-2.5 bg-[#007aff] hover:bg-[#636366] disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-m3-primary hover:bg-m3-on-surface-variant disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
               >
                 <Send size={14} /> Gửi báo cáo
               </button>
@@ -1002,7 +1002,7 @@ export default function ReceivingUnitPage() {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+      <div className="flex items-center justify-center h-48 text-m3-on-surface-variant text-sm">
         Đang tải...
       </div>
     );

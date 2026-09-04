@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RecruitmentCampaign } from "@/lib/data";
 import {
   CalendarClock,
@@ -17,6 +17,7 @@ import {
   User2,
   XCircle,
   AlertTriangle,
+  X,
 } from "lucide-react";
 
 // ── Mock youth candidates per campaign ──────────────────────────────────────
@@ -203,20 +204,20 @@ const mockReserves = [
 const resultConfig = {
   passed: {
     label: "Trúng tuyển",
-    color: "#059669",
-    bg: "#d1fae5",
+    color: "var(--color-m3-success)",
+    bg: "var(--color-m3-success-container)",
     icon: CheckCircle2,
   },
   failed: {
     label: "Không đạt",
-    color: "#dc2626",
-    bg: "#fee2e2",
+    color: "var(--m3-error, #ba1a1a)",
+    bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
     icon: XCircle,
   },
   pending: {
     label: "Chưa khám",
-    color: "#d97706",
-    bg: "#fef3c7",
+    color: "var(--color-m3-warning)",
+    bg: "var(--color-m3-warning-container)",
     icon: Activity,
   },
 };
@@ -271,6 +272,12 @@ export default function RecruitmentPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [userHierarchyLevel, setUserHierarchyLevel] = useState<string>("tinh");
+  const [campaignFormOpen, setCampaignFormOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<RecruitmentCampaign | null>(null);
+  const [campaignForm, setCampaignForm] = useState({ name: "", year: new Date().getFullYear().toString(), startDate: "", endDate: "", status: "planning", targetQuota: "" });
+  const [campaignSaving, setCampaignSaving] = useState(false);
+  const [campaignError, setCampaignError] = useState("");
+  const [campaignCandidates, setCampaignCandidates] = useState<Candidate[]>([]);
 
   // Detail view state
   const [selectedCamp, setSelectedCamp] = useState<RecruitmentCampaign | null>(
@@ -286,7 +293,7 @@ export default function RecruitmentPage() {
   const [reserveSearch, setReserveSearch] = useState("");
   const [reserveStatus, setReserveStatus] = useState("");
 
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = useCallback(async () => {
     setLoading(true);
     try {
       const query = new URLSearchParams({
@@ -305,7 +312,7 @@ export default function RecruitmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, statusFilter, yearFilter]);
 
   useEffect(() => {
     fetchCampaigns();
@@ -315,20 +322,67 @@ export default function RecruitmentPage() {
         if (d.user) setUserHierarchyLevel(d.user.hierarchyLevel);
       })
       .catch(() => {});
-  }, [page, statusFilter, yearFilter]);
+  }, [fetchCampaigns]);
+
+  useEffect(() => {
+    if (!selectedCamp) {
+      setCampaignCandidates([]);
+      return;
+    }
+    fetch(`/api/admin/approval?campaignId=${encodeURIComponent(selectedCamp.id)}`)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        const mapped: Candidate[] = (data.data || []).map((row: { id: string; fullName: string; cccd: string; dateOfBirth: string; unitName: string; status: string; healthResult: string }) => ({
+          id: row.id,
+          fullName: row.fullName,
+          cccd: row.cccd,
+          dob: row.dateOfBirth,
+          unit: row.unitName,
+          healthResult: row.status === "approved" ? "passed" : row.status === "rejected" ? "failed" : "pending",
+          score: Number(row.healthResult.replace(/\D/g, "")) || 0,
+          note: row.status === "pending" ? "Chờ xét duyệt" : "",
+        }));
+        setCampaignCandidates(mapped);
+      })
+      .catch(() => setCampaignCandidates([]));
+  }, [selectedCamp]);
+
+  const openCampaignForm = (campaign?: RecruitmentCampaign) => {
+    setEditingCampaign(campaign || null);
+    setCampaignForm(campaign ? { name: campaign.name, year: String(campaign.year), startDate: campaign.startDate, endDate: campaign.endDate, status: campaign.status, targetQuota: String(campaign.targetQuota) } : { name: "", year: new Date().getFullYear().toString(), startDate: "", endDate: "", status: "planning", targetQuota: "" });
+    setCampaignError("");
+    setCampaignFormOpen(true);
+  };
+
+  const saveCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCampaignSaving(true);
+    setCampaignError("");
+    try {
+      const response = await fetch(editingCampaign ? `/api/admin/recruitment/${editingCampaign.id}` : "/api/admin/recruitment", { method: editingCampaign ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...campaignForm, year: Number(campaignForm.year), targetQuota: Number(campaignForm.targetQuota) }) });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Không thể lưu đợt khám");
+      setCampaignFormOpen(false);
+      await fetchCampaigns();
+    } catch (cause) {
+      setCampaignError(cause instanceof Error ? cause.message : "Lỗi lưu đợt khám");
+    } finally {
+      setCampaignSaving(false);
+    }
+  };
 
   const getStatusInfo = (status: string) =>
     (
       ({
-        planning: { label: "Kế hoạch", color: "#6b7280", bg: "#f3f4f6" },
-        ongoing: { label: "Đang diễn ra", color: "#d97706", bg: "#fef3c7" },
-        completed: { label: "Đã kết thúc", color: "#059669", bg: "#d1fae5" },
+        planning: { label: "Kế hoạch", color: "var(--m3-on-surface-variant, #475569)", bg: "var(--m3-surface-container-high, #eef1f4)" },
+        ongoing: { label: "Đang diễn ra", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" },
+        completed: { label: "Đã kết thúc", color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" },
       }) as Record<string, { label: string; color: string; bg: string }>
-    )[status] || { label: status, color: "#6b7280", bg: "#f3f4f6" };
+    )[status] || { label: status, color: "var(--m3-on-surface-variant, #475569)", bg: "var(--m3-surface-container-high, #eef1f4)" };
 
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (selectedCamp) {
-    const candidates = mockCandidates["default"];
+    const candidates = campaignCandidates;
     const filteredCandidates = candidates.filter((c) => {
       const matchResult =
         !candidateFilter || c.healthResult === candidateFilter;
@@ -364,15 +418,15 @@ export default function RecruitmentPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSelectedCamp(null)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-xl border border-gray-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-surface-high rounded-xl border border-m3-outline-variant transition-colors"
           >
             <ChevronLeft size={16} /> Quay lại
           </button>
           <div>
-            <h1 className="text-xl font-bold" style={{ color: "#1d1d1f" }}>
+            <h1 className="text-xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
               {selectedCamp.name}
             </h1>
-            <p className="text-xs mt-0.5" style={{ color: "#007aff" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--m3-primary, #1a73e8)" }}>
               {new Date(selectedCamp.startDate).toLocaleDateString("vi-VN")} –{" "}
               {new Date(selectedCamp.endDate).toLocaleDateString("vi-VN")} · Năm{" "}
               {selectedCamp.year}
@@ -386,17 +440,17 @@ export default function RecruitmentPage() {
             {
               label: "Tổng gọi khám",
               value: candidates.length,
-              color: "#1d1d1f",
+              color: "var(--m3-on-surface, #1b1d20)",
             },
-            { label: "Trúng tuyển", value: passedCount, color: "#059669" },
-            { label: "Không đạt", value: failedCount, color: "#dc2626" },
-            { label: "Chưa khám", value: pendingCount, color: "#d97706" },
+            { label: "Trúng tuyển", value: passedCount, color: "var(--color-m3-success)" },
+            { label: "Không đạt", value: failedCount, color: "var(--m3-error, #ba1a1a)" },
+            { label: "Chưa khám", value: pendingCount, color: "var(--color-m3-warning)" },
           ].map((s) => (
             <div
               key={s.label}
-              className="bg-white rounded-2xl p-4 border border-[#e5e5ea] shadow-sm"
+              className="bg-m3-surface-lowest rounded-2xl p-4 border border-m3-outline-variant shadow-sm"
             >
-              <p className="text-xs text-gray-500">{s.label}</p>
+              <p className="text-xs text-m3-on-surface-variant">{s.label}</p>
               <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>
                 {s.value}
               </p>
@@ -405,22 +459,22 @@ export default function RecruitmentPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-gray-100 pb-0">
+        <div className="flex gap-2 border-b border-m3-outline-variant pb-0">
           <button
             onClick={() => setTab("candidates")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "candidates" ? "border-[#007aff] text-[#007aff]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "candidates" ? "border-m3-primary text-m3-primary" : "border-transparent text-m3-on-surface-variant hover:text-m3-on-surface-variant"}`}
           >
             <Users size={16} /> Danh sách thanh niên khám ({candidates.length})
           </button>
           <button
             onClick={() => setTab("reserve")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "reserve" ? "border-[#007aff] text-[#007aff]" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "reserve" ? "border-m3-primary text-m3-primary" : "border-transparent text-m3-on-surface-variant hover:text-m3-on-surface-variant"}`}
           >
             <Shield size={16} /> Danh sách dự bị ({mockReserves.length})
           </button>
           <button
             onClick={() => setTab("returned")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "returned" ? "border-red-600 text-red-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === "returned" ? "border-m3-error text-m3-on-error-container" : "border-transparent text-m3-on-surface-variant hover:text-m3-on-surface-variant"}`}
           >
             <XCircle size={16} /> Bị trả về ({mockReturnedSoldiers.length})
           </button>
@@ -428,17 +482,17 @@ export default function RecruitmentPage() {
 
         {/* TAB: Candidates */}
         {tab === "candidates" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-            <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+            <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
                   size={16}
                 />
                 <input
                   type="text"
                   placeholder="Tìm họ tên, CCCD..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
+                  className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -450,8 +504,8 @@ export default function RecruitmentPage() {
                     onClick={() => setCandidateFilter(v)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                       candidateFilter === v
-                        ? "bg-[#007aff] text-white"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        ? "bg-m3-primary text-white"
+                        : "bg-m3-surface-container text-m3-on-surface-variant hover:bg-m3-surface-highest"
                     }`}
                   >
                     {
@@ -468,7 +522,7 @@ export default function RecruitmentPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+                <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
                   <tr>
                     <th className="px-5 py-3">Họ và Tên</th>
                     <th className="px-5 py-3">Đơn vị</th>
@@ -477,34 +531,34 @@ export default function RecruitmentPage() {
                     <th className="px-5 py-3">Ghi chú</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-m3-outline-variant">
                   {filteredCandidates.map((c) => {
                     const cfg = resultConfig[c.healthResult];
                     const Icon = cfg.icon;
                     return (
                       <tr
                         key={c.id}
-                        className="hover:bg-gray-50/50 transition-colors"
+                        className="hover:bg-m3-surface-high/50 transition-colors"
                       >
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
-                              <User2 size={12} style={{ color: "#007aff" }} />
+                            <div className="w-7 h-7 rounded-full bg-m3-surface-high flex items-center justify-center shrink-0">
+                              <User2 size={12} style={{ color: "var(--m3-primary, #1a73e8)" }} />
                             </div>
                             <div>
-                              <div className="font-medium text-gray-900 text-sm">
+                              <div className="font-medium text-m3-on-surface text-sm">
                                 {c.fullName}
                               </div>
-                              <div className="text-xs text-gray-400 font-mono">
+                              <div className="text-xs text-m3-on-surface-variant font-mono">
                                 {c.cccd}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-xs text-gray-500">
+                        <td className="px-5 py-3 text-xs text-m3-on-surface-variant">
                           {c.unit}
                         </td>
-                        <td className="px-5 py-3 text-center font-semibold text-gray-800">
+                        <td className="px-5 py-3 text-center font-semibold text-m3-on-surface">
                           {c.score > 0 ? c.score : "—"}
                         </td>
                         <td className="px-5 py-3">
@@ -515,7 +569,7 @@ export default function RecruitmentPage() {
                             <Icon size={11} /> {cfg.label}
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-xs text-gray-400 italic">
+                        <td className="px-5 py-3 text-xs text-m3-on-surface-variant italic">
                           {c.note || "—"}
                         </td>
                       </tr>
@@ -525,7 +579,7 @@ export default function RecruitmentPage() {
                     <tr>
                       <td
                         colSpan={5}
-                        className="px-5 py-8 text-center text-gray-400"
+                        className="px-5 py-8 text-center text-m3-on-surface-variant"
                       >
                         Không có kết quả
                       </td>
@@ -539,23 +593,23 @@ export default function RecruitmentPage() {
 
         {/* TAB: Reserve */}
         {tab === "reserve" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-            <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+            <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
                   size={16}
                 />
                 <input
                   type="text"
                   placeholder="Tìm họ tên, CCCD..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff]"
+                  className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
                   value={reserveSearch}
                   onChange={(e) => setReserveSearch(e.target.value)}
                 />
               </div>
               <select
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] bg-white"
+                className="px-3 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary bg-m3-surface-lowest"
                 value={reserveStatus}
                 onChange={(e) => setReserveStatus(e.target.value)}
               >
@@ -566,7 +620,7 @@ export default function RecruitmentPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+                <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
                   <tr>
                     <th className="px-5 py-3">Họ và Tên</th>
                     <th className="px-5 py-3">Đơn vị dự bị</th>
@@ -577,31 +631,31 @@ export default function RecruitmentPage() {
                     <th className="px-5 py-3">Trạng thái</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-m3-outline-variant">
                   {filteredReserves.map((r) => (
                     <tr
                       key={r.id}
-                      className="hover:bg-gray-50/50 transition-colors"
+                      className="hover:bg-m3-surface-high/50 transition-colors"
                     >
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
-                            <Shield size={12} style={{ color: "#007aff" }} />
+                          <div className="w-7 h-7 rounded-full bg-m3-surface-high flex items-center justify-center shrink-0">
+                            <Shield size={12} style={{ color: "var(--m3-primary, #1a73e8)" }} />
                           </div>
                           <div>
-                            <div className="font-medium text-gray-900 text-sm">
+                            <div className="font-medium text-m3-on-surface text-sm">
                               {r.fullName}
                             </div>
-                            <div className="text-xs text-gray-400 font-mono">
+                            <div className="text-xs text-m3-on-surface-variant font-mono">
                               {r.cccd}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-xs text-gray-500">
+                      <td className="px-5 py-3 text-xs text-m3-on-surface-variant">
                         {r.unit}
                       </td>
-                      <td className="px-5 py-3 text-gray-600 text-sm">
+                      <td className="px-5 py-3 text-m3-on-surface-variant text-sm">
                         {new Date(r.discharged).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-5 py-3">
@@ -609,17 +663,17 @@ export default function RecruitmentPage() {
                           className="px-2 py-1 rounded-full text-xs font-medium"
                           style={
                             r.reserveClass === "Hạng 1"
-                              ? { background: "#dbeafe", color: "#2563eb" }
-                              : { background: "#f3f4f6", color: "#6b7280" }
+                              ? { background: "var(--m3-primary-container, #dae9fb)", color: "var(--m3-primary, #1a73e8)" }
+                              : { background: "var(--m3-surface-container-high, #eef1f4)", color: "var(--m3-on-surface-variant, #475569)" }
                           }
                         >
                           {r.reserveClass}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-gray-600 text-sm">
+                      <td className="px-5 py-3 text-m3-on-surface-variant text-sm">
                         {r.specialty}
                       </td>
-                      <td className="px-5 py-3 text-gray-600 text-sm">
+                      <td className="px-5 py-3 text-m3-on-surface-variant text-sm">
                         {new Date(r.lastTraining).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-5 py-3">
@@ -627,8 +681,8 @@ export default function RecruitmentPage() {
                           className="inline-flex px-2 py-1 rounded-full text-xs font-medium"
                           style={
                             r.status === "active"
-                              ? { background: "#d1fae5", color: "#059669" }
-                              : { background: "#f3f4f6", color: "#9ca3af" }
+                              ? { background: "var(--color-m3-success-container)", color: "var(--color-m3-success)" }
+                              : { background: "var(--m3-surface-container-high, #eef1f4)", color: "var(--m3-on-surface-variant, #475569)" }
                           }
                         >
                           {r.status === "active" ? "Hoạt động" : "Ngừng"}
@@ -640,7 +694,7 @@ export default function RecruitmentPage() {
                     <tr>
                       <td
                         colSpan={7}
-                        className="px-5 py-8 text-center text-gray-400"
+                        className="px-5 py-8 text-center text-m3-on-surface-variant"
                       >
                         Không có kết quả
                       </td>
@@ -654,11 +708,11 @@ export default function RecruitmentPage() {
 
         {/* TAB: Returned */}
         {tab === "returned" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden">
-            <div className="p-4 border-b border-red-50 flex flex-col sm:flex-row gap-3 bg-red-50/30">
+          <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-error overflow-hidden">
+            <div className="p-4 border-b border-m3-error flex flex-col sm:flex-row gap-3 bg-m3-error-container/30">
               <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-red-600" />
-                <span className="font-semibold text-red-800">
+                <AlertTriangle size={18} className="text-m3-on-error-container" />
+                <span className="font-semibold text-m3-on-error-container">
                   Danh sách quân nhân bị các đơn vị trả về
                 </span>
               </div>
@@ -667,7 +721,7 @@ export default function RecruitmentPage() {
               <table className="w-full text-left text-sm">
                 {userHierarchyLevel === "tinh" ? (
                   <>
-                    <thead className="bg-white text-gray-600 font-medium border-b border-gray-100">
+                    <thead className="bg-m3-surface-lowest text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
                       <tr>
                         <th className="px-6 py-4">Quận / Huyện</th>
                         <th className="px-6 py-4 text-center">
@@ -675,7 +729,7 @@ export default function RecruitmentPage() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-m3-outline-variant">
                       {Array.from(
                         new Set(mockReturnedSoldiers.map((s) => s.district)),
                       ).map((district) => {
@@ -691,12 +745,12 @@ export default function RecruitmentPage() {
                         return (
                           <tr
                             key={district}
-                            className="hover:bg-red-50/20 transition-colors"
+                            className="hover:bg-m3-error-container/20 transition-colors"
                           >
-                            <td className="px-6 py-4 font-medium text-gray-900">
+                            <td className="px-6 py-4 font-medium text-m3-on-surface">
                               {districtName || district}
                             </td>
-                            <td className="px-6 py-4 text-center text-red-600 font-bold">
+                            <td className="px-6 py-4 text-center text-m3-on-error-container font-bold">
                               {count}
                             </td>
                           </tr>
@@ -706,7 +760,7 @@ export default function RecruitmentPage() {
                   </>
                 ) : userHierarchyLevel === "huyen" ? (
                   <>
-                    <thead className="bg-white text-gray-600 font-medium border-b border-gray-100">
+                    <thead className="bg-m3-surface-lowest text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
                       <tr>
                         <th className="px-6 py-4">Xã / Phường</th>
                         <th className="px-6 py-4 text-center">
@@ -714,7 +768,7 @@ export default function RecruitmentPage() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-m3-outline-variant">
                       {Array.from(
                         new Set(mockReturnedSoldiers.map((s) => s.commune)),
                       ).map((commune) => {
@@ -730,12 +784,12 @@ export default function RecruitmentPage() {
                         return (
                           <tr
                             key={commune}
-                            className="hover:bg-red-50/20 transition-colors"
+                            className="hover:bg-m3-error-container/20 transition-colors"
                           >
-                            <td className="px-6 py-4 font-medium text-gray-900">
+                            <td className="px-6 py-4 font-medium text-m3-on-surface">
                               {communeName || commune}
                             </td>
-                            <td className="px-6 py-4 text-center text-red-600 font-bold">
+                            <td className="px-6 py-4 text-center text-m3-on-error-container font-bold">
                               {count}
                             </td>
                           </tr>
@@ -745,7 +799,7 @@ export default function RecruitmentPage() {
                   </>
                 ) : (
                   <>
-                    <thead className="bg-white text-gray-600 font-medium border-b border-gray-100">
+                    <thead className="bg-m3-surface-lowest text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
                       <tr>
                         <th className="px-6 py-4">Quân nhân</th>
                         <th className="px-6 py-4">Đơn vị trả về</th>
@@ -753,27 +807,27 @@ export default function RecruitmentPage() {
                         <th className="px-6 py-4 text-center">Ngày báo cáo</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-m3-outline-variant">
                       {mockReturnedSoldiers.map((soldier) => (
                         <tr
                           key={soldier.id}
-                          className="hover:bg-red-50/20 transition-colors"
+                          className="hover:bg-m3-error-container/20 transition-colors"
                         >
                           <td className="px-6 py-4">
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-m3-on-surface">
                               {soldier.fullName}
                             </div>
-                            <div className="text-xs text-gray-500 font-mono mt-0.5">
+                            <div className="text-xs text-m3-on-surface-variant font-mono mt-0.5">
                               {soldier.cccd}
                             </div>
                           </td>
-                          <td className="px-6 py-4 font-medium text-gray-700">
+                          <td className="px-6 py-4 font-medium text-m3-on-surface-variant">
                             {soldier.unitReceived}
                           </td>
-                          <td className="px-6 py-4 text-red-600 font-medium italic">
+                          <td className="px-6 py-4 text-m3-on-error-container font-medium italic">
                             {soldier.reason}
                           </td>
-                          <td className="px-6 py-4 text-center text-gray-500 text-xs">
+                          <td className="px-6 py-4 text-center text-m3-on-surface-variant text-xs">
                             {new Date(soldier.reportDate).toLocaleDateString(
                               "vi-VN",
                             )}
@@ -784,11 +838,11 @@ export default function RecruitmentPage() {
                   </>
                 )}
                 {mockReturnedSoldiers.length === 0 && (
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-m3-outline-variant">
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-6 py-8 text-center text-gray-400"
+                        className="px-6 py-8 text-center text-m3-on-surface-variant"
                       >
                         Không có kết quả
                       </td>
@@ -808,60 +862,60 @@ export default function RecruitmentPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
             Đợt khám tuyển
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
             Quản lý các đợt gọi khám sức khỏe và kết quả gọi quân
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
+        <button onClick={() => openCampaignForm()} className="flex items-center gap-2 px-4 py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl transition-colors text-sm font-medium">
           <Plus size={16} /> Tạo đợt khám mới
         </button>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+        <div className="bg-m3-surface-lowest p-5 rounded-2xl border border-m3-outline-variant shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-m3-warning-container flex items-center justify-center text-m3-on-warning-container">
             <CalendarClock size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">
+            <p className="text-sm text-m3-on-surface-variant font-medium">
               Đợt đang diễn ra
             </p>
-            <p className="text-2xl font-bold text-gray-900">1</p>
+            <p className="text-2xl font-bold text-m3-on-surface">1</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+        <div className="bg-m3-surface-lowest p-5 rounded-2xl border border-m3-outline-variant shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-m3-primary-container flex items-center justify-center text-m3-primary">
             <Users size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">Tổng gọi khám</p>
-            <p className="text-2xl font-bold text-gray-900">3,200</p>
+            <p className="text-sm text-m3-on-surface-variant font-medium">Tổng gọi khám</p>
+            <p className="text-2xl font-bold text-m3-on-surface">3,200</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-[#e5e5ea] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+        <div className="bg-m3-surface-lowest p-5 rounded-2xl border border-m3-outline-variant shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-m3-success-container flex items-center justify-center text-m3-on-success-container">
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <p className="text-sm text-gray-500 font-medium">Đã đạt sức khỏe</p>
-            <p className="text-2xl font-bold text-gray-900">450</p>
+            <p className="text-sm text-m3-on-surface-variant font-medium">Đã đạt sức khỏe</p>
+            <p className="text-2xl font-bold text-m3-on-surface">450</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex gap-3">
+      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
+        <div className="p-4 border-b border-m3-outline-variant flex gap-3">
           <div className="relative">
             <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
               size={16}
             />
             <select
-              className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
+              className="pl-9 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary bg-m3-surface-lowest cursor-pointer"
               value={yearFilter}
               onChange={(e) => {
                 setYearFilter(e.target.value);
@@ -875,7 +929,7 @@ export default function RecruitmentPage() {
             </select>
           </div>
           <select
-            className="px-3 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
+            className="px-3 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary bg-m3-surface-lowest cursor-pointer"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
@@ -891,7 +945,7 @@ export default function RecruitmentPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
               <tr>
                 <th className="px-6 py-4">Tên đợt khám</th>
                 <th className="px-6 py-4">Thời gian</th>
@@ -901,12 +955,12 @@ export default function RecruitmentPage() {
                 <th className="px-6 py-4 text-center">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-m3-outline-variant">
               {loading ? (
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-8 text-center text-gray-500"
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Đang tải dữ liệu...
                   </td>
@@ -915,7 +969,7 @@ export default function RecruitmentPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-6 py-8 text-center text-gray-500"
+                    className="px-6 py-8 text-center text-m3-on-surface-variant"
                   >
                     Không tìm thấy đợt khám nào.
                   </td>
@@ -932,41 +986,41 @@ export default function RecruitmentPage() {
                   return (
                     <tr
                       key={camp.id}
-                      className="hover:bg-[#f5f5f7]/30 transition-colors cursor-pointer"
+                      className="hover:bg-m3-surface-high/30 transition-colors cursor-pointer"
                       onClick={() => setSelectedCamp(camp)}
                     >
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-m3-on-surface">
                           {camp.name}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
+                        <div className="text-xs text-m3-on-surface-variant mt-0.5">
                           Năm {camp.year}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">
+                      <td className="px-6 py-4 text-m3-on-surface-variant text-sm">
                         {new Date(camp.startDate).toLocaleDateString("vi-VN")}
                         <br />
-                        <span className="text-gray-400">→</span>{" "}
+                        <span className="text-m3-on-surface-variant">→</span>{" "}
                         {new Date(camp.endDate).toLocaleDateString("vi-VN")}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-m3-on-surface">
                           {camp.targetQuota} / {camp.registeredCount}
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1.5">
+                        <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
                           <div
-                            className="bg-blue-500 h-1.5 rounded-full"
+                            className="bg-m3-primary-container h-1.5 rounded-full"
                             style={{ width: `${Math.min(regPct, 100)}%` }}
                           />
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-m3-on-surface">
                           {camp.passedCount} ({passPct}%)
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1.5">
+                        <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
                           <div
-                            className="bg-green-500 h-1.5 rounded-full"
+                            className="bg-m3-success-container h-1.5 rounded-full"
                             style={{ width: `${Math.min(passPct, 100)}%` }}
                           />
                         </div>
@@ -989,13 +1043,14 @@ export default function RecruitmentPage() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setSelectedCamp(camp)}
-                            className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors"
+                            className="p-1.5 text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-surface-high rounded-lg transition-colors"
                             title="Xem chi tiết"
                           >
                             <Eye size={16} />
                           </button>
                           <button
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            onClick={() => openCampaignForm(camp)}
+                            className="p-1.5 text-m3-on-surface-variant hover:text-m3-primary hover:bg-m3-primary-container rounded-lg transition-colors"
                             title="Chỉnh sửa"
                           >
                             <Edit2 size={16} />
@@ -1011,22 +1066,22 @@ export default function RecruitmentPage() {
         </div>
 
         {!loading && totalPages > 1 && (
-          <div className="p-4 border-t border-[#e5e5ea] flex items-center justify-between text-sm">
-            <span className="text-gray-500">
+          <div className="p-4 border-t border-m3-outline-variant flex items-center justify-between text-sm">
+            <span className="text-m3-on-surface-variant">
               Trang {page} / {totalPages}
             </span>
             <div className="flex gap-1">
               <button
                 disabled={page === 1}
                 onClick={() => setPage(page - 1)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-600"
+                className="px-3 py-1.5 border border-m3-outline-variant rounded-lg hover:bg-m3-surface-high disabled:opacity-50 transition-colors text-m3-on-surface-variant"
               >
                 Trước
               </button>
               <button
                 disabled={page === totalPages}
                 onClick={() => setPage(page + 1)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-600"
+                className="px-3 py-1.5 border border-m3-outline-variant rounded-lg hover:bg-m3-surface-high disabled:opacity-50 transition-colors text-m3-on-surface-variant"
               >
                 Sau
               </button>
@@ -1034,6 +1089,24 @@ export default function RecruitmentPage() {
           </div>
         )}
       </div>
+
+      {campaignFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={saveCampaign} className="w-full max-w-xl rounded-2xl bg-m3-surface-lowest p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-bold text-m3-on-surface">{editingCampaign ? "Sửa đợt khám" : "Tạo đợt khám mới"}</h2><button type="button" onClick={() => setCampaignFormOpen(false)} className="rounded-lg p-2 text-m3-on-surface-variant hover:bg-m3-surface-container"><X size={18} /></button></div>
+            {campaignError && <p className="mb-3 rounded-xl bg-m3-error-container px-3 py-2 text-sm text-m3-on-error-container">{campaignError}</p>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Tên đợt khám</span><input required value={campaignForm.name} onChange={(event) => setCampaignForm({ ...campaignForm, name: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm" /></label>
+              <label><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Năm</span><input required type="number" min="2000" value={campaignForm.year} onChange={(event) => setCampaignForm({ ...campaignForm, year: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm" /></label>
+              <label><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Chỉ tiêu</span><input required type="number" min="1" value={campaignForm.targetQuota} onChange={(event) => setCampaignForm({ ...campaignForm, targetQuota: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm" /></label>
+              <label><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Ngày bắt đầu</span><input required type="date" value={campaignForm.startDate} onChange={(event) => setCampaignForm({ ...campaignForm, startDate: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm" /></label>
+              <label><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Ngày kết thúc</span><input required type="date" value={campaignForm.endDate} onChange={(event) => setCampaignForm({ ...campaignForm, endDate: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm" /></label>
+              <label><span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">Trạng thái</span><select value={campaignForm.status} onChange={(event) => setCampaignForm({ ...campaignForm, status: event.target.value })} className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm"><option value="planning">Kế hoạch</option><option value="ongoing">Đang diễn ra</option><option value="completed">Đã kết thúc</option></select></label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCampaignFormOpen(false)} className="rounded-xl border border-m3-outline-variant px-4 py-2 text-sm">Hủy</button><button disabled={campaignSaving} className="rounded-xl bg-m3-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{campaignSaving ? "Đang lưu..." : "Lưu đợt khám"}</button></div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

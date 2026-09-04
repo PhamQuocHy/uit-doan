@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/data';
 import { getSession } from '@/lib/auth';
+import { hashPassword, isHashed } from '@/lib/password';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -17,6 +18,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
   const body = await request.json();
+  if (typeof body.password === 'string' && body.password && !isHashed(body.password)) {
+    body.password = hashPassword(body.password);
+  }
   const updated = db.users.update(id, body);
   if (!updated) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 });
   return NextResponse.json(updated);

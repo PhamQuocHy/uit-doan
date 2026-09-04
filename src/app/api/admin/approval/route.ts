@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { hierarchyUnits } from "@/lib/data";
+import { hierarchyUnits, getUnitDescendants } from "@/lib/data";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
 import {
   resolveApprovalAction,
@@ -9,13 +9,16 @@ import {
 } from "@/lib/enlistment-approval";
 import type { RowDataPacket } from "mysql2";
 
-function scopeWhere(level: string, unitCode: string): { sql: string; params: string[] } {
-  if (level === "bo") {
+function scopeWhere(level: string, unitCode: string, requestedUnit?: string): { sql: string; params: string[] } {
+  const selectedUnit = requestedUnit || unitCode;
+  if (level === "bo" && !requestedUnit) {
     return { sql: "1=1", params: [] };
   }
+  const allowed = level === "bo" || new Set(getUnitDescendants(unitCode)).has(selectedUnit);
+  if (!allowed) return { sql: "1=0", params: [] };
   return {
     sql: "(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))",
-    params: [unitCode, unitCode],
+    params: [selectedUnit, selectedUnit],
   };
 }
 
@@ -32,6 +35,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get("status") || "";
+  const campaignId = searchParams.get("campaignId") || "";
+  const requestedUnit = searchParams.get("unitCode") || "";
   const search = (searchParams.get("search") || "").trim();
 
   const dbOk = await pingDb();
@@ -39,13 +44,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: [], counts: { pending: 0, approved: 0, rejected: 0 } });
   }
 
-  const scope = scopeWhere(session.hierarchyLevel, session.unitCode);
+  const scope = scopeWhere(session.hierarchyLevel, session.unitCode, requestedUnit || undefined);
   const where: string[] = [
     scope.sql,
     "c.call_intent = 'du_kien_goi'",
     "c.approval_status IN ('pending','approved','rejected')",
   ];
   const params = [...scope.params];
+  if (campaignId) {
+    where.push("c.campaign_id = ?");
+    params.push(campaignId);
+  }
 
   if (statusFilter === "pending" || statusFilter === "approved" || statusFilter === "rejected") {
     where.push("c.approval_status = ?");
@@ -67,10 +76,11 @@ export async function GET(request: NextRequest) {
       unit_code: string | null;
       health_grade: number | null;
       approval_status: string;
+      campaign_id: string | null;
     })[]
   >(
-    `SELECT c.id, c.full_name, c.cccd, c.date_of_birth, c.unit_code,
-            c.health_grade, c.approval_status
+        `SELECT c.id, c.full_name, c.cccd, c.date_of_birth, c.unit_code,
+          c.health_grade, c.approval_status, c.campaign_id
      FROM citizens c
      WHERE ${where.join(" AND ")}
      ORDER BY
@@ -93,6 +103,7 @@ export async function GET(request: NextRequest) {
     politicalResult: "Đạt",
     status: toApprovalUiStatus(r.approval_status as "pending" | "approved" | "rejected"),
     callIntent: "du_kien_goi",
+    campaignId: r.campaign_id || undefined,
   }));
 
   const counts = {
@@ -113,6 +124,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const id = String(body.id || "");
   const action = body.action as "approve" | "reject";
+  const campaignId = String(body.campaignId || "");
 
   if (!id || (action !== "approve" && action !== "reject")) {
     return NextResponse.json({ error: "Thiếu id hoặc action không hợp lệ" }, { status: 400 });
@@ -128,7 +140,8 @@ export async function POST(request: NextRequest) {
   const scope = scopeWhere(session.hierarchyLevel, session.unitCode);
   const result = await queryExecute(
     `UPDATE citizens c SET
-       approval_status = ?,
+      approval_status = ?,
+      campaign_id = ?,
        call_intent = ?,
        military_status = ?,
        updated_at = NOW()
@@ -138,6 +151,7 @@ export async function POST(request: NextRequest) {
        AND c.approval_status = 'pending'`,
     [
       resolved.approvalStatus,
+      campaignId || null,
       resolved.callIntent,
       resolved.militaryStatus,
       id,

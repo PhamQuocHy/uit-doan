@@ -56,6 +56,37 @@ async function callGemini(body: Record<string, unknown>): Promise<string> {
   return text;
 }
 
+export async function generateGeminiJsonFromImage(args: {
+  imageBase64: string;
+  mimeType?: string;
+  prompt: string;
+  systemInstruction?: string;
+}): Promise<string> {
+  return callGemini({
+    systemInstruction: args.systemInstruction
+      ? { parts: [{ text: args.systemInstruction }] }
+      : undefined,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: args.prompt },
+          {
+            inlineData: {
+              mimeType: args.mimeType || "image/jpeg",
+              data: args.imageBase64.replace(/^data:[^;]+;base64,/, ""),
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 1024,
+    },
+  });
+}
+
 export async function generateGeminiText(
   prompt: string,
   options?: { systemInstruction?: string },

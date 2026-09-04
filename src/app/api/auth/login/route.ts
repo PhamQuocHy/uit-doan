@@ -3,7 +3,9 @@ import { db } from "@/lib/data";
 import { createSession } from "@/lib/auth";
 import {
   findUserByUsernameFromDb,
+  isHashed,
   touchLastLogin,
+  upgradePasswordHash,
   verifyPassword,
   type AuthUser,
 } from "@/lib/auth-users";
@@ -115,6 +117,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (authSource === "mysql") {
+      // Tự nâng cấp mật khẩu plaintext cũ lên scrypt hash ngay khi khớp
+      if (!isHashed(user.password)) {
+        await upgradePasswordHash(user.id, password);
+      }
       await touchLastLogin(user.id);
     }
 
