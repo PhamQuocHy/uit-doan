@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { X, Loader2 } from "lucide-react";
-import type { HealthExamPhase, HealthRecord } from "@/lib/data";
+import type { Citizen, HealthExamPhase, HealthRecord } from "@/lib/data";
 import {
   HEALTH_CONCLUSIONS,
   defaultFacilityForRound,
@@ -17,7 +17,7 @@ type Props = {
   hierarchyLevel: string;
   year: number;
   onClose: () => void;
-  onSaved: (record: HealthRecord) => void;
+  onSaved: (record: HealthRecord & { citizen?: Citizen }) => void;
 };
 
 const inputCls =
@@ -91,7 +91,10 @@ export default function HealthExamFormModal({
         height: h,
         weight: w,
         bloodPressure: bloodPressure || "—",
-        vision: vision || "—",
+        vision:
+          isScreening
+            ? vision || "—"
+            : [visionLeft, visionRight].filter(Boolean).join(" / ") || vision || "—",
         conclusion,
         doctor: doctor.trim(),
         note: note.trim() || undefined,

@@ -267,6 +267,8 @@ export async function main() {
 
       const citizenValues: unknown[][] = [];
       const eduValues: unknown[][] = [];
+      const identityValues: unknown[][] = [];
+      const familyValues: unknown[][] = [];
 
       for (let i = 0; i < need; i++) {
         const ward = pick(p.wards);
@@ -298,6 +300,19 @@ export async function main() {
               : status === "truottuyen"
                 ? "rejected"
                 : "none";
+
+        const issueYear = randInt(2021, 2024);
+        const issueMonth = randInt(1, 12);
+        const issueDay = randInt(1, 28);
+        const issueDate = `${issueYear}-${String(issueMonth).padStart(2, "0")}-${String(issueDay).padStart(2, "0")}`;
+        const expiryDate = `${issueYear + 15}-${String(issueMonth).padStart(2, "0")}-${String(issueDay).padStart(2, "0")}`;
+        const features = [
+          "Nốt ruồi cách 1cm dưới đuôi mắt phải",
+          "Sẹo nhỏ trên trán bên trái",
+          "Không có đặc điểm đặc biệt",
+          "Nốt ruồi trên cánh mũi trái",
+          "Sẹo dài 1cm ở cằm",
+        ][randInt(0, 4)];
 
         citizenValues.push([
           id,
@@ -332,6 +347,18 @@ export async function main() {
           Math.round((Math.random() * 2 + 2) * 100) / 100,
         ]);
 
+        identityValues.push([
+          id,
+          features,
+          issueDate,
+          expiryDate,
+          cccd.slice(-9),
+        ]);
+
+        const surname = name.split(/\s+/)[0] || "Nguyễn";
+        familyValues.push([id, `${surname} Văn ${pick(LAST)}`, "Cha"]);
+        familyValues.push([id, `${pick(FIRST)} Thị ${pick(LAST)}`, "Me"]);
+
         seq += 1;
       }
 
@@ -340,6 +367,8 @@ export async function main() {
       for (let b = 0; b < citizenValues.length; b += batch) {
         const slice = citizenValues.slice(b, b + batch);
         const eduSlice = eduValues.slice(b, b + batch);
+        const idSlice = identityValues.slice(b, b + batch);
+        const famSlice = familyValues.slice(b * 2, b * 2 + batch * 2);
         await conn.query(
           `INSERT INTO citizens (
             id, full_name, cccd, date_of_birth, gender, nationality, ethnicity, religion,
@@ -353,6 +382,20 @@ export async function main() {
           `INSERT INTO citizen_education (citizen_id, school_name, level, major, graduation_year, gpa) VALUES ?`,
           [eduSlice],
         );
+        if (idSlice.length) {
+          await conn.query(
+            `INSERT INTO citizen_identities
+              (citizen_id, identification_features, issue_date, expiry_date, old_id_number)
+             VALUES ?`,
+            [idSlice],
+          );
+        }
+        if (famSlice.length) {
+          await conn.query(
+            `INSERT INTO citizen_family (citizen_id, rel_name, relationship) VALUES ?`,
+            [famSlice],
+          );
+        }
       }
 
       insertedTotal += need;

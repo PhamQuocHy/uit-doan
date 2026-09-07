@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { hierarchyNeedsEditPin, verifyUnitEditPin } from "@/lib/data";
+import { hierarchyNeedsEditPin } from "@/lib/data";
+import { verifyEditPinAsync } from "@/lib/unit-pin";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Vui lòng nhập mã PIN" }, { status: 400 });
     }
 
-    const valid = verifyUnitEditPin(session.unitCode, pin);
+    const valid = await verifyEditPinAsync(session.unitCode, pin);
     if (!valid) {
       return NextResponse.json({ error: "Mã PIN không đúng" }, { status: 403 });
     }

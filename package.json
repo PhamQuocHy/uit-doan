@@ -11,6 +11,8 @@
     "db:migrate": "tsx scripts/run-migration.ts",
     "db:seed-analytics": "tsx scripts/seed-analytics.ts",
     "db:seed-citizens": "tsx scripts/seed-citizens-34.ts",
+    "db:backfill-profiles": "tsx scripts/backfill-citizen-profiles.ts",
+    "db:backfill-exams": "tsx scripts/backfill-citizen-exams-residence.ts",
     "db:seed-legal": "tsx scripts/seed-legal-docs.ts",
     "db:seed-users": "tsx scripts/seed-users.ts",
     "db:refresh-features": "tsx scripts/refresh-features.ts",

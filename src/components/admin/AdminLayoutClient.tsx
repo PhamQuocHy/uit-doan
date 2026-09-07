@@ -10,8 +10,8 @@ import { M3ThemeProvider } from "@/components/m3";
 const pageTitles: Record<string, string> = {
   "/admin": "Tổng quan",
   "/admin/citizens": "Hồ sơ công dân",
-  "/admin/ai-voice": "Nhận dạng CCCD (Voice)",
-  "/admin/ai-face": "Nhận dạng Khuôn mặt",
+  "/admin/ai-voice": "Nhận diện khuôn mặt và giọng nói",
+  "/admin/ai-face": "Nhận diện khuôn mặt và giọng nói",
   "/admin/recruitment": "Đợt khám tuyển",
   "/admin/quota": "Giao chỉ tiêu",
   "/admin/approval": "Xét duyệt danh sách",

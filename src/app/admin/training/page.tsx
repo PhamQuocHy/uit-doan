@@ -103,10 +103,10 @@ export default function TrainingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
+          <h1 className="text-[22px] font-bold tracking-tight text-m3-on-surface">
             Huấn luyện & Diễn tập
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
+          <p className="mt-1.5 text-[14px] text-m3-on-surface-variant">
             Quản lý lịch huấn luyện, diễn tập và kết quả của lực lượng dân quân,
             dự bị
           </p>
@@ -139,7 +139,7 @@ export default function TrainingPage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
+            className="macos-card p-5"
           >
             <p className="text-sm text-m3-on-surface-variant">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
@@ -179,7 +179,7 @@ export default function TrainingPage() {
           return (
             <div
               key={training.id}
-              className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-5 space-y-4"
+              className="macos-card p-5 space-y-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">

@@ -1,12 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
-import { Search, Plus, Eye, Pencil, Trash2, SlidersHorizontal, CalendarDays, CheckSquare, MapPinned, X } from "lucide-react";
+import { Search, Plus, Eye, Pencil, Trash2, SlidersHorizontal, CalendarDays, CheckSquare, MapPinned, X, Bell, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import CitizenFormModal from "@/components/admin/CitizenFormModal";
+import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
+import { ConfirmDialog } from "@/components/ui/Modal";
 import { getCallDisplayLabel } from "@/lib/enlistment-approval";
+import {
+  calcAgeYears,
+  citizenRowAgeTone,
+  NVQS_AGE_MAX,
+} from "@/lib/nvqs-age";
+import { buildPageItems } from "@/components/admin/list-ui";
+import type { Hn212CitizenScan } from "@/lib/hn212";
+import {
+  publishCitizensChanged,
+  subscribeCitizensChanged,
+} from "@/lib/citizens-realtime";
 
 const CALL_FILTER_OPTIONS = [
   { value: "", label: "Tất cả dự kiến" },
@@ -16,7 +29,16 @@ const CALL_FILTER_OPTIONS = [
 ] as const;
 
 const SELECT_CLS =
-  "h-10 min-w-0 rounded-[10px] border-0 bg-m3-surface-high px-3 pr-8 text-[14px] font-medium text-m3-on-surface outline-none transition-colors focus:bg-m3-surface-lowest focus:ring-2 focus:ring-m3-primary/15";
+  "h-9 min-w-0 rounded-full border border-black/[0.08] bg-white px-3.5 pr-8 text-[13px] font-medium text-m3-on-surface outline-none transition-colors hover:border-m3-primary/30 focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/10";
+
+const STATUS_TABS = [
+  { value: "", label: "Tất cả" },
+  { value: "du_kien_goi", label: "Dự kiến gọi" },
+  { value: "khong_goi", label: "Không gọi" },
+  { value: "unset", label: "Chưa xác định" },
+] as const;
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 type ScopeMeta = {
   code: string;
@@ -33,10 +55,14 @@ type CampaignOption = {
 
 export default function CitizensPage() {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const isArchive = pathname.includes("citizen-archive");
+  const ageScope = isArchive ? "archive" : "active";
   const [citizens, setCitizens] = useState<Citizen[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [callIntentFilter, setCallIntentFilter] = useState("");
@@ -59,6 +85,19 @@ export default function CitizensPage() {
   const [draftCampaignId, setDraftCampaignId] = useState("");
   const [draftCallIntent, setDraftCallIntent] = useState("");
   const [filterTab, setFilterTab] = useState<"campaign" | "status" | "location">("campaign");
+  const [pendingCitizens, setPendingCitizens] = useState<Citizen[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState<
+    null | { mode: "all" } | { mode: "one"; citizen: Citizen }
+  >(null);
+  const [formPrefill, setFormPrefill] = useState<Hn212CitizenScan | null>(null);
+  const [confirmCreateFromNfc, setConfirmCreateFromNfc] =
+    useState<Hn212CitizenScan | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const effectiveUnitCode =
     sessionLevel === "bo"
@@ -126,21 +165,49 @@ export default function CitizensPage() {
       });
   }, [searchParams, loadWards]);
 
-  const fetchCitizens = async () => {
-    setLoading(true);
+  const fetchCitizens = async (opts?: {
+    silent?: boolean;
+    search?: string;
+    page?: number;
+    /** Tra cứu CCCD (NFC): bỏ lọc đợt / dự kiến gọi, tìm theo phạm vi cấp */
+    lookupCccd?: boolean;
+  }) => {
+    if (!opts?.silent) setLoading(true);
     try {
+      const qSearch = opts?.search !== undefined ? opts.search : search;
+      const qPage = opts?.page !== undefined ? opts.page : page;
+      const lookup = Boolean(opts?.lookupCccd);
+      const searchTrim = (qSearch || "").trim();
+      // Cấp Bộ: chưa chọn tỉnh → chỉ search/NFC toàn quốc; không load sẵn 10k hồ sơ
+      const nationwideBo =
+        sessionLevel === "bo" &&
+        !effectiveUnitCode &&
+        (lookup || searchTrim.length > 0);
+
+      if (sessionLevel === "bo" && !effectiveUnitCode && !nationwideBo) {
+        setCitizens([]);
+        setTotalPages(0);
+        setTotalCount(0);
+        setScopeMeta(null);
+        setRequiresUnitSelection(true);
+        return;
+      }
+
       const query = new URLSearchParams({
-        page: page.toString(),
-        limit: "10",
-        ...(search && { search }),
-        ...(callIntentFilter && { callIntent: callIntentFilter }),
-        ...(campaignId && { campaignId }),
+        page: String(qPage),
+        limit: String(lookup ? Math.max(pageSize, 50) : pageSize),
+        ageScope: lookup ? "all" : ageScope,
+        ...(searchTrim && { search: searchTrim }),
+        // Tra cứu CCCD: không lọc đợt/dự kiến — tránh “không thấy” dù đã có hồ sơ
+        ...(!lookup && !isArchive && callIntentFilter && { callIntent: callIntentFilter }),
+        ...(!lookup && !isArchive && campaignId && { campaignId }),
         ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
+        ...(nationwideBo && { nationwide: "1" }),
       });
       const res = await fetch(`/api/admin/citizens?${query.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      setCitizens(data.data);
+      setCitizens(Array.isArray(data.data) ? data.data : []);
       setTotalPages(data.totalPages);
       setTotalCount(data.total ?? 0);
       setScopeMeta(data.meta?.scopeUnit ?? null);
@@ -148,8 +215,128 @@ export default function CitizensPage() {
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
+  };
+
+  const fetchPendingArchive = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!isArchive || sessionLevel === null) return;
+    // Cấp Bộ: chờ duyệt lưu trữ theo tỉnh đã chọn (không load toàn quốc)
+    if (sessionLevel === "bo" && !effectiveUnitCode) {
+      setPendingCitizens([]);
+      setPendingCount(0);
+      return;
+    }
+    if (!opts?.silent) setPendingLoading(true);
+    try {
+      const query = new URLSearchParams({
+        page: "1",
+        limit: "100",
+        ageScope: "pending",
+        ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
+      });
+      const res = await fetch(`/api/admin/citizens?${query.toString()}`);
+      if (!res.ok) throw new Error("pending failed");
+      const data = await res.json();
+      setPendingCitizens(Array.isArray(data.data) ? data.data : []);
+      setPendingCount(Number(data.total ?? 0));
+    } catch {
+      if (!opts?.silent) {
+        setPendingCitizens([]);
+        setPendingCount(0);
+      }
+    } finally {
+      if (!opts?.silent) setPendingLoading(false);
+    }
+  }, [isArchive, sessionLevel, effectiveUnitCode]);
+
+  const approveArchive = async (
+    ids?: string[],
+    approveAll = false,
+    knownCitizens?: Citizen[],
+  ) => {
+    if (approveAll) setApprovingAll(true);
+    else if (ids?.[0]) setApprovingId(ids[0]);
+
+    const nowIso = new Date().toISOString();
+    const moved: Citizen[] = approveAll
+      ? [...pendingCitizens]
+      : knownCitizens?.length
+        ? knownCitizens
+        : pendingCitizens.filter((c) => ids?.includes(c.id));
+    const movedIds = new Set(moved.map((c) => c.id));
+    const nextPendingCount = Math.max(
+      0,
+      pendingCount - (approveAll ? pendingCount : moved.length),
+    );
+
+    // Optimistic ngay lập tức
+    if (moved.length) {
+      setPendingCitizens((prev) => prev.filter((c) => !movedIds.has(c.id)));
+      setPendingCount(nextPendingCount);
+      if (isArchive) {
+        if (page !== 1) setPage(1);
+        setCitizens((prev) => {
+          const stamped = moved.map((c) => ({ ...c, archivedAt: nowIso }));
+          const withoutDup = prev.filter((c) => !movedIds.has(c.id));
+          return [...stamped, ...withoutDup].slice(0, 10);
+        });
+        setTotalCount((n) => n + moved.length);
+      }
+    }
+    setConfirmArchive(null);
+    if (nextPendingCount <= 0) setPendingOpen(false);
+
+    try {
+      const res = await fetch("/api/admin/citizens/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(approveAll ? { approveAll: true } : { ids: ids || [...movedIds] }),
+          ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || Number(data.archived || 0) <= 0) {
+        await Promise.all([
+          fetchPendingArchive({ silent: true }),
+          fetchCitizens({ silent: true }),
+        ]);
+        alert(
+          typeof data.error === "string"
+            ? data.error
+            : "Duyệt thất bại — hồ sơ chưa được chuyển lưu trữ",
+        );
+        return;
+      }
+      // Đồng bộ nền (không lọc campaign trên trang lưu trữ)
+      await Promise.all([
+        fetchPendingArchive({ silent: true }),
+        fetchCitizens({ silent: true }),
+      ]);
+    } catch {
+      await Promise.all([
+        fetchPendingArchive({ silent: true }),
+        fetchCitizens({ silent: true }),
+      ]);
+      alert("Lỗi kết nối khi duyệt lưu trữ");
+    } finally {
+      setApprovingAll(false);
+      setApprovingId(null);
+    }
+  };
+
+  const handleConfirmArchive = () => {
+    if (!confirmArchive) return;
+    if (confirmArchive.mode === "all") {
+      void approveArchive(undefined, true);
+      return;
+    }
+    void approveArchive(
+      [confirmArchive.citizen.id],
+      false,
+      [confirmArchive.citizen],
+    );
   };
 
   useEffect(() => {
@@ -160,9 +347,39 @@ export default function CitizensPage() {
   useEffect(() => {
     if (sessionLevel === null) return;
     fetchCitizens();
-  }, [page, search, callIntentFilter, campaignId, effectiveUnitCode, sessionLevel]);
+  }, [page, pageSize, search, callIntentFilter, campaignId, effectiveUnitCode, sessionLevel, ageScope, isArchive]);
+
+  // Realtime: tab khác thêm hồ sơ → làm mới danh sách; poll khi tab đang mở
+  useEffect(() => {
+    if (sessionLevel === null) return;
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      void fetchCitizens({ silent: true });
+    };
+    const unsub = subscribeCitizensChanged(() => refresh());
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(refresh, 12_000);
+    return () => {
+      unsub();
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ gắn listener theo phiên / phạm vi
+  }, [sessionLevel, effectiveUnitCode, ageScope, isArchive]);
 
   useEffect(() => {
+    if (sessionLevel === null) return;
+    fetchPendingArchive();
+  }, [fetchPendingArchive, sessionLevel]);
+
+  useEffect(() => {
+    // Trang lưu trữ không dùng lọc đợt khám — tránh ẩn hồ sơ vừa duyệt
+    if (isArchive) {
+      setCampaignId("");
+      setCallIntentFilter("");
+      return;
+    }
     fetch("/api/admin/recruitment?limit=100")
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
@@ -171,10 +388,10 @@ export default function CitizensPage() {
             b.year - a.year || String(b.startDate).localeCompare(String(a.startDate)),
         );
         setCampaigns(sorted);
-          if (sorted[0]) setCampaignId((current) => current || sorted[0].id);
+        // Mặc định "Tất cả đợt" — không tự chọn đợt để tránh ẩn hồ sơ
       })
       .catch(() => undefined);
-        }, [campaignId]);
+  }, [isArchive]);
 
   const handleTinhChange = (code: string) => {
     setFilterTinh(code);
@@ -202,16 +419,82 @@ export default function CitizensPage() {
     setFilterOpen(false);
   };
 
-  const openCreate = () => {
+  const openCreate = (prefill?: Hn212CitizenScan | null) => {
     setFormMode("create");
     setEditCitizen(null);
+    setFormPrefill(prefill ?? null);
     setFormOpen(true);
   };
 
   const openEdit = (citizen: Citizen) => {
+    if (
+      citizen.approvalStatus === "approved" &&
+      (citizen.militaryStatusLocked || citizen.militaryStatus === "nhapngu")
+    ) {
+      alert("Hồ sơ đã duyệt gọi nhập ngũ — không được sửa lại.");
+      return;
+    }
     setFormMode("edit");
     setEditCitizen(citizen);
+    setFormPrefill(null);
     setFormOpen(true);
+  };
+
+  const isApprovedLocked = (c: Citizen) =>
+    c.approvalStatus === "approved" &&
+    (c.militaryStatusLocked || c.militaryStatus === "nhapngu");
+
+  const handleNfcSearch = async (data: Hn212CitizenScan) => {
+    if (!data.cccd?.trim()) {
+      if (data.fullName?.trim()) {
+        openCreate(data);
+        return;
+      }
+      alert(
+        "Chip không trả về số CCCD. Thử quét lại (giữ thẻ trong khe đến khi ComQ báo xong) hoặc nhập tay.",
+      );
+      return;
+    }
+    const cccd = data.cccd.trim();
+    setSearch(cccd);
+    setPage(1);
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({
+        page: "1",
+        limit: "50",
+        ageScope: "all",
+        search: cccd,
+        // Bộ: luôn tra CCCD toàn quốc; Tỉnh/Xã: theo phạm vi đơn vị
+        ...(sessionLevel === "bo"
+          ? { nationwide: "1" }
+          : effectiveUnitCode
+            ? { unitCode: effectiveUnitCode }
+            : {}),
+      });
+      const res = await fetch(`/api/admin/citizens?${query.toString()}`);
+      if (!res.ok) throw new Error("lookup failed");
+      const payload = await res.json();
+      const list: Citizen[] = Array.isArray(payload.data) ? payload.data : [];
+      setCitizens(list);
+      setTotalPages(payload.totalPages ?? 1);
+      setTotalCount(payload.total ?? list.length);
+      setScopeMeta(payload.meta?.scopeUnit ?? null);
+      setRequiresUnitSelection(false);
+
+      const exact = list.filter((c) => c.cccd === cccd);
+      if (exact.length === 1) {
+        setViewCitizen(exact[0]!);
+        return;
+      }
+      if (exact.length === 0) {
+        setConfirmCreateFromNfc(data);
+      }
+    } catch {
+      alert("Không tra cứu được CCCD. Thử lại hoặc tìm thủ công.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (citizen: Citizen) => {
@@ -250,89 +533,250 @@ export default function CitizensPage() {
     return { bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" };
   };
 
-  const TABLE_COLS = 9;
+  const TABLE_COLS = 8;
+
+  const pageItems = buildPageItems(page, totalPages);
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId);
+  const campaignSelectTitle = selectedCampaign
+    ? `${selectedCampaign.year} · ${selectedCampaign.name}`
+    : "Tất cả đợt";
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-[22px] font-bold tracking-tight text-m3-on-surface">
-            Quản lý hồ sơ công dân
+      {/* Header kiểu hiện đại: tiêu đề + pill lọc + CTA */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+          <h1 className="text-[24px] font-bold tracking-tight text-m3-on-surface">
+            {isArchive ? "Hồ sơ lưu trữ" : "Hồ sơ công dân"}
           </h1>
-          {!requiresUnitSelection && scopeMeta && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-m3-primary/10 px-3 py-1 text-[13px] font-semibold text-m3-primary">
-                {scopeMeta.name}
-              </span>
-              <span className="text-[14px] font-medium text-m3-on-surface-variant">
-                {totalCount.toLocaleString("vi-VN")} hồ sơ
-              </span>
-            </div>
+          {(sessionLevel === "bo" || sessionLevel === "tinh") && (
+            <>
+              {sessionLevel === "bo" && (
+                <select
+                  className={`${SELECT_CLS} max-w-[180px]`}
+                  value={filterTinh}
+                  onChange={(e) => handleTinhChange(e.target.value)}
+                  aria-label="Chọn tỉnh thành phố"
+                >
+                  <option value="">Tỉnh / TP</option>
+                  {provinces.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {filterTinh && (
+                <select
+                  className={`${SELECT_CLS} max-w-[160px]`}
+                  value={filterXa}
+                  onChange={(e) => handleXaChange(e.target.value)}
+                  aria-label="Chọn xã phường"
+                >
+                  <option value="">Tất cả xã</option>
+                  {wards.map((w) => (
+                    <option key={w.code} value={w.code}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
           )}
-          {requiresUnitSelection && (
-            <p className="mt-1.5 text-[14px] text-m3-on-surface-variant">
-              Chọn địa phương bên dưới để tra cứu hồ sơ trong phạm vi quản lý.
-            </p>
+          {!isArchive && campaigns.length > 0 && (
+            <select
+              className={`${SELECT_CLS} max-w-[min(100%,380px)] min-w-[220px]`}
+              value={campaignId}
+              onChange={(e) => {
+                setCampaignId(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Đợt khám"
+              title={campaignSelectTitle}
+            >
+              <option value="">Tất cả đợt</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.year} · {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {!requiresUnitSelection && (
+            <span className="rounded-full bg-m3-primary/10 px-3 py-1 text-[12px] font-semibold text-m3-primary">
+              {totalCount.toLocaleString("vi-VN")} hồ sơ
+            </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-m3-primary px-5 text-[15px] font-bold text-white transition-colors hover:bg-m3-primary"
-        >
-          <Plus size={18} />
-          Thêm công dân
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {!isArchive && (
+            <>
+              <button
+                type="button"
+                onClick={openFilters}
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-black/[0.08] bg-white px-4 text-[13px] font-semibold text-m3-on-surface hover:bg-m3-surface-high"
+              >
+                <SlidersHorizontal size={15} />
+                Bộ lọc
+                {(callIntentFilter || campaignId) && (
+                  <span className="rounded-full bg-m3-primary px-1.5 text-[10px] text-white">
+                    {Number(Boolean(callIntentFilter)) + Number(Boolean(campaignId))}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => openCreate()}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-emerald-600 px-4 text-[13px] font-bold text-white shadow-sm hover:bg-emerald-700"
+              >
+                <Plus size={16} />
+                Thêm hồ sơ
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div>
-        <div className="rounded-[18px] border border-black/[0.06] bg-m3-surface-lowest p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            {(sessionLevel === "bo" || sessionLevel === "tinh") && (
-              <div className="flex min-w-0 flex-wrap items-center gap-2 xl:shrink-0">
-                {sessionLevel === "bo" && (
-                  <select
-                    className={`${SELECT_CLS} w-full sm:w-[200px]`}
-                    value={filterTinh}
-                    onChange={(e) => handleTinhChange(e.target.value)}
-                    aria-label="Chọn tỉnh thành phố"
-                  >
-                    <option value="">Tỉnh / Thành phố</option>
-                    {provinces.map((p) => (
-                      <option key={p.code} value={p.code}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {filterTinh && (
-                  <select
-                    className={`${SELECT_CLS} w-full sm:w-[180px]`}
-                    value={filterXa}
-                    onChange={(e) => handleXaChange(e.target.value)}
-                    aria-label="Chọn xã phường"
-                  >
-                    <option value="">Tất cả xã / phường</option>
-                    {wards.map((w) => (
-                      <option key={w.code} value={w.code}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="hidden h-8 w-px bg-black/[0.08] xl:block" aria-hidden />
-              </div>
-            )}
+      {saveNotice && (
+        <div className="rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[14px] font-semibold text-emerald-800">
+          {saveNotice}
+        </div>
+      )}
 
+      {requiresUnitSelection && (
+        <p className="text-[14px] text-m3-on-surface-variant">
+          Chọn tỉnh / thành phố để xem danh sách, hoặc tìm CCCD / họ tên ở ô tìm kiếm (toàn quốc).
+        </p>
+      )}
+
+      {isArchive && !requiresUnitSelection && pendingCount > 0 && (
+        <div className="overflow-hidden rounded-[16px] border border-red-500/30 bg-red-500/[0.06]">
+          <button
+            type="button"
+            onClick={() => setPendingOpen((v) => !v)}
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-red-500/[0.06]"
+          >
+            <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+              <Bell size={18} />
+              <span className="absolute -right-1 -top-1 inline-flex min-h-[20px] min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-red-700 ring-2 ring-red-600">
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold text-red-700">
+                Có {pendingCount.toLocaleString("vi-VN")} hồ sơ hết tuổi cần duyệt lưu trữ
+              </p>
+              <p className="mt-0.5 text-[13px] text-red-700/80">
+                Tuổi = năm hiện tại − năm sinh &gt; {NVQS_AGE_MAX}. Bấm để xem danh sách chờ duyệt.
+              </p>
+            </div>
+            <span className="text-[13px] font-semibold text-red-700">
+              {pendingOpen ? "Thu gọn" : "Xem danh sách"}
+            </span>
+          </button>
+
+          {pendingOpen && (
+            <div className="border-t border-red-500/15 bg-white px-4 py-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] font-semibold text-m3-on-surface">
+                  Danh sách chờ duyệt — kiểm tra rồi chuyển lưu trữ
+                </p>
+                <button
+                  type="button"
+                  disabled={approvingAll || pendingLoading || pendingCitizens.length === 0}
+                  onClick={() => setConfirmArchive({ mode: "all" })}
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-full bg-red-600 px-4 text-[14px] font-bold text-white hover:bg-red-700 disabled:opacity-40"
+                >
+                  <CheckSquare size={16} />
+                  {approvingAll ? "Đang duyệt..." : "Duyệt tất cả"}
+                </button>
+              </div>
+
+              {pendingLoading ? (
+                <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
+                  Đang tải danh sách chờ duyệt...
+                </p>
+              ) : (
+                <ul className="max-h-[360px] space-y-2 overflow-y-auto">
+                  {pendingCitizens.map((c) => {
+                    const age = calcAgeYears(c.dateOfBirth);
+                    return (
+                      <li
+                        key={c.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-black/[0.08] border-l-[3px] border-l-red-500 bg-white px-3.5 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[15px] font-bold text-m3-on-surface">
+                            {c.fullName}
+                            <span className="ml-2 rounded-full bg-red-500/12 px-2 py-0.5 text-[12px] font-bold text-red-700">
+                              {age} tuổi
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-[13px] text-m3-on-surface-variant">
+                            {new Date(c.dateOfBirth).toLocaleDateString("vi-VN")} · CCCD {c.cccd}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={approvingId === c.id || approvingAll}
+                          onClick={() => setConfirmArchive({ mode: "one", citizen: c })}
+                          className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-red-600 px-3.5 text-[13px] font-bold text-white hover:bg-red-700 disabled:opacity-40"
+                        >
+                          <Check size={15} />
+                          {approvingId === c.id ? "Đang duyệt..." : "Duyệt"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tabs trạng thái + tìm kiếm */}
+      <div className="rounded-[16px] border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        {!isArchive && (
+          <div className="flex flex-wrap items-center gap-1 border-b border-black/[0.05] px-3 pt-2">
+            {STATUS_TABS.map((tab) => {
+              const active = callIntentFilter === tab.value;
+              return (
+                <button
+                  key={tab.value || "all"}
+                  type="button"
+                  onClick={() => {
+                    setCallIntentFilter(tab.value);
+                    setPage(1);
+                  }}
+                  className={`relative min-h-[42px] px-3.5 text-[13px] font-semibold transition-colors ${
+                    active
+                      ? "text-m3-primary"
+                      : "text-m3-on-surface-variant hover:text-m3-on-surface"
+                  }`}
+                >
+                  {tab.label}
+                  {active && (
+                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-m3-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-b border-black/[0.05] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xl sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
               <Search
-                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-                size={17}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
+                size={16}
               />
               <input
                 type="text"
-                placeholder="Tìm theo tên, CCCD, SĐT..."
-                className="h-10 w-full rounded-[10px] border-0 bg-m3-surface-high py-2 pl-10 pr-4 text-[14px] text-m3-on-surface outline-none transition-colors placeholder:text-m3-on-surface-variant focus:bg-m3-surface-lowest focus:ring-2 focus:ring-m3-primary/15"
+                placeholder="Tìm tên, CCCD, SĐT..."
+                className="h-9 w-full rounded-full border border-black/[0.08] bg-m3-surface-high/60 py-2 pl-9 pr-4 text-[13px] text-m3-on-surface outline-none placeholder:text-m3-on-surface-variant focus:border-m3-primary/35 focus:bg-white focus:ring-2 focus:ring-m3-primary/10"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -340,19 +784,276 @@ export default function CitizensPage() {
                 }}
               />
             </div>
+            {!isArchive && (
+              <Hn212ScanButton
+                compact
+                label="Quét NFC"
+                onScanned={handleNfcSearch}
+              />
+            )}
+          </div>
 
-            <button
-              type="button"
-              onClick={openFilters}
-              className={`${SELECT_CLS} inline-flex w-full items-center justify-center gap-2 xl:w-auto xl:shrink-0`}
-              aria-label="Mở bộ lọc nâng cao"
-            >
-              <SlidersHorizontal size={16} />
-              Bộ lọc
-              {(callIntentFilter || campaignId) && <span className="rounded-full bg-m3-primary px-1.5 text-[11px] text-white">{Number(Boolean(callIntentFilter)) + Number(Boolean(campaignId))}</span>}
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-2 text-[13px] text-m3-on-surface-variant">
+              Hiển thị
+              <select
+                className="h-9 rounded-lg border border-black/[0.08] bg-white px-2 text-[13px] font-semibold text-m3-on-surface outline-none"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              dòng
+            </label>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/[0.08] text-m3-on-surface disabled:opacity-35"
+                  aria-label="Trang trước"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {pageItems.map((item, idx) =>
+                  item === "ellipsis" ? (
+                    <span
+                      key={`e-${idx}`}
+                      className="inline-flex h-8 min-w-8 items-center justify-center px-1 text-[13px] font-semibold text-m3-on-surface-variant"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item)}
+                      className={`inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[13px] font-semibold ${
+                        item === page
+                          ? "bg-m3-primary text-white"
+                          : "border border-black/[0.08] text-m3-on-surface hover:bg-m3-surface-high"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/[0.08] text-m3-on-surface disabled:opacity-35"
+                  aria-label="Trang sau"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        <div className="max-h-[min(62vh,640px)] overflow-auto">
+          <table className="w-full min-w-[880px] text-left">
+            <thead className="sticky top-0 z-20">
+              <tr className="border-b border-black/[0.06] text-[12px] font-semibold text-m3-on-surface-variant">
+                <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Họ và tên</th>
+                <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Mã / CCCD</th>
+                <th className="hidden bg-[#f1f5f9] px-4 py-3 font-semibold sm:table-cell">Ngày sinh</th>
+                <th className="hidden bg-[#f1f5f9] px-4 py-3 font-semibold lg:table-cell">Học vấn</th>
+                <th className="hidden bg-[#f1f5f9] px-4 py-3 font-semibold md:table-cell">Địa chỉ</th>
+                <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Sức khỏe</th>
+                <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Dự kiến gọi</th>
+                <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={TABLE_COLS} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : citizens.length === 0 ? (
+                <tr>
+                  <td colSpan={TABLE_COLS} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
+                    {requiresUnitSelection
+                      ? "Chọn tỉnh / thành phố để xem hồ sơ, hoặc nhập từ khóa tìm kiếm."
+                      : "Không có hồ sơ phù hợp."}
+                  </td>
+                </tr>
+              ) : (
+                citizens.map((citizen, idx) => {
+                  const statusInfo = getCallLabel(citizen);
+                  const healthStyle = getHealthStyle(citizen.healthStatus);
+                  const ageTone = !isArchive
+                    ? citizenRowAgeTone(citizen.dateOfBirth)
+                    : null;
+                  const age = calcAgeYears(citizen.dateOfBirth);
+                  const stripe = idx % 2 === 1 ? "bg-[#f8fafc]" : "bg-white";
+                  const ageBar =
+                    ageTone === "danger"
+                      ? "shadow-[inset_3px_0_0_0_#ef4444]"
+                      : ageTone === "warn"
+                        ? "shadow-[inset_3px_0_0_0_#f59e0b]"
+                        : "";
+                  const noteText = citizen.militaryStatusReason?.trim() || "";
+                  return (
+                    <tr
+                      key={citizen.id}
+                      className={`group border-b border-black/[0.04] transition-colors hover:bg-sky-50/70 ${stripe} ${ageBar}`}
+                    >
+                      <td className="px-4 py-3.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewCitizen(citizen)}
+                          className="text-left"
+                        >
+                          <div className="text-[14px] font-bold text-m3-on-surface hover:text-m3-primary">
+                            {citizen.fullName}
+                          </div>
+                          <div className="mt-0.5 text-[12px] text-m3-on-surface-variant">
+                            {citizen.gender === "male" ? "Nam" : "Nữ"}
+                            {citizen.phone ? ` · ${citizen.phone}` : ""}
+                            <span
+                              className={
+                                ageTone === "danger"
+                                  ? "ml-1 font-semibold text-red-600"
+                                  : ageTone === "warn"
+                                    ? "ml-1 font-semibold text-amber-600"
+                                    : "ml-1"
+                              }
+                            >
+                              · {age} tuổi
+                            </span>
+                          </div>
+                        </button>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <button
+                          type="button"
+                          onClick={() => setViewCitizen(citizen)}
+                          className="font-mono text-[13px] font-semibold text-sky-600 hover:underline"
+                        >
+                          {citizen.cccd}
+                        </button>
+                      </td>
+                      <td className="hidden px-4 py-3.5 text-[13px] text-m3-on-surface sm:table-cell">
+                        {new Date(citizen.dateOfBirth).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td className="hidden px-4 py-3.5 lg:table-cell">
+                        <div className="text-[13px] font-semibold text-m3-on-surface">
+                          {citizen.educationLevel}
+                        </div>
+                        <div className="text-[12px] text-m3-on-surface-variant">
+                          {citizen.job || "—"}
+                        </div>
+                      </td>
+                      <td className="hidden max-w-[200px] px-4 py-3.5 md:table-cell">
+                        <CellTruncate text={citizen.address} maxW="max-w-[200px]" />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {citizen.healthStatus ? (
+                          <span
+                            className="inline-flex rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                            style={{
+                              backgroundColor: healthStyle.bg,
+                              color: healthStyle.color,
+                            }}
+                          >
+                            {citizen.healthStatus}
+                          </span>
+                        ) : (
+                          <span className="text-[13px] text-m3-on-surface-variant">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className="inline-flex rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                          style={{
+                            backgroundColor: statusInfo.bg,
+                            color: statusInfo.color,
+                          }}
+                        >
+                          {statusInfo.label}
+                        </span>
+                      </td>
+                      <td className="relative px-4 py-3.5">
+                        <span
+                          className={`block max-w-[180px] truncate text-[13px] ${
+                            noteText ? "text-m3-on-surface" : "text-m3-on-surface-variant"
+                          }`}
+                          title={noteText || undefined}
+                        >
+                          {noteText || "—"}
+                        </span>
+                        <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                          <div className="flex items-center gap-0.5 rounded-lg border border-black/[0.06] bg-white/95 p-0.5 shadow-sm backdrop-blur-sm">
+                            <button
+                              type="button"
+                              title="Xem"
+                              onClick={() => setViewCitizen(citizen)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-m3-on-surface-variant hover:bg-m3-primary/10 hover:text-m3-primary"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            {!isArchive && (
+                              <>
+                                {!isApprovedLocked(citizen) && (
+                                  <button
+                                    type="button"
+                                    title="Sửa"
+                                    onClick={() => openEdit(citizen)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-m3-on-surface-variant hover:bg-sky-50 hover:text-sky-600"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                )}
+                                {isApprovedLocked(citizen) && (
+                                  <span
+                                    title="Đã duyệt gọi — khóa sửa"
+                                    className="inline-flex h-8 items-center px-1 text-[11px] font-semibold text-m3-on-surface-variant"
+                                  >
+                                    Khóa
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  title="Xóa"
+                                  disabled={busyId === citizen.id || isApprovedLocked(citizen)}
+                                  onClick={() => handleDelete(citizen)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-m3-on-surface-variant hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {!loading && totalPages > 0 && (
+          <div className="border-t border-black/[0.05] px-4 py-3 text-[13px]">
+            <span className="font-medium text-m3-on-surface-variant">
+              Trang {page} / {totalPages}
+            </span>
+          </div>
+        )}
       </div>
 
       {filterOpen && (
@@ -379,163 +1080,9 @@ export default function CitizensPage() {
         </div>
       )}
 
-      <div className="macos-card overflow-hidden">
-        <div className="overflow-x-auto overflow-y-visible">
-          <table className="w-full text-left">
-            <thead className="bg-m3-surface-high text-[13px] font-bold uppercase tracking-wide text-m3-on-surface-variant">
-              <tr>
-                <th className="px-5 py-4">Họ và tên</th>
-                <th className="px-5 py-4">Ngày sinh</th>
-                <th className="px-5 py-4">CCCD</th>
-                <th className="hidden px-5 py-4 lg:table-cell">Học vấn</th>
-                <th className="hidden px-5 py-4 md:table-cell min-w-[160px]">Địa chỉ</th>
-                <th className="hidden px-5 py-4 sm:table-cell">Sức khỏe</th>
-                <th className="px-5 py-4">Dự kiến gọi</th>
-                <th className="hidden px-5 py-4 xl:table-cell">Ghi chú</th>
-                <th className="w-0 p-0" aria-hidden />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/[0.04]">
-              {loading ? (
-                <tr>
-                  <td colSpan={TABLE_COLS} className="px-5 py-10 text-center text-[15px] text-m3-on-surface-variant">
-                    Đang tải dữ liệu...
-                  </td>
-                </tr>
-              ) : citizens.length === 0 ? (
-                <tr>
-                  <td colSpan={TABLE_COLS} className="px-5 py-10 text-center text-[15px] text-m3-on-surface-variant">
-                    {requiresUnitSelection
-                      ? "Chọn tỉnh / thành phố ở trên để xem hồ sơ công dân theo địa phương."
-                      : 'Không tìm thấy công dân. Bấm "Thêm công dân" để tạo mới.'}
-                  </td>
-                </tr>
-              ) : (
-                citizens.map((citizen) => {
-                  const statusInfo = getCallLabel(citizen);
-                  const healthStyle = getHealthStyle(citizen.healthStatus);
-                  return (
-                    <tr key={citizen.id} className="group relative hover:bg-m3-surface-high/70">
-                      <td className="px-5 py-4">
-                        <div className="text-[16px] font-bold text-m3-on-surface">
-                          {citizen.fullName}
-                        </div>
-                        <div className="mt-0.5 text-[13px] text-m3-on-surface-variant">
-                          {citizen.gender === "male" ? "Nam" : "Nữ"} · {citizen.phone || "—"}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-[15px] text-m3-on-surface">
-                        {new Date(citizen.dateOfBirth).toLocaleDateString("vi-VN")}
-                      </td>
-                      <td className="px-5 py-4 font-mono text-[14px] font-semibold text-m3-on-surface">
-                        {citizen.cccd}
-                      </td>
-                      <td className="hidden px-5 py-4 lg:table-cell">
-                        <div className="text-[15px] font-semibold text-m3-on-surface">
-                          {citizen.educationLevel}
-                        </div>
-                        <div className="text-[13px] text-m3-on-surface-variant">{citizen.job || "—"}</div>
-                      </td>
-                      <td className="hidden px-5 py-4 md:table-cell">
-                        <CellTruncate text={citizen.address} maxW="max-w-none" />
-                      </td>
-                      <td className="hidden px-5 py-4 sm:table-cell">
-                        {citizen.healthStatus ? (
-                          <span
-                            className="inline-flex rounded-[10px] px-2.5 py-1 text-[13px] font-bold"
-                            style={{
-                              backgroundColor: healthStyle.bg,
-                              color: healthStyle.color,
-                            }}
-                          >
-                            {citizen.healthStatus}
-                          </span>
-                        ) : (
-                          <span className="text-[14px] text-m3-on-surface-variant">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className="inline-flex rounded-[10px] px-3 py-1.5 text-[13px] font-bold"
-                          style={{
-                            backgroundColor: statusInfo.bg,
-                            color: statusInfo.color,
-                          }}
-                        >
-                          {statusInfo.label}
-                        </span>
-                      </td>
-                      <td className="hidden px-5 py-4 xl:table-cell">
-                        <CellTruncate
-                          text={citizen.militaryStatusReason}
-                          maxW="max-w-none"
-                          muted={!citizen.militaryStatusReason}
-                        />
-                      </td>
-                      <td className="relative w-0 border-0 p-0">
-                        <div className="pointer-events-none absolute right-4 top-1/2 z-10 flex -translate-y-1/2 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-sm:pointer-events-auto max-sm:relative max-sm:right-auto max-sm:top-auto max-sm:translate-y-0 max-sm:px-5 max-sm:py-4 max-sm:opacity-100">
-                          <div className="flex items-center gap-2 rounded-[14px] bg-m3-surface-lowest/95 px-2 py-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.06] backdrop-blur-sm max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none max-sm:ring-0">
-                          <ActionBtn
-                            label="Xem"
-                            tone="gray"
-                            icon={<Eye size={16} />}
-                            onClick={() => setViewCitizen(citizen)}
-                          />
-                          <ActionBtn
-                            label="Sửa"
-                            tone="blue"
-                            icon={<Pencil size={16} />}
-                            onClick={() => openEdit(citizen)}
-                          />
-                          <ActionBtn
-                            label="Xóa"
-                            tone="red"
-                            icon={<Trash2 size={16} />}
-                            disabled={busyId === citizen.id}
-                            onClick={() => handleDelete(citizen)}
-                          />
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-black/[0.05] px-5 py-4 text-[15px]">
-            <span className="font-medium text-m3-on-surface-variant">
-              Trang {page} / {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={page === 1}
-                onClick={() => setPage(page - 1)}
-                className="min-h-[44px] rounded-[12px] border border-black/[0.08] px-4 font-bold text-m3-on-surface disabled:opacity-40"
-              >
-                Trước
-              </button>
-              <button
-                type="button"
-                disabled={page === totalPages}
-                onClick={() => setPage(page + 1)}
-                className="min-h-[44px] rounded-[12px] border border-black/[0.08] px-4 font-bold text-m3-on-surface disabled:opacity-40"
-              >
-                Sau
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       <CitizenDetailModal
         citizen={viewCitizen}
         onClose={() => setViewCitizen(null)}
-        onEdit={openEdit}
         onCitizenUpdated={(updated) => {
           setViewCitizen(updated);
           setCitizens((prev) =>
@@ -547,8 +1094,87 @@ export default function CitizensPage() {
         open={formOpen}
         mode={formMode}
         citizen={editCitizen}
-        onClose={() => setFormOpen(false)}
-        onSaved={fetchCitizens}
+        prefill={formMode === "create" ? formPrefill : null}
+        defaultUnitCode={
+          formMode === "create"
+            ? filterXa ||
+              (sessionLevel === "xa" ? sessionUnitCode : null) ||
+              null
+            : null
+        }
+        defaultCampaignId={formMode === "create" ? campaignId || null : null}
+        onClose={() => {
+          setFormOpen(false);
+          setFormPrefill(null);
+        }}
+        onSaved={async (result) => {
+          const name = result?.citizen?.fullName?.trim();
+          const cccd = result?.citizen?.cccd?.trim();
+          setSaveNotice(
+            result?.mode === "edit"
+              ? "Đã cập nhật hồ sơ công dân."
+              : `Đã thêm hồ sơ${name ? ` “${name}”` : ""} thành công.`,
+          );
+          publishCitizensChanged(
+            result?.mode === "edit"
+              ? { type: "citizen-updated", id: result?.citizen?.id }
+              : { type: "citizen-created", id: result?.citizen?.id },
+          );
+          if (cccd) {
+            setSearch(cccd);
+            setPage(1);
+            await fetchCitizens({ search: cccd, page: 1 });
+          } else {
+            await fetchCitizens();
+          }
+          window.setTimeout(() => setSaveNotice(null), 6000);
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmCreateFromNfc !== null}
+        onClose={() => setConfirmCreateFromNfc(null)}
+        onConfirm={() => {
+          const scan = confirmCreateFromNfc;
+          setConfirmCreateFromNfc(null);
+          if (scan) openCreate(scan);
+        }}
+        title="Chưa có hồ sơ"
+        message={
+          confirmCreateFromNfc
+            ? `Không tìm thấy hồ sơ CCCD ${confirmCreateFromNfc.cccd}${
+                confirmCreateFromNfc.fullName
+                  ? ` (${confirmCreateFromNfc.fullName})`
+                  : ""
+              }. Thêm hồ sơ mới từ dữ liệu chip?`
+            : ""
+        }
+        confirmLabel="Thêm hồ sơ"
+      />
+
+      <ConfirmDialog
+        isOpen={confirmArchive !== null}
+        onClose={() => {
+          if (approvingAll || approvingId) return;
+          setConfirmArchive(null);
+        }}
+        onConfirm={handleConfirmArchive}
+        title={
+          confirmArchive?.mode === "all"
+            ? "Duyệt tất cả hồ sơ hết tuổi"
+            : "Duyệt chuyển lưu trữ"
+        }
+        message={
+          confirmArchive?.mode === "all"
+            ? `Chuyển ${pendingCount} hồ sơ hết tuổi NVQS sang Hồ sơ lưu trữ? Sau khi duyệt, hồ sơ chỉ còn xem trong mục lưu trữ.`
+            : confirmArchive?.mode === "one"
+              ? `Chuyển hồ sơ "${confirmArchive.citizen.fullName}" (${calcAgeYears(confirmArchive.citizen.dateOfBirth)} tuổi) sang Hồ sơ lưu trữ?`
+              : ""
+        }
+        confirmLabel={
+          confirmArchive?.mode === "all" ? "Duyệt tất cả" : "Duyệt hồ sơ"
+        }
+        loading={approvingAll || approvingId !== null}
       />
     </div>
   );
@@ -573,36 +1199,5 @@ function CellTruncate({
     >
       {text}
     </span>
-  );
-}
-
-function ActionBtn({
-  label,
-  icon,
-  onClick,
-  tone,
-  disabled,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-  tone: "gray" | "blue" | "red";
-  disabled?: boolean;
-}) {
-  const styles = {
-    gray: "bg-m3-surface-high text-m3-on-surface hover:bg-m3-outline-variant",
-    blue: "bg-m3-primary/12 text-m3-primary hover:bg-m3-primary/18",
-    red: "bg-m3-error/10 text-m3-error hover:bg-m3-error/16",
-  };
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-[12px] px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${styles[tone]}`}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, KeyRound } from "lucide-react";
-import type { Citizen, EducationRecord, HealthRecord, ResidenceRecord } from "@/lib/data";
+import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, KeyRound, Plus } from "lucide-react";
+import type { Citizen, EducationRecord, HealthRecord, ResidenceRecord, ResidenceType } from "@/lib/data";
 import {
   getHealthConclusionMeaning,
   hierarchyNeedsEditPin,
@@ -16,8 +16,18 @@ import HealthExamWorkflow from "@/components/admin/HealthExamWorkflow";
 import HealthExamFormModal from "@/components/admin/HealthExamFormModal";
 import {
   canEnterHealthRecords,
+  mergeHealthYearOptions,
+  yearHasOpenExamSlot,
   type HealthExamRound,
 } from "@/lib/health-exam";
+import { calcAgeYears, NVQS_AGE_MAX, NVQS_AGE_MIN } from "@/lib/nvqs-age";
+import {
+  getNvqsExamYearWindow,
+  lifecycleStageLabel,
+  resolveLifecycleStage,
+} from "@/lib/nvqs-lifecycle";
+import DateVnInput from "@/components/admin/DateVnInput";
+import { formatVnDate } from "@/lib/date-vn";
 
 type TabId = "identity" | "education" | "health" | "residence" | "nvqs";
 
@@ -98,6 +108,115 @@ function nvqsChoiceNeedsReason(choice: NvqsCallChoice) {
 const NVQS_INPUT_CLS =
   "w-full min-h-[44px] rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-4 text-[15px] text-m3-on-surface outline-none transition-colors focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15";
 
+const PROFILE_INPUT_CLS =
+  "mt-0.5 w-full min-h-[40px] rounded-[10px] border border-black/[0.08] bg-m3-surface-lowest px-3 text-[17px] font-medium text-m3-on-surface outline-none transition-colors focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15";
+
+const EDU_LEVEL_OPTIONS = [
+  "9/12",
+  "12/12",
+  "Cao đẳng",
+  "Đại học",
+  "Thạc sĩ",
+  "Tiến sĩ",
+] as const;
+
+const RESIDENCE_TYPE_OPTIONS: ResidenceType[] = [
+  "Thường trú",
+  "Tạm trú",
+  "Quê quán",
+  "Chuyển đi",
+];
+
+type EduAddForm = {
+  institution: string;
+  level: string;
+  major: string;
+  graduationYear: string;
+  gpa: string;
+};
+
+type ResAddForm = {
+  type: ResidenceType;
+  address: string;
+  startYear: string;
+  endYear: string;
+  status: ResidenceRecord["status"];
+  decisionNo: string;
+  note: string;
+};
+
+function emptyEduAddForm(): EduAddForm {
+  return {
+    institution: "",
+    level: "Đại học",
+    major: "",
+    graduationYear: "",
+    gpa: "",
+  };
+}
+
+function emptyResAddForm(): ResAddForm {
+  return {
+    type: "Thường trú",
+    address: "",
+    startYear: String(new Date().getFullYear()),
+    endYear: "",
+    status: "current",
+    decisionNo: "",
+    note: "",
+  };
+}
+
+type ProfileDraft = {
+  fullName: string;
+  phone: string;
+  nationality: string;
+  ethnicity: string;
+  religion: string;
+  originPlace: string;
+  identificationFeatures: string;
+  cccd: string;
+  issueDate: string;
+  expiryDate: string;
+  oldIdNumber: string;
+  fatherName: string;
+  motherName: string;
+  educationLevel: string;
+  job: string;
+  schoolName: string;
+  healthStatus: string;
+  address: string;
+  gender: string;
+  dateOfBirth: string;
+};
+
+type ProfileDraftField = keyof ProfileDraft;
+
+function emptyProfileDraft(): ProfileDraft {
+  return {
+    fullName: "",
+    phone: "",
+    nationality: "",
+    ethnicity: "",
+    religion: "",
+    originPlace: "",
+    identificationFeatures: "",
+    cccd: "",
+    issueDate: "",
+    expiryDate: "",
+    oldIdNumber: "",
+    fatherName: "",
+    motherName: "",
+    educationLevel: "",
+    job: "",
+    schoolName: "",
+    healthStatus: "",
+    address: "",
+    gender: "",
+    dateOfBirth: "",
+  };
+}
+
 interface CitizenDetailModalProps {
   citizen: Citizen | null;
   onClose: () => void;
@@ -107,12 +226,14 @@ interface CitizenDetailModalProps {
 }
 
 export default function CitizenDetailModal({
-  citizen,
+  citizen: citizenProp,
   onClose,
-  onEdit,
+  onEdit: _onEdit,
   onCitizenUpdated,
   initialTab = "identity",
 }: CitizenDetailModalProps) {
+  const [citizen, setCitizen] = useState<Citizen | null>(citizenProp);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [tab, setTab] = useState<TabId>(initialTab);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
@@ -140,14 +261,37 @@ export default function CitizenDetailModal({
   const [sessionUserRole, setSessionUserRole] = useState<string | null>(null);
   const [healthFormRound, setHealthFormRound] = useState<HealthExamRound | null>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<ProfileDraft>(emptyProfileDraft);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [profilePin, setProfilePin] = useState("");
+  const [listsTick, setListsTick] = useState(0);
+  const [showEduForm, setShowEduForm] = useState(false);
+  const [eduForm, setEduForm] = useState<EduAddForm>(emptyEduAddForm);
+  const [eduSaving, setEduSaving] = useState(false);
+  const [eduError, setEduError] = useState<string | null>(null);
+  const [editingEduId, setEditingEduId] = useState<string | null>(null);
+  const [editingEduInstitution, setEditingEduInstitution] = useState("");
+  const [eduPatchSaving, setEduPatchSaving] = useState(false);
+  const [showResForm, setShowResForm] = useState(false);
+  const [resForm, setResForm] = useState<ResAddForm>(emptyResAddForm);
+  const [resSaving, setResSaving] = useState(false);
+  const [resError, setResError] = useState<string | null>(null);
 
   const isBoLevel = sessionLevel === "bo";
   const needsPinToEdit = sessionLevel !== null && hierarchyNeedsEditPin(sessionLevel);
   const nvqsIsLocked = citizen?.militaryStatusLocked === true;
-  const nvqsCanEdit = !nvqsIsLocked || nvqsUnlocked;
+  const approvedEnlisted =
+    citizen?.approvalStatus === "approved" &&
+    (citizen.militaryStatusLocked || citizen.militaryStatus === "nhapngu");
+  const nvqsCanEdit = (!nvqsIsLocked || nvqsUnlocked) && !approvedEnlisted;
 
   const handleClose = useCallback(() => {
     setOpen(false);
+    setEditing(false);
+    setSaveError(null);
+    setProfilePin("");
     setNvqsUnlocked(false);
     setNvqsPin("");
     setNvqsVerifiedPin("");
@@ -156,14 +300,59 @@ export default function CitizenDetailModal({
   }, [onClose]);
 
   useEffect(() => {
-    if (!citizen) {
+    if (!citizenProp) {
+      setCitizen(null);
+      setOpen(false);
+      setEditing(false);
+      setSaveError(null);
+      setProfilePin("");
+      return;
+    }
+    setCitizen(citizenProp);
+    setEditing(false);
+    setSaveError(null);
+    setProfilePin("");
+    setShowEduForm(false);
+    setShowResForm(false);
+    setEduError(null);
+    setResError(null);
+    setEduForm(emptyEduAddForm());
+    setResForm(emptyResAddForm());
+    setDetailLoading(true);
+    let cancelled = false;
+    const ac = new AbortController();
+    fetch(`/api/admin/citizens/${encodeURIComponent(citizenProp.id)}`, {
+      signal: ac.signal,
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.id) return;
+        // Merge so list snapshot fields never wipe freshly loaded detail
+        setCitizen((prev) => ({ ...(prev || citizenProp), ...data }));
+        onCitizenUpdated?.(data);
+      })
+      .catch(() => {
+        /* keep list snapshot */
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [citizenProp?.id]);
+
+  useEffect(() => {
+    if (!citizenProp) {
       setOpen(false);
       return;
     }
     setTab(sessionFunctionalRole === "y_te" ? "health" : initialTab);
     const t = window.setTimeout(() => setOpen(true), 10);
     return () => window.clearTimeout(t);
-  }, [citizen, initialTab]);
+  }, [citizenProp?.id, initialTab, sessionFunctionalRole]);
 
   useEffect(() => {
     if (open) {
@@ -193,18 +382,32 @@ export default function CitizenDetailModal({
       setHealthFilterOpen(false);
       return;
     }
+    const citizenId = citizen.id;
     setHealthLoading(true);
     setExpandedHealthId(null);
-    fetch(`/api/admin/health?citizenId=${citizen.id}&limit=50`)
-      .then((r) => r.json())
-      .then((data) => {
-        const records: HealthRecord[] = data.data || [];
-        setHealthRecords(records);
-        const years = [...new Set(records.map((r) => r.year))].sort((a, b) => b - a);
-        setHealthYear(years[0] ?? null);
+    const ac = new AbortController();
+    fetch(`/api/admin/health?citizenId=${encodeURIComponent(citizenId)}&limit=50`, {
+      signal: ac.signal,
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`health ${r.status}`);
+        return r.json();
       })
-      .catch(() => setHealthRecords([]))
+      .then((data) => {
+        const records: HealthRecord[] = Array.isArray(data?.data) ? data.data : [];
+        setHealthRecords(records);
+        const years = [...new Set(records.map((r) => r.year))];
+        const options = mergeHealthYearOptions(citizen.dateOfBirth, years);
+        const open = options.find((y) => yearHasOpenExamSlot(records, y));
+        setHealthYear(open ?? options[0] ?? new Date().getFullYear());
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setHealthRecords([]);
+      })
       .finally(() => setHealthLoading(false));
+    return () => ac.abort();
   }, [citizen?.id]);
 
   useEffect(() => {
@@ -212,26 +415,107 @@ export default function CitizenDetailModal({
       setEducationRecords([]);
       return;
     }
+    const citizenId = citizen.id;
+    const snapshot = citizen;
     setEducationLoading(true);
-    fetch(`/api/admin/education?citizenId=${citizen.id}&limit=50`)
-      .then((r) => r.json())
-      .then((data) => setEducationRecords(data.data || []))
-      .catch(() => setEducationRecords([]))
+    const ac = new AbortController();
+    fetch(`/api/admin/education?citizenId=${encodeURIComponent(citizenId)}&limit=50`, {
+      signal: ac.signal,
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`education ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        const records: EducationRecord[] = Array.isArray(data?.data) ? data.data : [];
+        if (records.length > 0) {
+          setEducationRecords(records);
+          return;
+        }
+        // Fallback from citizen summary so tab never looks empty when level exists
+        if (snapshot.educationLevel || snapshot.schoolName) {
+          setEducationRecords([
+            {
+              id: `syn-edu-${citizenId}`,
+              citizenId,
+              level: snapshot.educationLevel || "THPT",
+              institution:
+                snapshot.schoolName ||
+                "Theo hồ sơ công dân (chưa có chi tiết trường)",
+              major: snapshot.job || undefined,
+              status: "completed",
+              createdAt: snapshot.updatedAt || new Date().toISOString(),
+              updatedAt: snapshot.updatedAt || new Date().toISOString(),
+            },
+          ]);
+        } else {
+          setEducationRecords([]);
+        }
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setEducationRecords([]);
+      })
       .finally(() => setEducationLoading(false));
-  }, [citizen?.id]);
+    return () => ac.abort();
+  }, [citizen?.id, listsTick]);
 
   useEffect(() => {
     if (!citizen) {
       setResidenceRecords([]);
       return;
     }
+    const citizenId = citizen.id;
+    const snapshot = citizen;
     setResidenceLoading(true);
-    fetch(`/api/admin/residence?citizenId=${citizen.id}&limit=50`)
-      .then((r) => r.json())
-      .then((data) => setResidenceRecords(data.data || []))
-      .catch(() => setResidenceRecords([]))
+    const ac = new AbortController();
+    fetch(`/api/admin/residence?citizenId=${encodeURIComponent(citizenId)}&limit=50`, {
+      signal: ac.signal,
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`residence ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        const records: ResidenceRecord[] = Array.isArray(data?.data) ? data.data : [];
+        if (records.length > 0) {
+          setResidenceRecords(records);
+          return;
+        }
+        const fallback: ResidenceRecord[] = [];
+        if (snapshot.originPlace) {
+          fallback.push({
+            id: `syn-origin-${citizenId}`,
+            citizenId,
+            type: "Quê quán",
+            address: snapshot.originPlace,
+            status: "past",
+            createdAt: snapshot.updatedAt || new Date().toISOString(),
+            updatedAt: snapshot.updatedAt || new Date().toISOString(),
+          });
+        }
+        if (snapshot.address) {
+          fallback.push({
+            id: `syn-addr-${citizenId}`,
+            citizenId,
+            type: "Thường trú",
+            address: snapshot.address,
+            status: "current",
+            createdAt: snapshot.updatedAt || new Date().toISOString(),
+            updatedAt: snapshot.updatedAt || new Date().toISOString(),
+          });
+        }
+        setResidenceRecords(fallback);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setResidenceRecords([]);
+      })
       .finally(() => setResidenceLoading(false));
-  }, [citizen?.id]);
+    return () => ac.abort();
+  }, [citizen?.id, listsTick]);
 
   useEffect(() => {
     if (!citizen) {
@@ -291,7 +575,7 @@ export default function CitizenDetailModal({
     if (!citizen) return;
 
     if (nvqsChoiceNeedsReason(nvqsCallChoice) && !nvqsReason.trim()) {
-      setNvqsError("Vui lòng nhập lý do khi chọn Tạm hoãn.");
+      setNvqsError("Vui lòng nhập ghi chú / lý do khi chọn Tạm hoãn.");
       return;
     }
     if (nvqsCallChoice === "du_kien_goi" && !campaignId) {
@@ -303,6 +587,7 @@ export default function CitizenDetailModal({
     setNvqsError(null);
     try {
       const isSpecial = nvqsCallChoice === "tamhoan" || nvqsCallChoice === "miengoi";
+      const note = nvqsReason.trim();
       const res = await fetch(`/api/admin/citizens/${citizen.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -311,13 +596,12 @@ export default function CitizenDetailModal({
             ? {
                 militaryStatus: nvqsCallChoice,
                 callIntent: "unset",
-                militaryStatusReason:
-                  nvqsCallChoice === "tamhoan" ? nvqsReason.trim() : "",
+                militaryStatusReason: note || null,
               }
             : {
                 callIntent: nvqsCallChoice,
-                  campaignId: nvqsCallChoice === "du_kien_goi" ? campaignId : null,
-                militaryStatusReason: "",
+                campaignId: nvqsCallChoice === "du_kien_goi" ? campaignId : null,
+                militaryStatusReason: note || null,
               }),
           militaryStatusLocked: true,
           ...(nvqsVerifiedPin ? { editPin: nvqsVerifiedPin } : {}),
@@ -367,9 +651,29 @@ export default function CitizenDetailModal({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [healthFilterOpen]);
 
-  const healthYears = useMemo(
+  const lifecycleStage = useMemo(() => {
+    if (!citizen) return null;
+    return resolveLifecycleStage(citizen.dateOfBirth, citizen.archivedAt);
+  }, [citizen?.dateOfBirth, citizen?.archivedAt]);
+
+  const examWindow = useMemo(
+    () => getNvqsExamYearWindow(citizen?.dateOfBirth),
+    [citizen?.dateOfBirth],
+  );
+
+  const citizenAge = useMemo(
+    () => (citizen ? calcAgeYears(citizen.dateOfBirth) : 0),
+    [citizen?.dateOfBirth],
+  );
+
+  const healthYearsFromRecords = useMemo(
     () => [...new Set(healthRecords.map((r) => r.year))].sort((a, b) => b - a),
     [healthRecords],
+  );
+
+  const healthYearOptions = useMemo(
+    () => mergeHealthYearOptions(citizen?.dateOfBirth, healthYearsFromRecords),
+    [citizen?.dateOfBirth, healthYearsFromRecords],
   );
 
   const filteredHealthRecords = useMemo(() => {
@@ -382,7 +686,8 @@ export default function CitizenDetailModal({
     );
   }, [healthRecords, healthYear]);
 
-  const examYear = healthYear ?? new Date().getFullYear();
+  const examYear =
+    healthYear ?? healthYearOptions[0] ?? new Date().getFullYear();
   const canEnterHealth = canEnterHealthRecords(
     sessionFunctionalRole,
     sessionUserRole ?? undefined,
@@ -390,18 +695,305 @@ export default function CitizenDetailModal({
 
   const reloadHealthRecords = useCallback(() => {
     if (!citizen) return;
+    const keepYear = healthYear;
     setHealthLoading(true);
-    fetch(`/api/admin/health?citizenId=${citizen.id}&limit=50`)
-      .then((r) => r.json())
+    fetch(`/api/admin/health?citizenId=${encodeURIComponent(citizen.id)}&limit=50`, {
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`health ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
-        const records: HealthRecord[] = data.data || [];
+        const records: HealthRecord[] = Array.isArray(data?.data) ? data.data : [];
         setHealthRecords(records);
         const years = [...new Set(records.map((r) => r.year))].sort((a, b) => b - a);
-        setHealthYear(years[0] ?? examYear);
+        const options = mergeHealthYearOptions(citizen.dateOfBirth, years);
+        if (keepYear != null && options.includes(keepYear)) {
+          setHealthYear(keepYear);
+        } else {
+          const open = options.find((y) => yearHasOpenExamSlot(records, y));
+          setHealthYear(open ?? options[0] ?? new Date().getFullYear());
+        }
       })
       .catch(() => setHealthRecords([]))
       .finally(() => setHealthLoading(false));
-  }, [citizen, examYear]);
+  }, [citizen, healthYear]);
+
+  const startEdit = useCallback(() => {
+    if (!citizen) return;
+    if (
+      citizen.approvalStatus === "approved" &&
+      (citizen.militaryStatusLocked || citizen.militaryStatus === "nhapngu")
+    ) {
+      setSaveError(
+        "Hồ sơ đã duyệt gọi nhập ngũ — không được sửa lại.",
+      );
+      return;
+    }
+    const sliceDate = (d?: string) => (d ? d.slice(0, 10) : "");
+    setDraft({
+      fullName: citizen.fullName || "",
+      phone: citizen.phone || "",
+      nationality: citizen.nationality || "",
+      ethnicity: citizen.ethnicity || "",
+      religion: citizen.religion || "",
+      originPlace: citizen.originPlace || "",
+      identificationFeatures: citizen.identificationFeatures || "",
+      cccd: citizen.cccd || "",
+      issueDate: sliceDate(citizen.issueDate),
+      expiryDate: sliceDate(citizen.expiryDate),
+      oldIdNumber: citizen.oldIdNumber || "",
+      fatherName: citizen.fatherName || "",
+      motherName: citizen.motherName || "",
+      educationLevel: citizen.educationLevel || "",
+      job: citizen.job || "",
+      schoolName: citizen.schoolName || "",
+      healthStatus: citizen.healthStatus || "",
+      address: citizen.address || "",
+      gender: citizen.gender || "",
+      dateOfBirth: sliceDate(citizen.dateOfBirth),
+    });
+    setSaveError(null);
+    setProfilePin("");
+    setEditing(true);
+    // Khi sửa: ưu tiên năm còn chỗ nhập (vd. năm hiện tại chưa khám)
+    setHealthRecords((records) => {
+      const years = [...new Set(records.map((r) => r.year))];
+      const options = mergeHealthYearOptions(citizen.dateOfBirth, years);
+      const open = options.find((y) => yearHasOpenExamSlot(records, y));
+      if (open != null) setHealthYear(open);
+      return records;
+    });
+  }, [citizen]);
+
+  const saveProfile = useCallback(async () => {
+    if (!citizen) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const body: Record<string, unknown> = { ...draft };
+      if (needsPinToEdit) {
+        body.requireEditPin = true;
+        body.editPin = profilePin;
+      }
+      const res = await fetch(`/api/admin/citizens/${encodeURIComponent(citizen.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(
+          typeof data.error === "string" ? data.error : "Không lưu được hồ sơ",
+        );
+        return;
+      }
+      setCitizen(data);
+      onCitizenUpdated?.(data);
+      setEditing(false);
+      setProfilePin("");
+      setSaveError(null);
+      setShowEduForm(false);
+      setShowResForm(false);
+      setEduError(null);
+      setResError(null);
+      setEditingEduId(null);
+      setListsTick((t) => t + 1);
+    } catch {
+      setSaveError("Lỗi kết nối khi lưu hồ sơ");
+    } finally {
+      setSaving(false);
+    }
+  }, [citizen, draft, needsPinToEdit, profilePin, onCitizenUpdated]);
+
+  const saveEducationHistory = useCallback(async () => {
+    if (!citizen) return;
+    if (!eduForm.institution.trim() || !eduForm.level.trim()) {
+      setEduError("Nhập tên trường và trình độ");
+      return;
+    }
+    setEduSaving(true);
+    setEduError(null);
+    try {
+      const res = await fetch("/api/admin/education", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          citizenId: citizen.id,
+          institution: eduForm.institution.trim(),
+          level: eduForm.level,
+          major: eduForm.major.trim() || undefined,
+          graduationYear: eduForm.graduationYear
+            ? Number(eduForm.graduationYear)
+            : undefined,
+          gpa: eduForm.gpa ? Number(eduForm.gpa) : undefined,
+          status: "completed",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEduError(
+          typeof data.error === "string"
+            ? data.error
+            : "Không lưu được quá trình học tập",
+        );
+        return;
+      }
+      setShowEduForm(false);
+      setEduForm(emptyEduAddForm());
+      setCitizen((prev) =>
+        prev
+          ? {
+              ...prev,
+              educationLevel: eduForm.level || prev.educationLevel,
+              job: eduForm.major.trim() || prev.job,
+              schoolName: eduForm.institution.trim() || prev.schoolName,
+            }
+          : prev,
+      );
+      setDraft((d) => ({
+        ...d,
+        educationLevel: eduForm.level || d.educationLevel,
+        job: eduForm.major.trim() || d.job,
+        schoolName: eduForm.institution.trim() || d.schoolName,
+      }));
+      setListsTick((t) => t + 1);
+    } catch {
+      setEduError("Lỗi kết nối khi lưu quá trình học tập");
+    } finally {
+      setEduSaving(false);
+    }
+  }, [citizen, eduForm]);
+
+  const saveEducationPatch = useCallback(
+    async (recordId: string) => {
+      if (!citizen) return;
+      const institution = editingEduInstitution.trim();
+      if (!institution) {
+        setEduError("Nhập tên trường");
+        return;
+      }
+      // Bản ghi đồng bộ từ hồ sơ (chưa có dòng education) → lưu qua PUT citizen
+      if (recordId.startsWith("syn-")) {
+        setEduPatchSaving(true);
+        setEduError(null);
+        try {
+          const res = await fetch(
+            `/api/admin/citizens/${encodeURIComponent(citizen.id)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ schoolName: institution }),
+            },
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setEduError(
+              typeof data.error === "string"
+                ? data.error
+                : "Không cập nhật được tên trường",
+            );
+            return;
+          }
+          setCitizen(data);
+          onCitizenUpdated?.(data);
+          setDraft((d) => ({ ...d, schoolName: institution }));
+          setEditingEduId(null);
+          setListsTick((t) => t + 1);
+        } catch {
+          setEduError("Lỗi kết nối khi cập nhật trường");
+        } finally {
+          setEduPatchSaving(false);
+        }
+        return;
+      }
+
+      setEduPatchSaving(true);
+      setEduError(null);
+      try {
+        const res = await fetch("/api/admin/education", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: recordId, institution }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setEduError(
+            typeof data.error === "string"
+              ? data.error
+              : "Không cập nhật được tên trường",
+          );
+          return;
+        }
+        setCitizen((prev) =>
+          prev ? { ...prev, schoolName: institution } : prev,
+        );
+        setDraft((d) => ({ ...d, schoolName: institution }));
+        setEditingEduId(null);
+        setListsTick((t) => t + 1);
+      } catch {
+        setEduError("Lỗi kết nối khi cập nhật trường");
+      } finally {
+        setEduPatchSaving(false);
+      }
+    },
+    [citizen, editingEduInstitution, onCitizenUpdated],
+  );
+
+  const saveResidenceHistory = useCallback(async () => {
+    if (!citizen) return;
+    if (!resForm.address.trim()) {
+      setResError("Nhập địa chỉ cư trú");
+      return;
+    }
+    setResSaving(true);
+    setResError(null);
+    try {
+      const res = await fetch("/api/admin/residence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          citizenId: citizen.id,
+          type: resForm.type,
+          address: resForm.address.trim(),
+          startYear: resForm.startYear ? Number(resForm.startYear) : undefined,
+          endYear: resForm.endYear ? Number(resForm.endYear) : undefined,
+          status: resForm.status,
+          decisionNo: resForm.decisionNo.trim() || undefined,
+          note: resForm.note.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResError(
+          typeof data.error === "string"
+            ? data.error
+            : "Không lưu được nơi cư trú",
+        );
+        return;
+      }
+      setShowResForm(false);
+      setResForm(emptyResAddForm());
+      if (resForm.status === "current") {
+        setCitizen((prev) =>
+          prev ? { ...prev, address: resForm.address.trim() } : prev,
+        );
+        setDraft((d) => ({ ...d, address: resForm.address.trim() }));
+      }
+      if (resForm.type === "Quê quán") {
+        setCitizen((prev) =>
+          prev ? { ...prev, originPlace: resForm.address.trim() } : prev,
+        );
+        setDraft((d) => ({ ...d, originPlace: resForm.address.trim() }));
+      }
+      setListsTick((t) => t + 1);
+    } catch {
+      setResError("Lỗi kết nối khi lưu nơi cư trú");
+    } finally {
+      setResSaving(false);
+    }
+  }, [citizen, resForm]);
 
   if (!citizen) return null;
 
@@ -409,12 +1001,35 @@ export default function CitizenDetailModal({
     label: string,
     value: string | undefined | null,
     colSpan: 1 | 2 = 1,
+    field?: ProfileDraftField,
+    inputType: "text" | "date" = "text",
   ) => (
     <div className={colSpan === 2 ? "col-span-2 min-w-0" : "min-w-0"}>
       <p className="text-[14px] font-normal text-m3-on-surface-variant">{label}</p>
-      <p className="mt-0.5 text-[17px] font-medium leading-snug text-m3-on-surface break-words">
-        {value || "—"}
-      </p>
+      {editing && field ? (
+        inputType === "date" ? (
+          <DateVnInput
+            valueIso={draft[field]}
+            onChangeIso={(iso) =>
+              setDraft((d) => ({ ...d, [field]: iso }))
+            }
+            className={PROFILE_INPUT_CLS}
+          />
+        ) : (
+          <input
+            type="text"
+            value={draft[field]}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, [field]: e.target.value }))
+            }
+            className={PROFILE_INPUT_CLS}
+          />
+        )
+      ) : (
+        <p className="mt-0.5 text-[17px] font-medium leading-snug text-m3-on-surface break-words">
+          {value || "—"}
+        </p>
+      )}
     </div>
   );
 
@@ -551,36 +1166,112 @@ export default function CitizenDetailModal({
               {/* Profile banner */}
               <div className="flex items-center gap-4 rounded-[16px] bg-gradient-to-r from-m3-primary/8 to-transparent p-4">
                 <img
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(citizen.fullName)}&background=007aff&color=fff&size=128&font-size=0.33`}
+                  src={
+                    citizen.avatar
+                      ? citizen.avatar.startsWith("data:") ||
+                        citizen.avatar.startsWith("http")
+                        ? citizen.avatar
+                        : `data:image/jpeg;base64,${citizen.avatar}`
+                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(citizen.fullName)}&background=007aff&color=fff&size=128&font-size=0.33`
+                  }
                   alt=""
                   className="h-30 w-24 shrink-0 rounded-[14px] object-cover shadow-xs"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[20px] font-medium text-m3-on-surface">{citizen.fullName}</p>
-                  <p className="mt-1 text-[16px] text-m3-on-surface-variant">
-                    {citizen.gender === "male" ? "Nam" : "Nữ"}
-                    {" · "}
-                    {new Date(citizen.dateOfBirth).toLocaleDateString("vi-VN")}
-                    {citizen.phone ? ` · ${citizen.phone}` : ""}
-                  </p>
-                  
+                  {editing ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="text"
+                        value={draft.fullName}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, fullName: e.target.value }))
+                        }
+                        placeholder="Họ và tên"
+                        className={PROFILE_INPUT_CLS}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={draft.gender}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, gender: e.target.value }))
+                          }
+                          className={`${PROFILE_INPUT_CLS} mt-0 max-w-[120px]`}
+                        >
+                          <option value="male">Nam</option>
+                          <option value="female">Nữ</option>
+                        </select>
+                        <DateVnInput
+                          valueIso={draft.dateOfBirth}
+                          onChangeIso={(iso) =>
+                            setDraft((d) => ({
+                              ...d,
+                              dateOfBirth: iso,
+                            }))
+                          }
+                          className={`${PROFILE_INPUT_CLS} mt-0 max-w-[180px]`}
+                        />
+                        <input
+                          type="text"
+                          value={draft.phone}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, phone: e.target.value }))
+                          }
+                          placeholder="Số điện thoại"
+                          className={`${PROFILE_INPUT_CLS} mt-0 min-w-[140px] flex-1`}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[20px] font-medium text-m3-on-surface">
+                        {citizen.fullName}
+                      </p>
+                      <p className="mt-1 text-[16px] text-m3-on-surface-variant">
+                        {citizen.gender === "male" ? "Nam" : "Nữ"}
+                        {" · "}
+                        {formatVnDate(citizen.dateOfBirth)}
+                        {citizen.phone ? ` · ${citizen.phone}` : ""}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Unified detail card */}
               <div className="rounded-[16px] border border-black/[0.06] bg-m3-surface-lowest p-5">
+                {detailLoading && (
+                  <p className="mb-3 text-[13px] text-m3-on-surface-variant">
+                    Đang tải đầy đủ hồ sơ từ hệ thống...
+                  </p>
+                )}
                 {renderSectionBlock(
                   "Thông tin cá nhân",
                   <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                    {renderCell("Quốc tịch", citizen.nationality || "Việt Nam")}
-                    {renderCell("Dân tộc", citizen.ethnicity || "Kinh")}
-                    {renderCell("Tôn giáo", citizen.religion || "Không")}
-                    {renderCell("Số điện thoại", citizen.phone)}
-                    {renderCell("Quê quán", citizen.originPlace, 2)}
+                    {renderCell(
+                      "Quốc tịch",
+                      citizen.nationality || "Việt Nam",
+                      1,
+                      "nationality",
+                    )}
+                    {renderCell(
+                      "Dân tộc",
+                      citizen.ethnicity || "Kinh",
+                      1,
+                      "ethnicity",
+                    )}
+                    {renderCell(
+                      "Tôn giáo",
+                      citizen.religion || "Không",
+                      1,
+                      "religion",
+                    )}
+                    {renderCell("Số điện thoại", citizen.phone, 1, "phone")}
+                    {renderCell("Quê quán", citizen.originPlace, 2, "originPlace")}
                     {renderCell(
                       "Đặc điểm nhận dạng",
                       citizen.identificationFeatures,
                       2,
+                      "identificationFeatures",
                     )}
                   </div>,
                 )}
@@ -589,20 +1280,27 @@ export default function CitizenDetailModal({
                   {renderSectionBlock(
                     "Thông tin CCCD",
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                      {renderCell("Số CCCD", citizen.cccd, 2)}
+                      {renderCell("Số CCCD", citizen.cccd, 2, "cccd")}
                       {renderCell(
                         "Ngày cấp",
-                        citizen.issueDate
-                          ? new Date(citizen.issueDate).toLocaleDateString("vi-VN")
-                          : undefined,
+                        formatVnDate(citizen.issueDate) || undefined,
+                        1,
+                        "issueDate",
+                        "date",
                       )}
                       {renderCell(
                         "Ngày hết hạn",
-                        citizen.expiryDate
-                          ? new Date(citizen.expiryDate).toLocaleDateString("vi-VN")
-                          : undefined,
+                        formatVnDate(citizen.expiryDate) || undefined,
+                        1,
+                        "expiryDate",
+                        "date",
                       )}
-                      {renderCell("CMND/CCCD cũ", citizen.oldIdNumber, 2)}
+                      {renderCell(
+                        "CMND/CCCD cũ",
+                        citizen.oldIdNumber,
+                        2,
+                        "oldIdNumber",
+                      )}
                     </div>,
                   )}
                 </div>
@@ -611,8 +1309,18 @@ export default function CitizenDetailModal({
                   {renderSectionBlock(
                     "Thông tin gia đình",
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                      {renderCell("Họ tên cha", citizen.fatherName)}
-                      {renderCell("Họ tên mẹ", citizen.motherName)}
+                      {renderCell(
+                        "Họ tên cha",
+                        citizen.fatherName,
+                        1,
+                        "fatherName",
+                      )}
+                      {renderCell(
+                        "Họ tên mẹ",
+                        citizen.motherName,
+                        1,
+                        "motherName",
+                      )}
                     </div>,
                   )}
                 </div>
@@ -623,20 +1331,220 @@ export default function CitizenDetailModal({
           {tab === "education" && (
             <div className="flex flex-col gap-4">
               <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
-                <p className="text-[12px] font-medium text-m3-on-surface-variant">Trình độ hiện tại</p>
-                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
-                  {citizen.educationLevel}
-                  {citizen.job ? (
-                    <span className="font-semibold text-m3-on-surface-variant"> · {citizen.job}</span>
-                  ) : null}
-                </p>
+                {editing ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                        Trình độ hiện tại
+                      </p>
+                      <input
+                        type="text"
+                        value={draft.educationLevel}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            educationLevel: e.target.value,
+                          }))
+                        }
+                        className={PROFILE_INPUT_CLS}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                        Nghề nghiệp
+                      </p>
+                      <input
+                        type="text"
+                        value={draft.job}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, job: e.target.value }))
+                        }
+                        className={PROFILE_INPUT_CLS}
+                      />
+                    </div>
+                    <div className="min-w-0 sm:col-span-2">
+                      <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                        Trường / cơ sở đào tạo
+                      </p>
+                      <input
+                        type="text"
+                        value={draft.schoolName}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            schoolName: e.target.value,
+                          }))
+                        }
+                        className={PROFILE_INPUT_CLS}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                      Trình độ hiện tại
+                    </p>
+                    <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
+                      {citizen.educationLevel}
+                      {citizen.job ? (
+                        <span className="font-semibold text-m3-on-surface-variant">
+                          {" "}
+                          · {citizen.job}
+                        </span>
+                      ) : null}
+                    </p>
+                    {citizen.schoolName ? (
+                      <p className="mt-1 text-[14px] text-m3-on-surface-variant">
+                        Trường: {citizen.schoolName}
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
 
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
-                  <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
-                  Quá trình học tập
-                </h3>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
+                    <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
+                    Quá trình học tập
+                  </h3>
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEduForm((v) => !v);
+                        setEduError(null);
+                      }}
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-m3-primary/25 bg-m3-primary/8 px-3.5 text-[13px] font-bold text-m3-primary hover:bg-m3-primary/12"
+                    >
+                      <Plus size={15} />
+                      Thêm quá trình học tập
+                    </button>
+                  )}
+                </div>
+
+                {editing && showEduForm && (
+                  <div className="mb-4 rounded-[14px] border border-m3-primary/20 bg-m3-primary/5 px-4 py-3.5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Trường / cơ sở
+                        </p>
+                        <input
+                          type="text"
+                          value={eduForm.institution}
+                          onChange={(e) =>
+                            setEduForm((f) => ({
+                              ...f,
+                              institution: e.target.value,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                          placeholder="Tên trường"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Trình độ
+                        </p>
+                        <select
+                          value={eduForm.level}
+                          onChange={(e) =>
+                            setEduForm((f) => ({ ...f, level: e.target.value }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        >
+                          {EDU_LEVEL_OPTIONS.map((lv) => (
+                            <option key={lv} value={lv}>
+                              {lv}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Ngành / nghề
+                        </p>
+                        <input
+                          type="text"
+                          value={eduForm.major}
+                          onChange={(e) =>
+                            setEduForm((f) => ({ ...f, major: e.target.value }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                          placeholder="Ngành học"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Năm tốt nghiệp
+                        </p>
+                        <input
+                          type="number"
+                          min={1950}
+                          max={2100}
+                          value={eduForm.graduationYear}
+                          onChange={(e) =>
+                            setEduForm((f) => ({
+                              ...f,
+                              graduationYear: e.target.value,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                          placeholder="VD: 2020"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          GPA (nếu có)
+                        </p>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          max={4}
+                          value={eduForm.gpa}
+                          onChange={(e) =>
+                            setEduForm((f) => ({ ...f, gpa: e.target.value }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        />
+                      </div>
+                    </div>
+                    {eduError && (
+                      <p className="mt-2 text-[13px] font-medium text-m3-error">
+                        {eduError}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={saveEducationHistory}
+                        disabled={eduSaving}
+                        className="inline-flex min-h-[40px] items-center rounded-[10px] bg-m3-primary px-4 text-[14px] font-bold text-white disabled:opacity-40"
+                      >
+                        {eduSaving ? "Đang lưu..." : "Lưu quá trình"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEduForm(false);
+                          setEduError(null);
+                          setEduForm(emptyEduAddForm());
+                        }}
+                        className="inline-flex min-h-[40px] items-center rounded-[10px] border border-black/[0.1] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-on-surface"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {eduError && !showEduForm && (
+                  <p className="mb-3 text-[13px] font-medium text-m3-error">
+                    {eduError}
+                  </p>
+                )}
 
                 {educationLoading ? (
                   <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
@@ -659,7 +1567,8 @@ export default function CitizenDetailModal({
                             bg: "var(--m3-surface-container-high, #eef1f4)",
                             color: "var(--m3-on-surface-variant, #475569)",
                           };
-                        const statusStyle = EDUCATION_STATUS[record.status];
+                        const statusStyle =
+                          EDUCATION_STATUS[record.status] ?? EDUCATION_STATUS.completed;
                         const yearLabel =
                           record.status === "studying" && record.startYear
                             ? `Từ ${record.startYear} · đang học`
@@ -699,6 +1608,64 @@ export default function CitizenDetailModal({
                               <p className="mt-2 text-[15px] font-bold text-m3-on-surface">
                                 {record.institution}
                               </p>
+                              {editing &&
+                                (record.id.startsWith("edu-") ||
+                                  record.id.startsWith("syn-")) && (
+                                <div className="mt-2">
+                                  {editingEduId === record.id ? (
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                      <input
+                                        type="text"
+                                        value={editingEduInstitution}
+                                        onChange={(e) =>
+                                          setEditingEduInstitution(e.target.value)
+                                        }
+                                        className={`${PROFILE_INPUT_CLS} flex-1`}
+                                        placeholder="Tên trường / cơ sở"
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          disabled={eduPatchSaving}
+                                          onClick={() =>
+                                            void saveEducationPatch(record.id)
+                                          }
+                                          className="rounded-full bg-m3-primary px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60"
+                                        >
+                                          {eduPatchSaving ? "Đang lưu…" : "Lưu"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingEduId(null);
+                                            setEduError(null);
+                                          }}
+                                          className="rounded-full border border-black/10 px-3 py-1.5 text-[12px] font-semibold"
+                                        >
+                                          Hủy
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingEduId(record.id);
+                                        setEditingEduInstitution(
+                                          record.institution.startsWith("Chưa") ||
+                                            record.institution.startsWith("Theo hồ sơ")
+                                            ? ""
+                                            : record.institution,
+                                        );
+                                        setEduError(null);
+                                      }}
+                                      className="text-[12px] font-semibold text-m3-primary hover:underline"
+                                    >
+                                      Cập nhật trường học
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                               {record.major && (
                                 <p className="mt-0.5 text-[14px] text-m3-on-surface-variant">
                                   Ngành: {record.major}
@@ -728,10 +1695,72 @@ export default function CitizenDetailModal({
 
           {tab === "health" && (
             <div className="flex flex-col gap-4">
+              {lifecycleStage && examWindow && (
+                <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
+                  <p className="text-[13px] font-bold text-m3-on-surface">
+                    Vòng đời NVQS · {lifecycleStageLabel(lifecycleStage)}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-snug text-m3-on-surface-variant">
+                    Tuổi hiện tại {citizenAge} (năm hiện tại − năm sinh). Cửa sổ
+                    khám {NVQS_AGE_MIN}–{NVQS_AGE_MAX}: năm {examWindow.fromYear}
+                    –{examWindow.toYear || "—"}. Hồ sơ lưu vĩnh viễn; hết tuổi
+                    chuyển Hồ sơ lưu trữ sau khi duyệt — lịch sử khám các năm
+                    vẫn giữ để đối chiếu.
+                  </p>
+                  {examWindow.years.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {examWindow.years
+                        .slice()
+                        .reverse()
+                        .map((y) => {
+                          const count = healthRecords.filter(
+                            (r) => r.year === y,
+                          ).length;
+                          const open = yearHasOpenExamSlot(healthRecords, y);
+                          const active = healthYear === y;
+                          return (
+                            <button
+                              key={y}
+                              type="button"
+                              onClick={() => {
+                                setHealthYear(y);
+                                setExpandedHealthId(null);
+                              }}
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                                active
+                                  ? "bg-m3-primary text-white"
+                                  : open
+                                    ? "bg-m3-primary/12 text-m3-primary"
+                                    : count > 0
+                                      ? "bg-m3-success/14 text-m3-success"
+                                      : "bg-black/[0.05] text-m3-on-surface-variant"
+                              }`}
+                              title={
+                                open
+                                  ? `${y}: còn nhập`
+                                  : count > 0
+                                    ? `${y}: đã có ${count} lần`
+                                    : `${y}: chưa khám`
+                              }
+                            >
+                              {y}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <HealthExamWorkflow
                 year={examYear}
                 records={healthRecords}
-                canEnter={canEnterHealth}
+                canEnter={editing}
+                yearOptions={healthYearOptions}
+                onYearChange={(y) => {
+                  setHealthYear(y);
+                  setExpandedHealthId(null);
+                }}
                 onEnterRound={setHealthFormRound}
               />
 
@@ -739,13 +1768,29 @@ export default function CitizenDetailModal({
                 <p className="text-[12px] font-medium text-m3-on-surface-variant">
                   Phân loại sức khỏe (tóm tắt)
                 </p>
-                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
-                  {citizen.healthStatus || "—"}
-                </p>
-                {citizen.healthStatus && (
-                  <p className="mt-1 text-[13px] font-medium text-m3-success">
-                    {getHealthConclusionMeaning(citizen.healthStatus, 'Khám tuyển cấp huyện')}
-                  </p>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={draft.healthStatus}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, healthStatus: e.target.value }))
+                    }
+                    className={PROFILE_INPUT_CLS}
+                  />
+                ) : (
+                  <>
+                    <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
+                      {citizen.healthStatus || "—"}
+                    </p>
+                    {citizen.healthStatus && (
+                      <p className="mt-1 text-[13px] font-medium text-m3-success">
+                        {getHealthConclusionMeaning(
+                          citizen.healthStatus,
+                          "Khám tuyển cấp huyện",
+                        )}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -753,14 +1798,10 @@ export default function CitizenDetailModal({
                 <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
                   Đang tải lịch sử khám...
                 </p>
-              ) : healthRecords.length === 0 ? (
-                <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
-                  Chưa có lần khám nào trong hệ thống.
-                </p>
               ) : (
                 <>
-                  {healthYears.length > 0 && (
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
                       <h3 className="text-[15px] font-bold text-m3-on-surface">
                         Lịch sử khám
                         {healthYear !== null && (
@@ -769,64 +1810,82 @@ export default function CitizenDetailModal({
                           </span>
                         )}
                       </h3>
-                      <div className="relative shrink-0" ref={healthFilterRef}>
-                        <button
-                          type="button"
-                          onClick={() => setHealthFilterOpen((v) => !v)}
-                          className={`inline-flex min-h-[40px] items-center gap-2 rounded-full border px-3.5 text-[14px] font-semibold transition-colors ${
-                            healthFilterOpen
-                              ? "border-m3-primary/30 bg-m3-primary/10 text-m3-primary"
-                              : "border-black/[0.08] bg-m3-surface-lowest text-m3-on-surface hover:bg-m3-surface-high"
-                          }`}
-                        >
-                          <Filter size={16} />
-                          Năm {healthYear ?? "—"}
-                          <ChevronDown
-                            size={16}
-                            className={`transition-transform ${healthFilterOpen ? "rotate-180" : ""}`}
-                          />
-                        </button>
-
-                        {healthFilterOpen && (
-                          <div
-                            className="absolute right-0 z-20 mt-2 max-h-[240px] w-44 overflow-y-auto rounded-[14px] border border-black/[0.08] bg-m3-surface-lowest py-1.5 shadow-lg"
-                            style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.12)" }}
-                          >
-                            {healthYears.map((year) => {
-                              const count = healthRecords.filter(
-                                (r) => r.year === year,
-                              ).length;
-                              return (
-                                <button
-                                  key={year}
-                                  type="button"
-                                  onClick={() => {
-                                    setHealthYear(year);
-                                    setExpandedHealthId(null);
-                                    setHealthFilterOpen(false);
-                                  }}
-                                  className={`flex w-full min-h-[42px] items-center justify-between gap-2 px-4 text-left text-[14px] font-medium transition-colors hover:bg-m3-surface-high ${
-                                    healthYear === year
-                                      ? "bg-m3-primary/8 font-bold text-m3-primary"
-                                      : "text-m3-on-surface"
-                                  }`}
-                                >
-                                  <span>{year}</span>
-                                  <span className="text-[12px] font-semibold text-m3-on-surface-variant">
-                                    {count} lần
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
+                      <p className="mt-0.5 text-[12px] text-m3-on-surface-variant">
+                        Mỗi năm trong độ tuổi 18–27 là một chu kỳ khám riêng; giữ
+                        các năm trước để đối chiếu.
+                      </p>
                     </div>
-                  )}
+                    <div className="relative shrink-0" ref={healthFilterRef}>
+                      <button
+                        type="button"
+                        onClick={() => setHealthFilterOpen((v) => !v)}
+                        className={`inline-flex min-h-[40px] items-center gap-2 rounded-full border px-3.5 text-[14px] font-semibold transition-colors ${
+                          healthFilterOpen
+                            ? "border-m3-primary/30 bg-m3-primary/10 text-m3-primary"
+                            : "border-black/[0.08] bg-m3-surface-lowest text-m3-on-surface hover:bg-m3-surface-high"
+                        }`}
+                      >
+                        <Filter size={16} />
+                        Năm {healthYear ?? "—"}
+                        <ChevronDown
+                          size={16}
+                          className={`transition-transform ${healthFilterOpen ? "rotate-180" : ""}`}
+                        />
+                      </button>
+
+                      {healthFilterOpen && (
+                        <div
+                          className="absolute right-0 z-20 mt-2 max-h-[280px] w-52 overflow-y-auto rounded-[14px] border border-black/[0.08] bg-m3-surface-lowest py-1.5 shadow-lg"
+                          style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.12)" }}
+                        >
+                          {healthYearOptions.map((year) => {
+                            const count = healthRecords.filter(
+                              (r) => r.year === year,
+                            ).length;
+                            const open = yearHasOpenExamSlot(
+                              healthRecords,
+                              year,
+                            );
+                            return (
+                              <button
+                                key={year}
+                                type="button"
+                                onClick={() => {
+                                  setHealthYear(year);
+                                  setExpandedHealthId(null);
+                                  setHealthFilterOpen(false);
+                                }}
+                                className={`flex w-full min-h-[42px] items-center justify-between gap-2 px-4 text-left text-[14px] font-medium transition-colors hover:bg-m3-surface-high ${
+                                  healthYear === year
+                                    ? "bg-m3-primary/8 font-bold text-m3-primary"
+                                    : "text-m3-on-surface"
+                                }`}
+                              >
+                                <span>
+                                  {year}
+                                  {open ? (
+                                    <span className="ml-1 text-[11px] font-semibold text-m3-success">
+                                      còn nhập
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="text-[12px] font-semibold text-m3-on-surface-variant">
+                                  {count} lần
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
                   {filteredHealthRecords.length === 0 ? (
-                    <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
-                      Không có lần khám nào trong năm {healthYear}.
+                    <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
+                      Chưa có lần khám năm {examYear}.
+                      {editing
+                        ? " Dùng «Nhập vòng 1» phía trên để thêm chu kỳ khám năm này."
+                        : " Bấm Sửa hồ sơ để nhập khám cho năm này."}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -907,23 +1966,216 @@ export default function CitizenDetailModal({
           {tab === "residence" && (
             <div className="flex flex-col gap-4">
               <div className="rounded-[14px] border border-black/[0.06] bg-m3-surface-high px-4 py-3">
-                <p className="text-[12px] font-medium text-m3-on-surface-variant">Cư trú hiện tại</p>
-                <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
-                  {citizen.address || "—"}
+                <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                  Cư trú hiện tại
                 </p>
-                {citizen.originPlace && (
-                  <p className="mt-1 text-[13px] text-m3-on-surface-variant">
-                    Quê quán: {citizen.originPlace}
-                    {citizen.phone ? ` · ${citizen.phone}` : ""}
-                  </p>
+                {editing ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="min-w-0">
+                      <p className="mt-1 text-[12px] font-medium text-m3-on-surface-variant">
+                        Địa chỉ
+                      </p>
+                      <input
+                        type="text"
+                        value={draft.address}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, address: e.target.value }))
+                        }
+                        className={PROFILE_INPUT_CLS}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                        Quê quán
+                      </p>
+                      <input
+                        type="text"
+                        value={draft.originPlace}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            originPlace: e.target.value,
+                          }))
+                        }
+                        className={PROFILE_INPUT_CLS}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mt-0.5 text-[16px] font-bold text-m3-on-surface">
+                      {citizen.address || "—"}
+                    </p>
+                    {citizen.originPlace && (
+                      <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+                        Quê quán: {citizen.originPlace}
+                        {citizen.phone ? ` · ${citizen.phone}` : ""}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
               <div>
-                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
-                  <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
-                  Lịch sử biến động cư trú
-                </h3>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-[13px] font-bold tracking-wide text-m3-primary">
+                    <span className="h-3.5 w-1 rounded-full bg-m3-primary" aria-hidden />
+                    Lịch sử biến động cư trú
+                  </h3>
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowResForm((v) => !v);
+                        setResError(null);
+                      }}
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-m3-primary/25 bg-m3-primary/8 px-3.5 text-[13px] font-bold text-m3-primary hover:bg-m3-primary/12"
+                    >
+                      <Plus size={15} />
+                      Thêm nơi cư trú
+                    </button>
+                  )}
+                </div>
+
+                {editing && showResForm && (
+                  <div className="mb-4 rounded-[14px] border border-m3-primary/20 bg-m3-primary/5 px-4 py-3.5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Địa chỉ
+                        </p>
+                        <input
+                          type="text"
+                          value={resForm.address}
+                          onChange={(e) =>
+                            setResForm((f) => ({ ...f, address: e.target.value }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                          placeholder="Địa chỉ đầy đủ"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Loại cư trú
+                        </p>
+                        <select
+                          value={resForm.type}
+                          onChange={(e) =>
+                            setResForm((f) => ({
+                              ...f,
+                              type: e.target.value as ResidenceType,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        >
+                          {RESIDENCE_TYPE_OPTIONS.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Trạng thái
+                        </p>
+                        <select
+                          value={resForm.status}
+                          onChange={(e) =>
+                            setResForm((f) => ({
+                              ...f,
+                              status: e.target.value as ResidenceRecord["status"],
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        >
+                          <option value="current">Đang cư trú</option>
+                          <option value="past">Đã chuyển đi</option>
+                          <option value="pending">Chờ xác nhận</option>
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Từ năm
+                        </p>
+                        <input
+                          type="number"
+                          min={1950}
+                          max={2100}
+                          value={resForm.startYear}
+                          onChange={(e) =>
+                            setResForm((f) => ({
+                              ...f,
+                              startYear: e.target.value,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Đến năm (nếu đã chuyển)
+                        </p>
+                        <input
+                          type="number"
+                          min={1950}
+                          max={2100}
+                          value={resForm.endYear}
+                          onChange={(e) =>
+                            setResForm((f) => ({
+                              ...f,
+                              endYear: e.target.value,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                          placeholder="Để trống nếu đang cư trú"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-[12px] font-medium text-m3-on-surface-variant">
+                          Số quyết định (nếu có)
+                        </p>
+                        <input
+                          type="text"
+                          value={resForm.decisionNo}
+                          onChange={(e) =>
+                            setResForm((f) => ({
+                              ...f,
+                              decisionNo: e.target.value,
+                            }))
+                          }
+                          className={PROFILE_INPUT_CLS}
+                        />
+                      </div>
+                    </div>
+                    {resError && (
+                      <p className="mt-2 text-[13px] font-medium text-m3-error">
+                        {resError}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={saveResidenceHistory}
+                        disabled={resSaving}
+                        className="inline-flex min-h-[40px] items-center rounded-[10px] bg-m3-primary px-4 text-[14px] font-bold text-white disabled:opacity-40"
+                      >
+                        {resSaving ? "Đang lưu..." : "Lưu nơi cư trú"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowResForm(false);
+                          setResError(null);
+                          setResForm(emptyResAddForm());
+                        }}
+                        className="inline-flex min-h-[40px] items-center rounded-[10px] border border-black/[0.1] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-on-surface"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {residenceLoading ? (
                   <p className="py-6 text-center text-[14px] text-m3-on-surface-variant">
@@ -946,7 +2198,8 @@ export default function CitizenDetailModal({
                             bg: "var(--m3-surface-container-high, #eef1f4)",
                             color: "var(--m3-on-surface-variant, #475569)",
                           };
-                        const statusStyle = RESIDENCE_STATUS[record.status];
+                        const statusStyle =
+                          RESIDENCE_STATUS[record.status] ?? RESIDENCE_STATUS.past;
                         const periodLabel =
                           record.status === "current" && record.startYear
                             ? `Từ ${record.startYear} · đang cư trú`
@@ -1094,7 +2347,6 @@ export default function CitizenDetailModal({
                         const next = e.target.value as NvqsCallChoice;
                         setNvqsCallChoice(next);
                         setNvqsError(null);
-                        if (!nvqsChoiceNeedsReason(next)) setNvqsReason("");
                       }}
                     >
                       {NVQS_CALL_OPTIONS.map((opt) => (
@@ -1134,35 +2386,40 @@ export default function CitizenDetailModal({
                   </div>
                 )}
 
-                {nvqsChoiceNeedsReason(
-                  nvqsCanEdit ? nvqsCallChoice : citizenToNvqsChoice(citizen),
-                ) &&
-                  (nvqsCanEdit ? (
-                    <div className="min-w-0">
-                      <label
-                        htmlFor="nvqs-reason"
-                        className="text-[14px] font-medium text-m3-on-surface-variant"
-                      >
-                        Lý do{" "}
-                        <span className="text-m3-error">*</span>
-                      </label>
-                      <textarea
-                        id="nvqs-reason"
-                        rows={3}
-                        className={`${NVQS_INPUT_CLS} mt-1.5 min-h-[88px] resize-y py-3`}
-                        placeholder="Nhập lý do tạm hoãn (VD: đang theo học đại học...)"
-                        value={nvqsReason}
-                        onChange={(e) => {
-                          setNvqsReason(e.target.value);
-                          setNvqsError(null);
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    renderStackField("Lý do", citizen.militaryStatusReason)
-                  ))}
-
                 {renderStackField("Phân loại sức khỏe", citizen.healthStatus)}
+
+                {nvqsCanEdit ? (
+                  <div className="min-w-0">
+                    <label
+                      htmlFor="nvqs-note"
+                      className="text-[14px] font-medium text-m3-on-surface-variant"
+                    >
+                      Ghi chú
+                      {nvqsChoiceNeedsReason(nvqsCallChoice) && (
+                        <span className="text-m3-error"> *</span>
+                      )}
+                    </label>
+                    <textarea
+                      id="nvqs-note"
+                      rows={4}
+                      className={`${NVQS_INPUT_CLS} mt-1.5 min-h-[110px] resize-y py-3`}
+                      placeholder={
+                        nvqsCallChoice === "tamhoan"
+                          ? "Nhập lý do tạm hoãn (VD: đang theo học đại học...)"
+                          : nvqsCallChoice === "miengoi"
+                            ? "VD: Thuộc diện miễn theo quy định..."
+                            : "Ghi chú thêm về dự kiến tuyển gọi (không bắt buộc)"
+                      }
+                      value={nvqsReason}
+                      onChange={(e) => {
+                        setNvqsReason(e.target.value);
+                        setNvqsError(null);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  renderStackField("Ghi chú", citizen.militaryStatusReason)
+                )}
               </div>
 
               {nvqsError && (
@@ -1230,37 +2487,91 @@ export default function CitizenDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/[0.06] bg-m3-surface-high/80 px-5 py-4">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
-          >
-            <Printer size={18} />
-            In hồ sơ
-          </button>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface"
-              style={{ border: "1px solid rgba(0,0,0,0.1)" }}
-            >
-              Đóng
-            </button>
-            {onEdit && sessionFunctionalRole !== "y_te" && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] bg-m3-surface-high/80 px-5 py-4">
+          {editing ? (
+            <>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                {needsPinToEdit && (
+                  <label className="flex min-w-0 flex-wrap items-center gap-2 text-[14px] font-medium text-m3-on-surface-variant">
+                    <span className="shrink-0">Mã PIN xác thực</span>
+                    <input
+                      type="password"
+                      value={profilePin}
+                      onChange={(e) => setProfilePin(e.target.value)}
+                      autoComplete="off"
+                      className="min-h-[44px] w-[140px] rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-3 text-[15px] text-m3-on-surface outline-none focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15"
+                    />
+                  </label>
+                )}
+                {saveError && (
+                  <p className="text-[13px] font-medium text-m3-error">{saveError}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setSaveError(null);
+                    setProfilePin("");
+                    setShowEduForm(false);
+                    setShowResForm(false);
+                    setEduError(null);
+                    setResError(null);
+                    setHealthFormRound(null);
+                  }}
+                  disabled={saving}
+                  className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface disabled:opacity-50"
+                  style={{ border: "1px solid rgba(0,0,0,0.1)" }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveProfile()}
+                  disabled={saving}
+                  className="min-h-[44px] rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white disabled:opacity-50"
+                >
+                  {saving ? "Đang lưu..." : "Lưu hồ sơ"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
               <button
                 type="button"
-                onClick={() => {
-                  onEdit(citizen);
-                  handleClose();
-                }}
-                className="min-h-[44px] rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white"
+                onClick={() => window.print()}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
               >
-                Sửa hồ sơ
+                <Printer size={18} />
+                In hồ sơ
               </button>
-            )}
-          </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface"
+                  style={{ border: "1px solid rgba(0,0,0,0.1)" }}
+                >
+                  Đóng
+                </button>
+                {sessionFunctionalRole !== "y_te" && !approvedEnlisted && (
+                  <button
+                    type="button"
+                    onClick={startEdit}
+                    className="min-h-[44px] rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white"
+                  >
+                    Sửa hồ sơ
+                  </button>
+                )}
+                {sessionFunctionalRole !== "y_te" && approvedEnlisted && (
+                  <span className="inline-flex min-h-[44px] items-center rounded-[12px] bg-m3-surface-high px-4 text-[13px] font-semibold text-m3-on-surface-variant">
+                    Đã duyệt gọi — khóa sửa
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -1272,9 +2583,31 @@ export default function CitizenDetailModal({
           hierarchyLevel={sessionLevel || "xa"}
           year={examYear}
           onClose={() => setHealthFormRound(null)}
-          onSaved={() => {
+          onSaved={(saved) => {
             reloadHealthRecords();
-            onCitizenUpdated?.(citizen);
+            if (saved.citizen) {
+              setCitizen(saved.citizen);
+              setDraft((d) => ({
+                ...d,
+                healthStatus: saved.citizen?.healthStatus || d.healthStatus,
+              }));
+              onCitizenUpdated?.(saved.citizen);
+            } else {
+              const nextStatus = saved.conclusion || citizen.healthStatus;
+              setCitizen((prev) =>
+                prev
+                  ? { ...prev, healthStatus: nextStatus || prev.healthStatus }
+                  : prev,
+              );
+              setDraft((d) => ({
+                ...d,
+                healthStatus: nextStatus || d.healthStatus,
+              }));
+              onCitizenUpdated?.({
+                ...citizen,
+                healthStatus: nextStatus || citizen.healthStatus,
+              });
+            }
           }}
         />
       )}

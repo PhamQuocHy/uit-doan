@@ -1,38 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  Search,
-  Filter,
-  Check,
-  X,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, X } from "lucide-react";
 import type { ApprovalRow } from "@/lib/enlistment-approval";
 import type { HierarchyUnit } from "@/lib/data";
+import {
+  AdminListHeader,
+  AdminStatusTabs,
+  AdminListToolbar,
+  AdminListShell,
+  AdminTable,
+  AdminTHead,
+  ADMIN_TH_CLS,
+  ADMIN_TD_CLS,
+  adminRowClass,
+  AdminHoverActions,
+  AdminIconBtn,
+  AdminPill,
+  ADMIN_SELECT_CLS,
+} from "@/components/admin/list-ui";
 
 type CampaignOption = { id: string; name: string; year: number };
 
 const statusConfig: Record<
   string,
-  { label: string; color: string; bg: string; icon: React.ElementType }
+  { label: string; color: string; bg: string }
 > = {
-  pending: { label: "Chờ duyệt", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)", icon: Clock },
+  pending: {
+    label: "Chờ duyệt",
+    color: "var(--color-m3-warning)",
+    bg: "var(--color-m3-warning-container)",
+  },
   approved: {
     label: "Đã duyệt",
     color: "var(--color-m3-success)",
     bg: "var(--color-m3-success-container)",
-    icon: CheckCircle2,
   },
   rejected: {
     label: "Không đạt",
     color: "var(--m3-error, #ba1a1a)",
     bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
-    icon: AlertCircle,
   },
 };
+
+const TABLE_COLS = 6;
 
 export default function ApprovalPage() {
   const [rows, setRows] = useState<ApprovalRow[]>([]);
@@ -49,13 +60,16 @@ export default function ApprovalPage() {
   const [wards, setWards] = useState<HierarchyUnit[]>([]);
   const [provinceCode, setProvinceCode] = useState("");
   const [unitCode, setUnitCode] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { status?: string }) => {
     setLoading(true);
     try {
       const q = new URLSearchParams();
       if (search.trim()) q.set("search", search.trim());
-      if (statusFilter) q.set("status", statusFilter);
+      const status = opts?.status !== undefined ? opts.status : statusFilter;
+      if (status) q.set("status", status);
       if (campaignId) q.set("campaignId", campaignId);
       if (unitCode) q.set("unitCode", unitCode);
       const res = await fetch(`/api/admin/approval?${q.toString()}`);
@@ -93,7 +107,9 @@ export default function ApprovalPage() {
           const json = await res.json();
           setProvinces(json.items || []);
         } else if (level === "tinh") {
-          const res = await fetch(`/api/admin/hierarchy/children?parentCode=${encodeURIComponent(code)}`);
+          const res = await fetch(
+            `/api/admin/hierarchy/children?parentCode=${encodeURIComponent(code)}`,
+          );
           const json = await res.json();
           setWards(json.items || []);
         }
@@ -106,11 +122,17 @@ export default function ApprovalPage() {
       if (sessionLevel === "bo") setWards([]);
       return;
     }
-    fetch(`/api/admin/hierarchy/children?parentCode=${encodeURIComponent(provinceCode)}`)
+    fetch(
+      `/api/admin/hierarchy/children?parentCode=${encodeURIComponent(provinceCode)}`,
+    )
       .then((res) => res.json())
       .then((data) => setWards(data.items || []))
       .catch(() => setWards([]));
   }, [provinceCode, sessionLevel]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, campaignId, unitCode]);
 
   const handleProvinceChange = (value: string) => {
     setProvinceCode(value);
@@ -144,178 +166,233 @@ export default function ApprovalPage() {
     }
   };
 
+  const totalCount = counts.pending + counts.approved + counts.rejected;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const statusTabs = [
+    { value: "", label: `Tất cả (${totalCount})` },
+    { value: "pending", label: `Chờ duyệt (${counts.pending})` },
+    { value: "approved", label: `Đã duyệt (${counts.approved})` },
+    { value: "rejected", label: `Không đạt (${counts.rejected})` },
+  ];
+
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId);
+  const campaignSelectTitle = selectedCampaign
+    ? `${selectedCampaign.year} · ${selectedCampaign.name}`
+    : "Chọn đợt tuyển quân";
+
+  const headerFilters = (
+    <>
+      {campaigns.length > 0 && (
+        <select
+          className={`${ADMIN_SELECT_CLS} max-w-[min(100%,380px)] min-w-[220px]`}
+          value={campaignId}
+          onChange={(e) => setCampaignId(e.target.value)}
+          aria-label="Đợt tuyển quân"
+          title={campaignSelectTitle}
+        >
+          <option value="">Chọn đợt tuyển quân...</option>
+          {campaigns.map((campaign) => (
+            <option key={campaign.id} value={campaign.id}>
+              {campaign.year} · {campaign.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {sessionLevel === "bo" && (
+        <select
+          className={`${ADMIN_SELECT_CLS} max-w-[180px]`}
+          value={provinceCode}
+          onChange={(e) => handleProvinceChange(e.target.value)}
+          aria-label="Chọn tỉnh thành phố"
+        >
+          <option value="">Tỉnh / TP</option>
+          {provinces.map((item) => (
+            <option key={item.code} value={item.code}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {sessionLevel === "bo" && provinceCode && (
+        <select
+          className={`${ADMIN_SELECT_CLS} max-w-[160px]`}
+          value={unitCode === provinceCode ? "" : unitCode}
+          onChange={(e) => handleWardChange(e.target.value)}
+          aria-label="Chọn xã phường"
+        >
+          <option value="">Tất cả xã</option>
+          {wards.map((item) => (
+            <option key={item.code} value={item.code}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {sessionLevel === "tinh" && (
+        <select
+          className={`${ADMIN_SELECT_CLS} max-w-[160px]`}
+          value={unitCode === sessionUnitCode ? "" : unitCode}
+          onChange={(e) => handleWardChange(e.target.value)}
+          aria-label="Chọn xã phường"
+        >
+          <option value="">Tất cả xã</option>
+          {wards.map((item) => (
+            <option key={item.code} value={item.code}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </>
+  );
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
-          Xét duyệt danh sách nhập ngũ
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
-          Chỉ hiển thị hồ sơ được đánh dấu Dự kiến gọi từ mục Hồ sơ công dân
-        </p>
-          <div className="mt-4 max-w-md">
-            <label className="mb-1 block text-sm font-medium text-m3-on-surface-variant">Đợt tuyển quân</label>
-            <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="w-full rounded-xl border border-m3-outline-variant bg-m3-surface-lowest px-3 py-2 text-sm">
-              <option value="">Chọn đợt để xét duyệt...</option>
-              {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name} ({campaign.year})</option>)}
-            </select>
-          </div>
-          {sessionLevel === "bo" && (
-            <div className="mt-3 flex max-w-2xl flex-wrap gap-2">
-              <select value={provinceCode} onChange={(e) => handleProvinceChange(e.target.value)} className="rounded-xl border border-m3-outline-variant bg-m3-surface-lowest px-3 py-2 text-sm">
-                <option value="">Tất cả tỉnh / thành phố</option>
-                {provinces.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
-              </select>
-              {provinceCode && <select value={unitCode === provinceCode ? "" : unitCode} onChange={(e) => handleWardChange(e.target.value)} className="rounded-xl border border-m3-outline-variant bg-m3-surface-lowest px-3 py-2 text-sm"><option value="">Tất cả xã / phường</option>{wards.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select>}
-            </div>
-          )}
-          {sessionLevel === "tinh" && <div className="mt-3 max-w-md"><select value={unitCode === sessionUnitCode ? "" : unitCode} onChange={(e) => handleWardChange(e.target.value)} className="w-full rounded-xl border border-m3-outline-variant bg-m3-surface-lowest px-3 py-2 text-sm"><option value="">Tất cả xã / phường</option>{wards.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></div>}
-      </div>
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Xét duyệt danh sách"
+        countLabel={
+          rows.length > 0
+            ? `${rows.length.toLocaleString("vi-VN")} hồ sơ`
+            : undefined
+        }
+        filters={headerFilters}
+      />
 
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: "Chờ duyệt", value: counts.pending, color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" },
-          { label: "Đã duyệt", value: counts.approved, color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" },
-          { label: "Không đạt", value: counts.rejected, color: "var(--m3-error, #ba1a1a)", bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl p-5 border shadow-sm"
-            style={{ background: s.bg, borderColor: s.color + "33" }}
-          >
-            <p className="text-sm font-medium" style={{ color: s.color }}>
-              {s.label}
-            </p>
-            <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
-              {s.value}
-            </p>
-          </div>
-        ))}
-      </div>
+      <p className="text-[14px] text-m3-on-surface-variant">
+        Chỉ hiển thị hồ sơ được đánh dấu Dự kiến gọi từ mục Hồ sơ công dân
+      </p>
 
-      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
-        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-              size={18}
-            />
-            <input
-              type="text"
-              placeholder="Tìm theo họ tên, số CCCD..."
-              className="w-full pl-10 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="relative">
-            <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-              size={18}
-            />
-            <select
-              className="pl-10 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none bg-m3-surface-lowest"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="pending">Chờ duyệt</option>
-              <option value="approved">Đã duyệt</option>
-              <option value="rejected">Không đạt</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
+      <AdminListShell
+        page={page}
+        totalPages={totalPages}
+        loading={loading}
+        tabs={
+          <AdminStatusTabs
+            tabs={statusTabs}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+        }
+        toolbar={
+          <AdminListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm theo họ tên, số CCCD..."
+            page={page}
+            pageSize={pageSize}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        <AdminTable>
+          <AdminTHead>
+            <th className={ADMIN_TH_CLS}>Họ và Tên</th>
+            <th className={ADMIN_TH_CLS}>Đơn vị</th>
+            <th className={ADMIN_TH_CLS}>Kết quả SK</th>
+            <th className={ADMIN_TH_CLS}>Kết quả CT</th>
+            <th className={ADMIN_TH_CLS}>Trạng thái duyệt</th>
+            <th className={ADMIN_TH_CLS}>Ghi chú</th>
+          </AdminTHead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th className="px-6 py-4">Họ và Tên</th>
-                <th className="px-6 py-4">Đơn vị</th>
-                <th className="px-6 py-4">Kết quả SK</th>
-                <th className="px-6 py-4">Kết quả CT</th>
-                <th className="px-6 py-4">Trạng thái duyệt</th>
-                <th className="px-6 py-4 text-center">Thao tác</th>
+                <td
+                  colSpan={TABLE_COLS}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
+                >
+                  Đang tải...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-m3-outline-variant">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-m3-on-surface-variant">
-                    Đang tải...
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-m3-on-surface-variant">
-                    Chưa có hồ sơ dự kiến gọi. Vào Hồ sơ công dân → tab NVQS → chọn Dự kiến gọi.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row) => {
-                  const s = statusConfig[row.status];
-                  const Icon = s.icon;
-                  return (
-                    <tr key={row.id} className="hover:bg-m3-surface-high/50">
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-m3-on-surface">{row.fullName}</div>
-                        <div className="text-xs text-m3-on-surface-variant font-mono mt-0.5">
-                          {row.cccd}
-                        </div>
-                        <div className="text-xs text-m3-on-surface-variant mt-0.5">
-                          Sinh: {new Date(row.dateOfBirth).toLocaleDateString("vi-VN")}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-m3-on-surface-variant">{row.unitName}</td>
-                      <td className="px-6 py-4 font-medium">{row.healthResult}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-m3-success-container text-m3-on-success-container">
-                          {row.politicalResult}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                          style={{ background: s.bg, color: s.color }}
-                        >
-                          <Icon size={12} />
-                          {s.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-1">
-                          {row.status === "pending" && (
-                            <>
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                onClick={() => void handleAction(row.id, "approve")}
-                                className="p-1.5 text-m3-on-surface-variant hover:text-m3-on-success-container hover:bg-m3-success-container rounded-lg"
-                                title="Duyệt gọi nhập ngũ"
-                              >
-                                <Check size={15} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                onClick={() => void handleAction(row.id, "reject")}
-                                className="p-1.5 text-m3-on-surface-variant hover:text-m3-on-error-container hover:bg-m3-error-container rounded-lg"
-                                title="Không gọi"
-                              >
-                                <X size={15} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={TABLE_COLS}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
+                >
+                  Chưa có hồ sơ dự kiến gọi. Vào Hồ sơ công dân → tab NVQS → chọn
+                  Dự kiến gọi.
+                </td>
+              </tr>
+            ) : (
+              pagedRows.map((row, idx) => {
+                const s = statusConfig[row.status];
+                return (
+                  <tr key={row.id} className={adminRowClass(idx)}>
+                    <td className={ADMIN_TD_CLS}>
+                      <div className="text-[14px] font-bold text-m3-on-surface">
+                        {row.fullName}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[12px] text-m3-on-surface-variant">
+                        {row.cccd}
+                      </div>
+                      <div className="mt-0.5 text-[12px] text-m3-on-surface-variant">
+                        Sinh:{" "}
+                        {new Date(row.dateOfBirth).toLocaleDateString("vi-VN")}
+                      </div>
+                    </td>
+                    <td className={`${ADMIN_TD_CLS} text-m3-on-surface-variant`}>
+                      {row.unitName}
+                    </td>
+                    <td className={`${ADMIN_TD_CLS} font-semibold`}>
+                      {row.healthResult}
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      <AdminPill
+                        label={row.politicalResult}
+                        bg="var(--color-m3-success-container)"
+                        color="var(--color-m3-success)"
+                      />
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      <AdminPill label={s.label} bg={s.bg} color={s.color} />
+                    </td>
+                    <td className={`relative ${ADMIN_TD_CLS}`}>
+                      <span className="block max-w-[180px] truncate text-[13px] text-m3-on-surface-variant">
+                        —
+                      </span>
+                      {row.status === "pending" && (
+                        <AdminHoverActions>
+                          <AdminIconBtn
+                            title="Duyệt gọi nhập ngũ"
+                            tone="green"
+                            disabled={busyId === row.id}
+                            onClick={() => void handleAction(row.id, "approve")}
+                          >
+                            <Check size={15} />
+                          </AdminIconBtn>
+                          <AdminIconBtn
+                            title="Không đạt"
+                            tone="red"
+                            disabled={busyId === row.id}
+                            onClick={() => void handleAction(row.id, "reject")}
+                          >
+                            <X size={15} />
+                          </AdminIconBtn>
+                        </AdminHoverActions>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </AdminTable>
+      </AdminListShell>
     </div>
   );
 }

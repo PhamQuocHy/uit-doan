@@ -7,7 +7,6 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import {
   FcHome,
   FcConferenceCall,
-  FcVoicePresentation,
   FcCameraIdentification,
   FcCalendar,
   FcBullish,
@@ -21,6 +20,8 @@ import {
   FcKey,
   FcClock,
   FcSettings,
+  FcDataSheet,
+  FcLike,
 } from "react-icons/fc";
 import { clsx } from "clsx";
 import type { FunctionalRole } from "@/lib/functional-roles";
@@ -44,13 +45,18 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin", label: "Tổng quan", icon: <FcHome size={ICON} /> },
       { href: "/admin/citizens", label: "Hồ sơ công dân", icon: <FcConferenceCall size={ICON} /> },
+      { href: "/admin/health", label: "Khám sức khỏe", icon: <FcLike size={ICON} /> },
+      { href: "/admin/citizen-archive", label: "Hồ sơ lưu trữ", icon: <FcDataSheet size={ICON} /> },
     ],
   },
   {
     name: "Nhận dạng AI",
     items: [
-      { href: "/admin/ai-voice", label: "Đọc CCCD bằng giọng nói", icon: <FcVoicePresentation size={ICON} /> },
-      { href: "/admin/ai-face", label: "Nhận diện khuôn mặt", icon: <FcCameraIdentification size={ICON} /> },
+      {
+        href: "/admin/ai-face",
+        label: "Nhận diện khuôn mặt và giọng nói",
+        icon: <FcCameraIdentification size={ICON} />,
+      },
     ],
   },
   {
@@ -132,6 +138,14 @@ function filterNavGroups(
         ["Hồ sơ thanh niên", "Tuyển quân", "Quản trị"].includes(g.name),
       )
       .map((g) => {
+        if (g.name === "Hồ sơ thanh niên") {
+          return {
+            ...g,
+            items: g.items.filter((i) =>
+              ["/admin", "/admin/citizens", "/admin/health"].includes(i.href),
+            ),
+          };
+        }
         if (g.name === "Tuyển quân") {
           return {
             ...g,
@@ -255,7 +269,12 @@ export default function Sidebar({
                   {group.items.map((item) => {
                     const isActive =
                       pathname === item.href ||
-                      (item.href !== "/admin" && pathname.startsWith(item.href));
+                      (item.href !== "/admin" &&
+                        item.href !== "/admin/citizens" &&
+                        pathname.startsWith(item.href)) ||
+                      (item.href === "/admin/citizens" &&
+                        (pathname === "/admin/citizens" ||
+                          pathname.startsWith("/admin/citizens/")));
                     return (
                       <Link
                         key={item.href}

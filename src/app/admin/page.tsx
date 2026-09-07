@@ -5,7 +5,6 @@ import {
   FcConferenceCall,
   FcCalendar,
   FcBullish,
-  FcVoicePresentation,
   FcCameraIdentification,
   FcBarChart,
   FcDocument,
@@ -239,7 +238,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
               Cập nhật danh sách công dân →
             </Link>
             <Link
-              href="/admin/ai-voice"
+              href="/admin/ai-face?tab=voice"
               className="rounded-[16px] bg-m3-surface-high px-4 py-4 text-[15px] font-bold text-m3-on-surface hover:bg-m3-primary/8"
             >
               Tra cứu CCCD bằng giọng nói →
@@ -256,8 +255,11 @@ function shortcutsForLevel(level: string) {
     { href: "/admin/citizens", label: "Công dân", icon: FcConferenceCall },
     { href: "/admin/recruitment", label: "Khám tuyển", icon: FcCalendar },
     { href: "/admin/quota", label: "Chỉ tiêu", icon: FcBullish },
-    { href: "/admin/ai-voice", label: "Đọc CCCD", icon: FcVoicePresentation },
-    { href: "/admin/ai-face", label: "Khuôn mặt", icon: FcCameraIdentification },
+    {
+      href: "/admin/ai-face",
+      label: "Khuôn mặt & giọng nói",
+      icon: FcCameraIdentification,
+    },
     { href: "/admin/reports", label: "Báo cáo", icon: FcBarChart },
     { href: "/admin/documents", label: "Công văn", icon: FcDocument },
   ];
@@ -265,9 +267,12 @@ function shortcutsForLevel(level: string) {
   // Xã: ưu tiên thao tác địa phương, ít mục hơn cho dễ dùng
   if (level === "xa") {
     return all.filter((x) =>
-      ["/admin/citizens", "/admin/ai-voice", "/admin/ai-face", "/admin/documents", "/admin/reports"].includes(
-        x.href
-      )
+      [
+        "/admin/citizens",
+        "/admin/ai-face",
+        "/admin/documents",
+        "/admin/reports",
+      ].includes(x.href),
     );
   }
   return all;

@@ -14,6 +14,8 @@ export function getPool(): Pool {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      // DATE trả chuỗi yyyy-MM-dd — tránh Date→toISOString trừ 1 ngày (UTC+7)
+      dateStrings: ["DATE"],
     });
   }
   return pool;

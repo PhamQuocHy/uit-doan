@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { RowDataPacket } from "mysql2";
 import { pingDb, queryExecute, queryRows } from "@/lib/db";
+import { toDateOnlyString } from "@/lib/date-vn";
 
 export type LegalDocType =
   | "luat"
@@ -251,20 +252,14 @@ export async function listLegalDocuments(hierarchyLevel: string): Promise<{
           } catch {
             tags = [];
           }
-          const issued =
-            r.issued_date instanceof Date
-              ? r.issued_date.toISOString().slice(0, 10)
-              : String(r.issued_date || "").slice(0, 10);
+          const issued = toDateOnlyString(r.issued_date) || "";
           return enrich({
             id: r.id,
             code: r.code,
             title: r.title,
             issuer: r.issuer,
             issued_date: issued,
-            effective_date:
-              r.effective_date instanceof Date
-                ? r.effective_date.toISOString().slice(0, 10)
-                : String(r.effective_date || "").slice(0, 10),
+            effective_date: toDateOnlyString(r.effective_date) || "",
             doc_type: r.doc_type,
             priority: r.priority,
             summary: r.summary || "",
@@ -326,10 +321,7 @@ export async function getLegalDocument(id: string, hierarchyLevel: string): Prom
         } catch {
           tags = [];
         }
-        const issued =
-          r.issued_date instanceof Date
-            ? r.issued_date.toISOString().slice(0, 10)
-            : String(r.issued_date || "").slice(0, 10);
+        const issued = toDateOnlyString(r.issued_date) || "";
         const content =
           r.content_text || readLegalDocContent(r.file_name);
         return enrich(
@@ -339,10 +331,7 @@ export async function getLegalDocument(id: string, hierarchyLevel: string): Prom
             title: r.title,
             issuer: r.issuer,
             issued_date: issued,
-            effective_date:
-              r.effective_date instanceof Date
-                ? r.effective_date.toISOString().slice(0, 10)
-                : String(r.effective_date || "").slice(0, 10),
+            effective_date: toDateOnlyString(r.effective_date) || "",
             doc_type: r.doc_type,
             priority: r.priority,
             summary: r.summary || "",

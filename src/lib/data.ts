@@ -26,10 +26,21 @@ export interface User {
   hierarchyLevel: HierarchyLevel;
   unitCode: string; // e.g. 'bo', 'tinh-hn', 'huyen-hk', 'xa-hb'
   functionalRole: FunctionalRole;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'locked';
+  /** Mã PIN đơn vị (tỉnh/huyện/xã) — dùng xác thực khi sửa hồ sơ */
+  editPin?: string | null;
   avatar?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MilitaryDocumentAttachment {
+  id: string;
+  fileName: string;
+  /** URL công khai, vd /uploads/cong-van/... */
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface MilitaryDocument {
@@ -45,6 +56,7 @@ export interface MilitaryDocument {
   urgent: boolean;
   createdBy: string; // userId
   createdAt: string;
+  attachments?: MilitaryDocumentAttachment[];
 }
 
 export interface Quota {
@@ -90,6 +102,8 @@ export interface Citizen {
   phone: string;
   educationLevel: string;
   job: string;
+  /** Tên trường / cơ sở đào tạo — citizen_education.school_name */
+  schoolName?: string;
   healthStatus?: string;
   identificationFeatures?: string;
   issueDate?: string;
@@ -114,6 +128,10 @@ export interface Citizen {
   militaryStatusReason?: string;
   /** Khóa chỉnh sửa trạng thái NVQS trực tiếp sau khi đã lưu — DB: military_status_locked */
   militaryStatusLocked?: boolean;
+  /** DB: archived_at — đã duyệt chuyển hồ sơ lưu trữ */
+  archivedAt?: string | null;
+  /** Ảnh 3x4 từ chip / upload — citizen_identities.avatar_url */
+  avatar?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -306,10 +324,22 @@ export function getChildUnits(parentCode: string): HierarchyUnit[] {
 export const unitEditPins: Record<string, string> = {
   '92': '123456',
   '92-31756': '654321',
+  '92-31201': '654321',
 };
 
 export function hierarchyNeedsEditPin(level: HierarchyLevel | string): boolean {
   return level === 'tinh' || level === 'huyen' || level === 'xa';
+}
+
+export function getUnitEditPin(unitCode: string): string | null {
+  const pin = unitEditPins[unitCode];
+  return pin ? pin : null;
+}
+
+export function setUnitEditPin(unitCode: string, pin: string): void {
+  const trimmed = pin.trim();
+  if (!unitCode || unitCode === 'bo' || !trimmed) return;
+  unitEditPins[unitCode] = trimmed;
 }
 
 export function verifyUnitEditPin(unitCode: string, pin: string): boolean {
@@ -491,7 +521,7 @@ const users: User[] = [
     id: 'u-yte-ct',
     username: 'admin_yte',
     password: 'scrypt$6f367a1f3e8752918c43bd46ba2b4d85$7083c4bd77ab61d5cd92b231ecabee0b97506691af34ab07d5751ef5273c0b49f31e1bcabc2af7b762045b119647b446e8f5e5cc3f17a4ea2d37d040ee6a23e6',
-    name: 'NV Y tế — Thành phố Cần Thơ',
+    name: 'Cán bộ y tế — Thành phố Cần Thơ',
     email: 'yte.cantho@ymsa.vn',
     phone: '0900000005',
     role: 'user',
@@ -1103,7 +1133,10 @@ export const db = {
       const limit = query?.limit || 10;
       const start = (page - 1) * limit;
       return {
-        data: list.slice(start, start + limit).map(({ password: _, ...u }) => u),
+        data: list.slice(start, start + limit).map(({ password: _, ...u }) => ({
+          ...u,
+          editPin: getUnitEditPin(u.unitCode),
+        })),
         total,
         page,
         limit,
@@ -1114,22 +1147,27 @@ export const db = {
       const u = users.find((u) => u.id === id);
       if (!u) return null;
       const { password: _, ...rest } = u;
-      return rest;
+      return { ...rest, editPin: getUnitEditPin(u.unitCode) };
     },
     findByUsername: (username: string) => users.find((u) => u.username === username) || null,
     create: (data: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
       const user: User = { id: generateId(), ...data, createdAt: now, updatedAt: now };
       users.push(user);
+      if (data.editPin) setUnitEditPin(user.unitCode, data.editPin);
       const { password: _, ...rest } = user;
-      return rest;
+      return { ...rest, editPin: getUnitEditPin(user.unitCode) };
     },
     update: (id: string, data: Partial<Omit<User, 'id' | 'createdAt'>>) => {
       const idx = users.findIndex((u) => u.id === id);
       if (idx === -1) return null;
-      users[idx] = { ...users[idx], ...data, updatedAt: new Date().toISOString() };
-      const { password: _, ...rest } = users[idx];
-      return rest;
+      const { editPin, ...rest } = data;
+      users[idx] = { ...users[idx], ...rest, updatedAt: new Date().toISOString() };
+      if (typeof editPin === 'string') {
+        setUnitEditPin(users[idx].unitCode, editPin);
+      }
+      const { password: _, ...safe } = users[idx];
+      return { ...safe, editPin: getUnitEditPin(users[idx].unitCode) };
     },
     delete: (id: string) => {
       const idx = users.findIndex((u) => u.id === id);
@@ -1204,7 +1242,10 @@ export const db = {
         );
       }
       if (query?.militaryStatus) list = list.filter((c) => c.militaryStatus === query.militaryStatus);
-      if (query?.campaignId) list = list.filter((c) => c.campaignId === query.campaignId);
+      if (query?.campaignId)
+        list = list.filter(
+          (c) => c.campaignId === query.campaignId || !c.campaignId,
+        );
       if (query?.unitCodes && query.unitCodes.length > 0) {
         const allowed = new Set(query.unitCodes);
         list = list.filter((c) => c.unitCode && allowed.has(c.unitCode));
@@ -1414,6 +1455,7 @@ export const db = {
       const doc: MilitaryDocument = {
         id: generateId(),
         ...data,
+        attachments: data.attachments || [],
         createdAt: new Date().toISOString(),
       };
       militaryDocuments.push(doc);

@@ -8,6 +8,7 @@ import {
   type ApprovalRow,
 } from "@/lib/enlistment-approval";
 import type { RowDataPacket } from "mysql2";
+import { toDateOnlyString } from "@/lib/date-vn";
 
 function scopeWhere(level: string, unitCode: string, requestedUnit?: string): { sql: string; params: string[] } {
   const selectedUnit = requestedUnit || unitCode;
@@ -45,26 +46,47 @@ export async function GET(request: NextRequest) {
   }
 
   const scope = scopeWhere(session.hierarchyLevel, session.unitCode, requestedUnit || undefined);
-  const where: string[] = [
+  const baseWhere: string[] = [
     scope.sql,
-    "c.call_intent = 'du_kien_goi'",
+    // Dự kiến gọi đang xét + hồ sơ đã từ chối (kể cả bản cũ call_intent=khong_goi)
+    `(c.call_intent = 'du_kien_goi' OR c.approval_status = 'rejected')`,
     "c.approval_status IN ('pending','approved','rejected')",
   ];
-  const params = [...scope.params];
+  const baseParams = [...scope.params];
   if (campaignId) {
-    where.push("c.campaign_id = ?");
-    params.push(campaignId);
+    // Hồ sơ chưa gán đợt vẫn hiện khi đang chọn đợt (để gắn/duyệt vào đợt đó)
+    baseWhere.push("(c.campaign_id = ? OR c.campaign_id IS NULL)");
+    baseParams.push(campaignId);
+  }
+  if (search) {
+    baseWhere.push("(c.full_name LIKE ? OR c.cccd LIKE ?)");
+    const s = `%${search}%`;
+    baseParams.push(s, s);
   }
 
+  // Đếm tab: luôn theo toàn bộ (không theo statusFilter) — tránh chọn “Chờ duyệt” làm “Đã duyệt” về 0
+  const countRows = await queryRows<
+    (RowDataPacket & { approval_status: string; n: number })[]
+  >(
+    `SELECT c.approval_status, COUNT(*) AS n
+     FROM citizens c
+     WHERE ${baseWhere.join(" AND ")}
+     GROUP BY c.approval_status`,
+    baseParams,
+  );
+  const counts = { pending: 0, approved: 0, rejected: 0 };
+  for (const r of countRows) {
+    const n = Number(r.n) || 0;
+    if (r.approval_status === "pending") counts.pending = n;
+    else if (r.approval_status === "approved") counts.approved = n;
+    else if (r.approval_status === "rejected") counts.rejected = n;
+  }
+
+  const where = [...baseWhere];
+  const params = [...baseParams];
   if (statusFilter === "pending" || statusFilter === "approved" || statusFilter === "rejected") {
     where.push("c.approval_status = ?");
     params.push(statusFilter);
-  }
-
-  if (search) {
-    where.push("(c.full_name LIKE ? OR c.cccd LIKE ?)");
-    const s = `%${search}%`;
-    params.push(s, s);
   }
 
   const rows = await queryRows<
@@ -79,7 +101,7 @@ export async function GET(request: NextRequest) {
       campaign_id: string | null;
     })[]
   >(
-        `SELECT c.id, c.full_name, c.cccd, c.date_of_birth, c.unit_code,
+    `SELECT c.id, c.full_name, c.cccd, c.date_of_birth, c.unit_code,
           c.health_grade, c.approval_status, c.campaign_id
      FROM citizens c
      WHERE ${where.join(" AND ")}
@@ -94,10 +116,7 @@ export async function GET(request: NextRequest) {
     id: r.id,
     fullName: r.full_name,
     cccd: r.cccd,
-    dateOfBirth:
-      r.date_of_birth instanceof Date
-        ? r.date_of_birth.toISOString().slice(0, 10)
-        : String(r.date_of_birth).slice(0, 10),
+    dateOfBirth: toDateOnlyString(r.date_of_birth) || "",
     unitName: unitName(r.unit_code),
     healthResult: r.health_grade != null ? `Loại ${r.health_grade}` : "—",
     politicalResult: "Đạt",
@@ -105,12 +124,6 @@ export async function GET(request: NextRequest) {
     callIntent: "du_kien_goi",
     campaignId: r.campaign_id || undefined,
   }));
-
-  const counts = {
-    pending: data.filter((d) => d.status === "pending").length,
-    approved: data.filter((d) => d.status === "approved").length,
-    rejected: data.filter((d) => d.status === "rejected").length,
-  };
 
   return NextResponse.json({ data, counts });
 }
@@ -142,9 +155,10 @@ export async function POST(request: NextRequest) {
     `UPDATE citizens c SET
       approval_status = ?,
       campaign_id = ?,
-       call_intent = ?,
-       military_status = ?,
-       updated_at = NOW()
+      call_intent = ?,
+      military_status = ?,
+      military_status_locked = ?,
+      updated_at = NOW()
      WHERE c.id = ?
        AND ${scope.sql}
        AND c.call_intent = 'du_kien_goi'
@@ -154,6 +168,7 @@ export async function POST(request: NextRequest) {
       campaignId || null,
       resolved.callIntent,
       resolved.militaryStatus,
+      resolved.militaryStatusLocked ? 1 : 0,
       id,
       ...scope.params,
     ],
@@ -171,7 +186,7 @@ export async function POST(request: NextRequest) {
     action,
     message:
       action === "approve"
-        ? "Đã duyệt gọi nhập ngũ"
-        : "Đã từ chối — chuyển sang không gọi",
+        ? "Đã duyệt gọi nhập ngũ — hồ sơ công dân đã khóa không sửa được"
+        : "Đã đánh Không đạt — đã cập nhật hồ sơ công dân",
   });
 }

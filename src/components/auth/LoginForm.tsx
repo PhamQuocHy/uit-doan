@@ -33,6 +33,43 @@ const PORTAL_ICONS: Record<LoginPortal, typeof Building2> = {
   can_bo_y_te: Stethoscope,
 };
 
+const LOGIN_REMEMBER_KEY = "nvqs.login.portal-remember";
+const LOGIN_REMEMBER_TTL_MS = 24 * 60 * 60 * 1000;
+
+type RememberedLogin = {
+  loginPortal: LoginPortal;
+  localLevel: "tinh" | "xa";
+  tinhCode: string;
+  xaCode: string;
+  donviCode: string;
+  step: 2 | 3;
+  savedAt: number;
+};
+
+function loadRememberedLogin(): RememberedLogin | null {
+  try {
+    const raw = localStorage.getItem(LOGIN_REMEMBER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RememberedLogin;
+    if (!parsed?.loginPortal || !parsed?.savedAt) return null;
+    if (Date.now() - parsed.savedAt > LOGIN_REMEMBER_TTL_MS) {
+      localStorage.removeItem(LOGIN_REMEMBER_KEY);
+      return null;
+    }
+    if (!LOGIN_PORTAL_OPTIONS.some((o) => o.value === parsed.loginPortal)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveRememberedLogin(data: Omit<RememberedLogin, "savedAt">) {
+  const payload: RememberedLogin = { ...data, savedAt: Date.now() };
+  localStorage.setItem(LOGIN_REMEMBER_KEY, JSON.stringify(payload));
+}
+
 export default function LoginForm() {
   const router = useRouter();
 
@@ -42,6 +79,7 @@ export default function LoginForm() {
   const [tinhCode, setTinhCode] = useState("");
   const [xaCode, setXaCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
+  const [restoredHint, setRestoredHint] = useState("");
 
   const [units, setUnits] = useState<any[]>([]);
 
@@ -56,16 +94,39 @@ export default function LoginForm() {
       .then((res) => res.json())
       .then((data) => setUnits(data))
       .catch(console.error);
+
+    const remembered = loadRememberedLogin();
+    if (!remembered) return;
+
+    setLoginPortal(remembered.loginPortal);
+    setLocalLevel(remembered.localLevel || "tinh");
+    setTinhCode(remembered.tinhCode || "");
+    setXaCode(remembered.xaCode || "");
+    setDonviCode(remembered.donviCode || "");
+    setStep(remembered.step);
+    const portalLabel =
+      LOGIN_PORTAL_OPTIONS.find((o) => o.value === remembered.loginPortal)?.label ||
+      remembered.loginPortal;
+    setRestoredHint(`Đã nhớ lựa chọn: ${portalLabel} (trong 24 giờ)`);
   }, []);
 
   const handlePortalStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setRestoredHint("");
     if (!loginPortal) {
       setError("Vui lòng chọn loại đăng nhập");
       return;
     }
     if (loginPortal === "cap_bo") {
+      saveRememberedLogin({
+        loginPortal,
+        localLevel: "tinh",
+        tinhCode: "",
+        xaCode: "",
+        donviCode: "",
+        step: 3,
+      });
       setStep(3);
       return;
     }
@@ -73,12 +134,21 @@ export default function LoginForm() {
     setXaCode("");
     setDonviCode("");
     setLocalLevel("tinh");
+    saveRememberedLogin({
+      loginPortal,
+      localLevel: "tinh",
+      tinhCode: "",
+      xaCode: "",
+      donviCode: "",
+      step: 2,
+    });
     setStep(2);
   };
 
   const handleUnitStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setRestoredHint("");
     if (!loginPortal) return;
 
     if (loginPortal === "don_vi_nhan_quan" && !donviCode) {
@@ -95,6 +165,14 @@ export default function LoginForm() {
         return;
       }
     }
+    saveRememberedLogin({
+      loginPortal,
+      localLevel,
+      tinhCode,
+      xaCode,
+      donviCode,
+      step: 3,
+    });
     setStep(3);
   };
 
@@ -256,12 +334,24 @@ export default function LoginForm() {
               </div>
             )}
 
+            {!error && restoredHint && (
+              <div
+                className="mb-4 text-center text-sm px-3 py-2 rounded-xl"
+                style={{
+                  background: "color-mix(in srgb, var(--m3-primary, #1a73e8) 8%, transparent)",
+                  color: "var(--m3-primary, #1a73e8)",
+                }}
+              >
+                {restoredHint}
+              </div>
+            )}
+
             {step === 1 ? (
               <form
                 onSubmit={handlePortalStep}
                 className="animate-in fade-in duration-300"
               >
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                   {LOGIN_PORTAL_OPTIONS.map((opt) => {
                     const selected = loginPortal === opt.value;
                     const Icon = PORTAL_ICONS[opt.value];
@@ -270,7 +360,7 @@ export default function LoginForm() {
                         key={opt.value}
                         type="button"
                         onClick={() => setLoginPortal(opt.value)}
-                        className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border px-2 py-4 text-center transition-all sm:min-h-[168px] sm:px-3"
+                        className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border px-2.5 py-5 text-center transition-all sm:min-h-[220px] sm:px-3.5"
                         style={{
                           borderColor: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-outline-variant, #e3e8ee)",
                           background: selected
@@ -282,7 +372,7 @@ export default function LoginForm() {
                         }}
                       >
                         <div
-                          className="mb-2.5 flex h-11 w-11 items-center justify-center rounded-full sm:mb-3 sm:h-12 sm:w-12"
+                          className="mb-3 flex h-12 w-12 items-center justify-center rounded-full sm:mb-3.5 sm:h-14 sm:w-14"
                           style={{
                             background: selected
                               ? "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)"
@@ -290,15 +380,15 @@ export default function LoginForm() {
                             color: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-on-surface-variant, #475569)",
                           }}
                         >
-                          <Icon size={22} strokeWidth={1.75} />
+                          <Icon size={28} strokeWidth={1.75} />
                         </div>
                         <p
-                          className="text-[13px] font-semibold leading-tight sm:text-[14px]"
+                          className="text-[16px] font-semibold leading-tight sm:text-[18px]"
                           style={{ color: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-on-surface, #1b1d20)" }}
                         >
                           {opt.label}
                         </p>
-                        <p className="mt-1.5 hidden text-[10px] leading-snug text-m3-on-surface-variant sm:block sm:text-[11px]">
+                        <p className="mt-2 text-[14px] leading-snug text-m3-on-surface-variant sm:text-[15px]">
                           {opt.description}
                         </p>
                       </button>

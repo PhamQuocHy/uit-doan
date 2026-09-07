@@ -1,20 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  ClipboardList,
   CheckCircle2,
   AlertTriangle,
   User2,
-  Search,
-  Filter,
   X,
   Send,
   Shield,
   Clock,
-  Plus,
-  Users,
 } from "lucide-react";
+import {
+  AdminListHeader,
+  AdminListToolbar,
+  AdminListShell,
+  AdminTable,
+  AdminTHead,
+  ADMIN_TH_CLS,
+  ADMIN_TD_CLS,
+  adminRowClass,
+  AdminHoverActions,
+  AdminIconBtn,
+  AdminPill,
+  AdminStatusTabs,
+  AdminPrimaryBtn,
+} from "@/components/admin/list-ui";
+
+const STAT_CARD_CLS =
+  "rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
 
 interface Session {
   hierarchyLevel: string;
@@ -257,17 +270,40 @@ const mockUnqualifiedSoldiers = [
   },
 ];
 
+const BO_STATUS_TABS = [
+  { value: "", label: "Tất cả" },
+  { value: "confirmed", label: "Đã nhận đủ" },
+  { value: "pending", label: "Chờ xác nhận" },
+  { value: "supplement_needed", label: "Cần bổ sung" },
+] as const;
+
 function BoView() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [notePopover, setNotePopover] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const filtered = boMockUnits.filter((u) => {
-    const matchSearch =
-      !search || u.name.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !statusFilter || u.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(
+    () =>
+      boMockUnits.filter((u) => {
+        const matchSearch =
+          !search || u.name.toLowerCase().includes(search.toLowerCase());
+        const matchStatus = !statusFilter || u.status === statusFilter;
+        return matchSearch && matchStatus;
+      }),
+    [search, statusFilter],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
 
   const confirmedCount = boMockUnits.filter(
     (u) => u.status === "confirmed",
@@ -301,47 +337,65 @@ function BoView() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
-          Đơn vị nhận quân
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
-          Theo dõi tình trạng nhận quân của tất cả đơn vị
-        </p>
-      </div>
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Đơn vị nhận quân"
+        countLabel={`${boMockUnits.length} đơn vị`}
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <p className="text-[14px] text-m3-on-surface-variant">
+        Theo dõi tình trạng nhận quân của tất cả đơn vị
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { label: "Tổng đơn vị", value: boMockUnits.length, color: "var(--m3-on-surface, #1b1d20)" },
-          { label: "Đã nhận đủ quân", value: confirmedCount, color: "var(--color-m3-success)" },
-          { label: "Chờ xác nhận", value: pendingCount, color: "var(--color-m3-warning)" },
-          { label: "Cần bổ sung", value: supplementCount, color: "var(--m3-error, #ba1a1a)" },
+          {
+            label: "Tổng đơn vị",
+            value: boMockUnits.length,
+            color: "var(--m3-on-surface, #1b1d20)",
+          },
+          {
+            label: "Đã nhận đủ quân",
+            value: confirmedCount,
+            color: "var(--color-m3-success)",
+          },
+          {
+            label: "Chờ xác nhận",
+            value: pendingCount,
+            color: "var(--color-m3-warning)",
+          },
+          {
+            label: "Cần bổ sung",
+            value: supplementCount,
+            color: "var(--m3-error, #ba1a1a)",
+          },
         ].map((s) => (
-          <div
-            key={s.label}
-            className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
-          >
-            <p className="text-xs text-m3-on-surface-variant">{s.label}</p>
-            <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>
+          <div key={s.label} className={STAT_CARD_CLS}>
+            <p className="text-[12px] text-m3-on-surface-variant">{s.label}</p>
+            <p
+              className="mt-1 text-[24px] font-bold"
+              style={{ color: s.color }}
+            >
               {s.value}
             </p>
           </div>
         ))}
       </div>
-      {/* Progress */}
-      <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-m3-on-surface-variant">
+
+      <div className={STAT_CARD_CLS}>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[13px] font-medium text-m3-on-surface-variant">
             Tổng tiến độ nhận quân
           </p>
-          <span className="text-sm font-bold" style={{ color: "var(--m3-primary, #1a73e8)" }}>
+          <span
+            className="text-[13px] font-bold"
+            style={{ color: "var(--m3-primary, #1a73e8)" }}
+          >
             {totalReceived}/{totalQuota} (
             {Math.round((totalReceived / totalQuota) * 100)}%)
           </span>
         </div>
-        <div className="h-3 bg-m3-surface-container rounded-full overflow-hidden">
+        <div className="h-3 overflow-hidden rounded-full bg-m3-surface-container">
           <div
             className="h-full rounded-full"
             style={{
@@ -352,87 +406,101 @@ function BoView() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
-        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-              size={16}
-            />
-            <input
-              type="text"
-              placeholder="Tìm đơn vị..."
-              className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <select
-            className="px-3 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary bg-m3-surface-lowest"
+      <AdminListShell
+        page={page}
+        totalPages={totalPages}
+        tabs={
+          <AdminStatusTabs
+            tabs={[...BO_STATUS_TABS]}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="">Tất cả trạng thái</option>
-            <option value="confirmed">Đã nhận đủ</option>
-            <option value="pending">Chờ xác nhận</option>
-            <option value="supplement_needed">Cần bổ sung</option>
-          </select>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
+            onChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+          />
+        }
+        toolbar={
+          <AdminListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm đơn vị..."
+            page={page}
+            pageSize={pageSize}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        <AdminTable minWidth="min-w-[900px]">
+          <AdminTHead>
+            <th className={ADMIN_TH_CLS}>Đơn vị nhận quân</th>
+            <th className={`${ADMIN_TH_CLS} text-center`}>Chỉ tiêu</th>
+            <th className={`${ADMIN_TH_CLS} text-center`}>Đã nhận</th>
+            <th className={ADMIN_TH_CLS}>Tiến độ</th>
+            <th className={ADMIN_TH_CLS}>Trạng thái</th>
+            <th className={ADMIN_TH_CLS}>Cập nhật</th>
+          </AdminTHead>
+          <tbody>
+            {paginated.length === 0 ? (
               <tr>
-                <th className="px-6 py-4">Đơn vị nhận quân</th>
-                <th className="px-6 py-4 text-center">Chỉ tiêu</th>
-                <th className="px-6 py-4 text-center">Đã nhận</th>
-                <th className="px-6 py-4">Tiến độ</th>
-                <th className="px-6 py-4">Trạng thái</th>
-                <th className="px-6 py-4">Cập nhật</th>
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
+                >
+                  Không có kết quả
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-m3-outline-variant">
-              {filtered.map((u) => {
+            ) : (
+              paginated.map((u, idx) => {
                 const pct = Math.round((u.received / u.quota) * 100);
                 const sc = statusConf[u.status];
                 return (
                   <tr
                     key={u.id}
-                    className={`transition-colors ${
+                    className={adminRowClass(
+                      idx,
                       u.status === "supplement_needed"
-                        ? "bg-m3-error-container/50 hover:bg-m3-error-container/50"
-                        : "hover:bg-m3-surface-high/50"
-                    }`}
+                        ? "bg-red-50/60 hover:bg-red-50/80"
+                        : "",
+                    )}
                   >
-                    <td className="px-6 py-4">
+                    <td className={ADMIN_TD_CLS}>
                       <div className="flex items-center gap-2">
                         <div className="relative shrink-0">
                           {u.status === "supplement_needed" ? (
                             <button
+                              type="button"
                               onClick={() =>
                                 setNotePopover(
                                   notePopover === u.id ? null : u.id,
                                 )
                               }
-                              className="w-8 h-8 rounded-full flex items-center justify-center bg-m3-error-container hover:bg-m3-error-container ring-2 ring-m3-error transition-colors"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-m3-error-container ring-2 ring-m3-error transition-colors hover:bg-m3-error-container"
                               title="Xem lý do cần bổ sung"
                             >
                               <Shield size={13} className="text-m3-error" />
-                              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-m3-error-container text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-m3-error-container text-[10px] font-bold leading-none text-white">
                                 !
                               </span>
                             </button>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-m3-surface-high flex items-center justify-center">
-                              <Shield size={13} style={{ color: "var(--m3-primary, #1a73e8)" }} />
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-m3-surface-high">
+                              <Shield
+                                size={13}
+                                style={{ color: "var(--m3-primary, #1a73e8)" }}
+                              />
                             </div>
                           )}
                           {notePopover === u.id && (
-                            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                              <div className="bg-m3-surface-lowest rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+                              <div className="animate-in fade-in zoom-in w-full max-w-4xl overflow-hidden rounded-3xl bg-m3-surface-lowest shadow-2xl duration-200">
                                 <div className="p-6">
-                                  <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-12 h-12 rounded-2xl bg-m3-error-container flex items-center justify-center shrink-0">
+                                  <div className="mb-6 flex items-center gap-3">
+                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-m3-error-container">
                                       <AlertTriangle
                                         size={24}
                                         className="text-m3-error"
@@ -447,22 +515,23 @@ function BoView() {
                                       </p>
                                     </div>
                                     <button
+                                      type="button"
                                       onClick={() => setNotePopover(null)}
-                                      className="ml-auto p-2 hover:bg-m3-surface-container rounded-xl transition-colors text-m3-on-surface-variant"
+                                      className="ml-auto rounded-xl p-2 text-m3-on-surface-variant transition-colors hover:bg-m3-surface-container"
                                     >
                                       <X size={20} />
                                     </button>
                                   </div>
 
-                                  <div className="bg-m3-error-container/50 border border-m3-error rounded-2xl p-4 mb-6">
-                                    <p className="text-sm text-m3-on-surface-variant leading-relaxed whitespace-pre-wrap">
+                                  <div className="mb-6 rounded-2xl border border-m3-error bg-m3-error-container/50 p-4">
+                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-m3-on-surface-variant">
                                       {u.note}
                                     </p>
                                   </div>
 
-                                  <div className="border border-m3-outline-variant rounded-xl overflow-hidden mb-6">
+                                  <div className="mb-6 overflow-hidden rounded-xl border border-m3-outline-variant">
                                     <table className="w-full text-left text-sm">
-                                      <thead className="bg-m3-surface-high font-medium text-m3-on-surface-variant border-b border-m3-outline-variant">
+                                      <thead className="border-b border-m3-outline-variant bg-m3-surface-high font-medium text-m3-on-surface-variant">
                                         <tr>
                                           <th className="px-4 py-3">
                                             Quân nhân
@@ -492,14 +561,14 @@ function BoView() {
                                                 <div className="font-medium text-m3-on-surface">
                                                   {soldier.fullName}
                                                 </div>
-                                                <div className="text-xs text-m3-on-surface-variant font-mono mt-0.5">
+                                                <div className="mt-0.5 font-mono text-xs text-m3-on-surface-variant">
                                                   {soldier.cccd}
                                                 </div>
                                               </td>
                                               <td className="px-4 py-3 text-m3-on-surface-variant">
                                                 {soldier.origin}
                                               </td>
-                                              <td className="px-4 py-3 text-m3-on-error-container font-medium italic">
+                                              <td className="px-4 py-3 font-medium italic text-m3-on-error-container">
                                                 {soldier.reason}
                                               </td>
                                               <td className="px-4 py-3 text-center text-m3-on-surface-variant">
@@ -526,8 +595,9 @@ function BoView() {
                                   </div>
 
                                   <button
+                                    type="button"
                                     onClick={() => setNotePopover(null)}
-                                    className="w-full py-3 bg-m3-surface-highest hover:bg-black text-white rounded-2xl text-sm font-semibold transition-all shadow-lg active:scale-95"
+                                    className="w-full rounded-2xl bg-m3-surface-highest py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-black active:scale-95"
                                   >
                                     Đã hiểu
                                   </button>
@@ -541,59 +611,62 @@ function BoView() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center font-semibold text-m3-on-surface-variant">
+                    <td
+                      className={`${ADMIN_TD_CLS} text-center font-semibold text-m3-on-surface-variant`}
+                    >
                       {u.quota}
                     </td>
-                    <td className="px-6 py-4 text-center font-semibold text-m3-on-surface">
+                    <td
+                      className={`${ADMIN_TD_CLS} text-center font-semibold text-m3-on-surface`}
+                    >
                       {u.received}
                     </td>
-                    <td className="px-6 py-4 min-w-[130px]">
+                    <td className={`${ADMIN_TD_CLS} min-w-[130px]`}>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-m3-surface-container rounded-full overflow-hidden">
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-m3-surface-container">
                           <div
                             className="h-full rounded-full"
                             style={{
                               width: `${Math.min(pct, 100)}%`,
-                              background: pct >= 100 ? "var(--color-m3-success)" : "var(--m3-primary, #1a73e8)",
+                              background:
+                                pct >= 100
+                                  ? "var(--color-m3-success)"
+                                  : "var(--m3-primary, #1a73e8)",
                             }}
                           />
                         </div>
-                        <span className="text-xs text-m3-on-surface-variant w-7">
+                        <span className="w-7 text-xs text-m3-on-surface-variant">
                           {pct}%
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{ background: sc.bg, color: sc.color }}
-                      >
-                        <sc.Icon size={11} /> {sc.label}
-                      </span>
+                    <td className={ADMIN_TD_CLS}>
+                      <AdminPill
+                        label={sc.label}
+                        bg={sc.bg}
+                        color={sc.color}
+                      />
                     </td>
-                    <td className="px-6 py-4 text-xs text-m3-on-surface-variant">
+                    <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>
                       {new Date(u.lastUpdate).toLocaleDateString("vi-VN")}
                     </td>
                   </tr>
                 );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-8 text-center text-m3-on-surface-variant"
-                  >
-                    Không có kết quả
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              })
+            )}
+          </tbody>
+        </AdminTable>
+      </AdminListShell>
     </div>
   );
 }
+
+const ARRIVAL_TABS = [
+  { value: "", label: "Tất cả" },
+  { value: "arrived", label: "Đã trình diện" },
+  { value: "pending", label: "Chưa lên" },
+  { value: "absent", label: "Vắng mặt" },
+] as const;
 
 // ── DONVI VIEW: soldier detail ──────────────────────────────────────────────
 function DonViView() {
@@ -606,15 +679,31 @@ function DonViView() {
   );
   const [reportNote, setReportNote] = useState("");
   const [confirmAll, setConfirmAll] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const filtered = soldiers.filter((s) => {
-    const matchSearch =
-      !search ||
-      s.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      s.cccd.includes(search);
-    const matchArrival = !arrivalFilter || s.arrivalStatus === arrivalFilter;
-    return matchSearch && matchArrival;
-  });
+  const filtered = useMemo(
+    () =>
+      soldiers.filter((s) => {
+        const matchSearch =
+          !search ||
+          s.fullName.toLowerCase().includes(search.toLowerCase()) ||
+          s.cccd.includes(search);
+        const matchArrival = !arrivalFilter || s.arrivalStatus === arrivalFilter;
+        return matchSearch && matchArrival;
+      }),
+    [soldiers, search, arrivalFilter],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, arrivalFilter, pageSize]);
 
   const arrivedCount = soldiers.filter(
     (s) => s.arrivalStatus === "arrived",
@@ -652,62 +741,77 @@ function DonViView() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
-            Đơn vị nhận quân
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
-            Xác nhận danh sách nhận quân và báo cáo tình trạng sức khỏe
-          </p>
-        </div>
-        {!confirmAll ? (
-          <button
-            onClick={handleConfirmAll}
-            className="flex items-center gap-2 px-4 py-2 bg-m3-success-container hover:bg-m3-success-container text-white rounded-xl text-sm font-medium transition-colors"
-          >
-            <CheckCircle2 size={16} /> Xác nhận đủ quân
-          </button>
-        ) : (
-          <span className="flex items-center gap-2 px-4 py-2 bg-m3-success-container text-m3-on-success-container border border-m3-success rounded-xl text-sm font-medium">
-            <CheckCircle2 size={16} /> Đã xác nhận đủ quân
-          </span>
-        )}
-      </div>
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Đơn vị nhận quân"
+        countLabel={`${soldiers.length} quân nhân`}
+        actions={
+          !confirmAll ? (
+            <AdminPrimaryBtn onClick={handleConfirmAll}>
+              <CheckCircle2 size={16} />
+              Xác nhận đủ quân
+            </AdminPrimaryBtn>
+          ) : (
+            <span className="inline-flex h-10 items-center gap-2 rounded-full border border-m3-success bg-m3-success-container px-4 text-[13px] font-semibold text-m3-on-success-container">
+              <CheckCircle2 size={16} /> Đã xác nhận đủ quân
+            </span>
+          )
+        }
+      />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <p className="text-[14px] text-m3-on-surface-variant">
+        Xác nhận danh sách nhận quân và báo cáo tình trạng sức khỏe
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { label: "Tổng quân nhân", value: soldiers.length, color: "var(--m3-on-surface, #1b1d20)" },
-          { label: "Đã trình diện", value: arrivedCount, color: "var(--color-m3-success)" },
-          { label: "Báo cáo đủ SK", value: confirmedOk, color: "var(--m3-primary, #1a73e8)" },
+          {
+            label: "Tổng quân nhân",
+            value: soldiers.length,
+            color: "var(--m3-on-surface, #1b1d20)",
+          },
+          {
+            label: "Đã trình diện",
+            value: arrivedCount,
+            color: "var(--color-m3-success)",
+          },
+          {
+            label: "Báo cáo đủ SK",
+            value: confirmedOk,
+            color: "var(--m3-primary, #1a73e8)",
+          },
           {
             label: "SK không đảm bảo",
             value: reportedIssues,
             color: "var(--m3-error, #ba1a1a)",
           },
         ].map((s) => (
-          <div
-            key={s.label}
-            className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm"
-          >
-            <p className="text-xs text-m3-on-surface-variant">{s.label}</p>
-            <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
+          <div key={s.label} className={STAT_CARD_CLS}>
+            <p className="text-[12px] text-m3-on-surface-variant">{s.label}</p>
+            <p
+              className="mt-1 text-[28px] font-bold"
+              style={{ color: s.color }}
+            >
               {s.value}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="bg-m3-surface-lowest rounded-2xl p-5 border border-m3-outline-variant shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-m3-on-surface-variant">Tiến độ nhận quân</p>
-          <span className="text-sm font-bold" style={{ color: "var(--m3-primary, #1a73e8)" }}>
+      <div className={STAT_CARD_CLS}>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[13px] font-medium text-m3-on-surface-variant">
+            Tiến độ nhận quân
+          </p>
+          <span
+            className="text-[13px] font-bold"
+            style={{ color: "var(--m3-primary, #1a73e8)" }}
+          >
             {arrivedCount}/{soldiers.length} (
             {Math.round((arrivedCount / soldiers.length) * 100)}%)
           </span>
         </div>
-        <div className="h-3 bg-m3-surface-container rounded-full overflow-hidden">
+        <div className="h-3 overflow-hidden rounded-full bg-m3-surface-container">
           <div
             className="h-full rounded-full"
             style={{
@@ -718,161 +822,161 @@ function DonViView() {
         </div>
       </div>
 
-      <div className="bg-m3-surface-lowest rounded-2xl shadow-sm border border-m3-outline-variant overflow-hidden">
-        <div className="p-4 border-b border-m3-outline-variant flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-              size={16}
-            />
-            <input
-              type="text"
-              placeholder="Tìm họ tên, CCCD..."
-              className="w-full pl-9 pr-4 py-2 border border-m3-outline-variant rounded-xl text-sm focus:outline-none focus:border-m3-primary"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="relative">
-            <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-m3-on-surface-variant"
-              size={15}
-            />
-            <select
-              className="pl-9 pr-8 py-2 border border-m3-outline-variant rounded-xl text-sm appearance-none focus:outline-none focus:border-m3-primary bg-m3-surface-lowest"
-              value={arrivalFilter}
-              onChange={(e) => setArrivalFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="arrived">Đã trình diện</option>
-              <option value="pending">Chưa lên</option>
-              <option value="absent">Vắng mặt</option>
-            </select>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-m3-surface-high/50 text-m3-on-surface-variant font-medium border-b border-m3-outline-variant">
+      <AdminListShell
+        page={page}
+        totalPages={totalPages}
+        tabs={
+          <AdminStatusTabs
+            tabs={[...ARRIVAL_TABS]}
+            value={arrivalFilter}
+            onChange={(v) => {
+              setArrivalFilter(v);
+              setPage(1);
+            }}
+          />
+        }
+        toolbar={
+          <AdminListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm họ tên, CCCD..."
+            page={page}
+            pageSize={pageSize}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        <AdminTable minWidth="min-w-[960px]">
+          <AdminTHead>
+            <th className={ADMIN_TH_CLS}>Quân nhân</th>
+            <th className={ADMIN_TH_CLS}>Quê quán</th>
+            <th className={`${ADMIN_TH_CLS} text-center`}>Phân loại SK</th>
+            <th className={ADMIN_TH_CLS}>Trình diện</th>
+            <th className={ADMIN_TH_CLS}>Báo cáo</th>
+            <th className={ADMIN_TH_CLS}>Thao tác</th>
+          </AdminTHead>
+          <tbody>
+            {paginated.length === 0 ? (
               <tr>
-                <th className="px-5 py-3">Quân nhân</th>
-                <th className="px-5 py-3">Quê quán</th>
-                <th className="px-5 py-3 text-center">Phân loại SK</th>
-                <th className="px-5 py-3">Trình diện</th>
-                <th className="px-5 py-3">Báo cáo</th>
-                <th className="px-5 py-3 text-center">Thao tác</th>
+                <td
+                  colSpan={6}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
+                >
+                  Không có kết quả
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-m3-outline-variant">
-              {filtered.map((s) => {
+            ) : (
+              paginated.map((s, idx) => {
                 const ac = arrivalConfig[s.arrivalStatus];
                 return (
-                  <tr
-                    key={s.id}
-                    className="hover:bg-m3-surface-high/50 transition-colors"
-                  >
-                    <td className="px-5 py-3">
+                  <tr key={s.id} className={adminRowClass(idx)}>
+                    <td className={ADMIN_TD_CLS}>
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-m3-surface-high flex items-center justify-center shrink-0">
-                          <User2 size={12} style={{ color: "var(--m3-primary, #1a73e8)" }} />
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-m3-surface-high">
+                          <User2
+                            size={12}
+                            style={{ color: "var(--m3-primary, #1a73e8)" }}
+                          />
                         </div>
                         <div>
-                          <div className="font-medium text-m3-on-surface text-sm">
+                          <div className="text-[14px] font-bold text-m3-on-surface">
                             {s.fullName}
                           </div>
-                          <div className="text-xs text-m3-on-surface-variant font-mono">
+                          <div className="font-mono text-[12px] text-m3-on-surface-variant">
                             {s.cccd}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-xs text-m3-on-surface-variant max-w-[160px]">
+                    <td
+                      className={`${ADMIN_TD_CLS} max-w-[160px] text-[12px] text-m3-on-surface-variant`}
+                    >
                       {s.origin}
                     </td>
-                    <td className="px-5 py-3 text-center">
-                      <span
-                        className="px-2 py-1 rounded-full text-xs font-bold"
-                        style={{ background: "var(--m3-primary-container, #dae9fb)", color: "var(--m3-primary, #1a73e8)" }}
-                      >
-                        {s.healthClass}
-                      </span>
+                    <td className={`${ADMIN_TD_CLS} text-center`}>
+                      <AdminPill
+                        label={s.healthClass}
+                        bg="var(--m3-primary-container, #dae9fb)"
+                        color="var(--m3-primary, #1a73e8)"
+                      />
                     </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{ background: ac.bg, color: ac.color }}
-                      >
-                        {ac.label}
-                      </span>
+                    <td className={ADMIN_TD_CLS}>
+                      <AdminPill
+                        label={ac.label}
+                        bg={ac.bg}
+                        color={ac.color}
+                      />
                     </td>
-                    <td className="px-5 py-3">
+                    <td className={ADMIN_TD_CLS}>
                       {s.unitReport === "ok" && (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ background: "var(--color-m3-success-container)", color: "var(--color-m3-success)" }}
-                        >
-                          <CheckCircle2 size={11} /> Đủ SK
-                        </span>
+                        <AdminPill
+                          label="Đủ SK"
+                          bg="var(--color-m3-success-container)"
+                          color="var(--color-m3-success)"
+                        />
                       )}
                       {s.unitReport === "health_issue" && (
                         <div>
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                            style={{ background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))", color: "var(--m3-error, #ba1a1a)" }}
-                          >
-                            <AlertTriangle size={11} /> SK không đảm bảo
-                          </span>
-                          {s.reportNote && (
-                            <p className="text-xs text-m3-on-surface-variant mt-0.5 italic">
+                          <AdminPill
+                            label="SK không đảm bảo"
+                            bg="var(--m3-error-container, #ffdad6)"
+                            color="var(--m3-error, #ba1a1a)"
+                          />
+                          {s.reportNote ? (
+                            <p className="mt-0.5 text-[12px] italic text-m3-on-surface-variant">
                               {s.reportNote}
                             </p>
-                          )}
+                          ) : null}
                         </div>
                       )}
                       {!s.unitReport && (
-                        <span className="text-xs text-m3-on-surface-variant">
+                        <span className="text-[12px] text-m3-on-surface-variant">
                           Chưa báo cáo
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className={`relative ${ADMIN_TD_CLS}`}>
                       {s.arrivalStatus === "arrived" && !s.unitReport ? (
-                        <button
-                          onClick={() => {
-                            setReportModal(s);
-                            setReportType("health_issue");
-                            setReportNote("");
-                          }}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-m3-primary hover:bg-m3-on-surface-variant rounded-lg transition-colors flex items-center gap-1 mx-auto"
-                        >
-                          <Send size={12} /> Báo cáo
-                        </button>
+                        <span className="text-[12px] text-m3-on-surface-variant">
+                          Chờ báo cáo
+                        </span>
                       ) : (
-                        <span className="text-xs text-m3-on-surface-variant italic">
-                          {s.unitReport ? "Đã BÁO" : "—"}
+                        <span className="text-[12px] italic text-m3-on-surface-variant">
+                          {s.unitReport ? "Đã báo" : "—"}
                         </span>
                       )}
+                      {s.arrivalStatus === "arrived" && !s.unitReport ? (
+                        <AdminHoverActions>
+                          <AdminIconBtn
+                            title="Báo cáo"
+                            onClick={() => {
+                              setReportModal(s);
+                              setReportType("health_issue");
+                              setReportNote("");
+                            }}
+                            tone="blue"
+                          >
+                            <Send size={14} />
+                          </AdminIconBtn>
+                        </AdminHoverActions>
+                      ) : null}
                     </td>
                   </tr>
                 );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-5 py-8 text-center text-m3-on-surface-variant"
-                  >
-                    Không có kết quả
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              })
+            )}
+          </tbody>
+        </AdminTable>
+      </AdminListShell>
 
       {reportModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-m3-surface-lowest rounded-2xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-[16px] border border-black/[0.06] bg-white shadow-xl">
             <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
               <h2 className="text-base font-semibold text-m3-on-surface">
                 Báo cáo tình trạng quân nhân

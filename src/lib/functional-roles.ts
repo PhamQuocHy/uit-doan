@@ -17,15 +17,15 @@ export const FUNCTIONAL_ROLE_OPTIONS: {
   },
   {
     value: "y_te",
-    label: "Y tế",
-    description: "Nhân viên y tế — khám sức khỏe, đợt khám tuyển",
+    label: "Cán bộ y tế",
+    description: "Nhập khám sức khỏe, theo dõi đợt khám tuyển",
   },
 ];
 
 export const FUNCTIONAL_ROLE_LABELS: Record<FunctionalRole, string> = {
   tuyen_quan: "Tuyển quân",
   nhan_quan: "Nhận quân",
-  y_te: "Y tế",
+  y_te: "Cán bộ y tế",
 };
 
 /** Gợi ý quyền theo cấp đơn vị đăng nhập */

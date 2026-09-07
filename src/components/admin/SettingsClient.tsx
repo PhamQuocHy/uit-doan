@@ -49,7 +49,7 @@ export default function SettingsClient({
   return (
     <div className="max-w-2xl space-y-6">
       {/* Profile Card */}
-      <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6">
+      <div className="macos-card p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-m3-primary-container rounded-xl">
             <User size={20} className="text-m3-primary" />
@@ -83,7 +83,7 @@ export default function SettingsClient({
       </div>
 
       {/* Change Password */}
-      <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6">
+      <div className="macos-card p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-m3-warning-container rounded-xl">
             <Lock size={20} className="text-m3-on-warning-container" />
@@ -171,7 +171,7 @@ export default function SettingsClient({
       </div>
 
       {/* System Info */}
-      <div className="bg-m3-surface-lowest rounded-2xl border border-m3-outline-variant shadow-sm p-6">
+      <div className="macos-card p-6">
         <h3 className="font-semibold text-m3-on-surface mb-4">
           Thông tin hệ thống
         </h3>

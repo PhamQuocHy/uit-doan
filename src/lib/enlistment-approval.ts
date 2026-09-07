@@ -91,18 +91,23 @@ export function resolveApprovalAction(
   approvalStatus: ApprovalStatus;
   callIntent: CallIntent;
   militaryStatus: Citizen["militaryStatus"];
+  militaryStatusLocked: boolean;
 } {
   if (action === "approve") {
     return {
       approvalStatus: "approved",
       callIntent: "du_kien_goi",
       militaryStatus: "nhapngu",
+      // Duyệt gọi → khóa hồ sơ, không cho sửa lại
+      militaryStatusLocked: true,
     };
   }
   return {
     approvalStatus: "rejected",
+    // Đồng bộ cột Dự kiến gọi bên Hồ sơ công dân → Không gọi
     callIntent: "khong_goi",
     militaryStatus: "truottuyen",
+    militaryStatusLocked: false,
   };
 }
 

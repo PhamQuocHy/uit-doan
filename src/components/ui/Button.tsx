@@ -24,8 +24,8 @@ const variants = {
 };
 
 const sizes = {
-  sm: "px-4 min-h-[34px] text-[13px]",
-  md: "px-5 min-h-[40px] text-[15px]",
+  sm: "px-4 min-h-[36px] text-[14px]",
+  md: "px-5 min-h-[44px] text-[15px]",
   lg: "px-7 min-h-[48px] text-[16px]",
 };
 

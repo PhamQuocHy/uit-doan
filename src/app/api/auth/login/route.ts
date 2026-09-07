@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth-users";
 import { pingDb } from "@/lib/db";
 import type { FunctionalRole } from "@/lib/functional-roles";
+import { writeAuditLog } from "@/lib/audit-log";
 
 function fromMemory(username: string): AuthUser | null {
   const user = db.users.findByUsername(username);
@@ -122,6 +123,15 @@ export async function POST(request: NextRequest) {
         await upgradePasswordHash(user.id, password);
       }
       await touchLastLogin(user.id);
+      const forwarded = request.headers.get("x-forwarded-for");
+      await writeAuditLog({
+        userId: user.id,
+        actionType: "LOGIN",
+        targetTable: "users",
+        targetId: user.id,
+        dataSnapshot: { username: user.username },
+        ipAddress: forwarded?.split(",")[0]?.trim() || null,
+      });
     }
 
     return NextResponse.json({

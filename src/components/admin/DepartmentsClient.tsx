@@ -163,15 +163,12 @@ export default function DepartmentsClient() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2
-            className="text-xl font-bold tracking-wide"
-            style={{ color: "var(--m3-on-surface, #1b1d20)" }}
-          >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-bold tracking-tight text-m3-on-surface">
             Danh sách đơn vị
-          </h2>
-          <p className="text-sm font-medium mt-1" style={{ color: "var(--m3-primary, #1a73e8)" }}>
+          </h1>
+          <p className="mt-1.5 text-[14px] text-m3-on-surface-variant">
             {total} đơn vị trong hệ thống
           </p>
         </div>
@@ -186,14 +183,7 @@ export default function DepartmentsClient() {
       </div>
 
       {/* Filters */}
-      <div
-        className="rounded-3xl p-4"
-        style={{
-          background: "var(--m3-surface-container-lowest, var(--m3-surface-container-lowest, #ffffff))",
-          border: "1px solid var(--m3-outline-variant, #e3e8ee)",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
-        }}
-      >
+      <div className="admin-filter-tray">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
             <Search
@@ -260,51 +250,24 @@ export default function DepartmentsClient() {
       </div>
 
       {/* Table */}
-      <div
-        className="rounded-3xl overflow-hidden"
-        style={{
-          background: "var(--m3-surface-container-lowest, var(--m3-surface-container-lowest, #ffffff))",
-          border: "1px solid var(--m3-outline-variant, #e3e8ee)",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.02)",
-        }}
-      >
+      <div className="macos-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="admin-table">
             <thead>
-              <tr
-                style={{
-                  borderBottom: "1px solid var(--m3-outline-variant, #e3e8ee)",
-                  background: "var(--m3-surface-container-high, #eef1f4)",
-                }}
-              >
-                <th
-                  className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
-                >
+              <tr>
+                <th>
                   Đơn vị
                 </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden md:table-cell"
-                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
-                >
+                <th className="hidden md:table-cell">
                   Chỉ huy trưởng
                 </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest hidden sm:table-cell"
-                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
-                >
+                <th className="hidden sm:table-cell">
                   Quân số
                 </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
-                >
+                <th>
                   Trạng thái
                 </th>
-                <th
-                  className="text-right px-6 py-4 text-xs font-bold uppercase tracking-widest"
-                  style={{ color: "var(--m3-on-surface-variant, #475569)" }}
-                >
+                <th className="text-right">
                   Hành động
                 </th>
               </tr>
