@@ -5,6 +5,8 @@ import { decrypt } from '@/lib/auth';
 const publicRoutes = [
   '/login',
   '/api/auth/login',
+  '/tra-cuu',
+  '/api/public/tra-cuu',
   '/mobile',
   '/api/mobile/session/connect',
   '/api/mobile/session/disconnect',

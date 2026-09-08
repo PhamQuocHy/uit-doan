@@ -49,12 +49,24 @@ function mapCampaign(row: CampaignRow): RecruitmentCampaign {
   };
 }
 
+/**
+ * Thống kê đợt (toàn quốc):
+ * - registered_count = đã duyệt gọi (QK/Bộ trả về) + đậu SK (loại 1–3)
+ *   → dùng làm tiến độ đủ chỉ tiêu, không đếm mọi hồ sơ gắn đợt
+ * - passed_count = thanh niên đạt sức khỏe (loại 1–3) trong đợt
+ */
 const STATS_SELECT = `
   c.id, c.name, c.year, c.start_date, c.end_date, c.status, c.target_quota,
   c.created_at, c.updated_at,
-  (SELECT COUNT(*) FROM citizens ci WHERE ci.campaign_id = c.id) AS registered_count,
   (SELECT COUNT(*) FROM citizens ci
      WHERE ci.campaign_id = c.id
+       AND ci.archived_at IS NULL
+       AND (ci.approval_status = 'approved' OR ci.military_status = 'nhapngu')
+       AND ci.health_grade IS NOT NULL
+       AND ci.health_grade BETWEEN 1 AND 3) AS registered_count,
+  (SELECT COUNT(*) FROM citizens ci
+     WHERE ci.campaign_id = c.id
+       AND ci.archived_at IS NULL
        AND ci.health_grade IS NOT NULL
        AND ci.health_grade BETWEEN 1 AND 3) AS passed_count
 `;
@@ -237,5 +249,39 @@ export async function updateCampaignInDb(
   } catch (e) {
     console.error("updateCampaignInDb:", e);
     return null;
+  }
+}
+
+export async function deleteCampaignInDb(id: string): Promise<boolean> {
+  if (!(await pingDb())) return false;
+  try {
+    const existing = await findCampaignByIdFromDb(id);
+    if (!existing) return false;
+
+    await queryExecute(
+      `UPDATE citizens SET campaign_id = NULL WHERE campaign_id = ?`,
+      [id],
+    );
+
+    for (const sql of [
+      `DELETE FROM quotas WHERE campaign_id = ?`,
+      `DELETE FROM receiving_sub_quotas WHERE campaign_id = ?`,
+      `DELETE FROM receiving_quotas WHERE campaign_id = ?`,
+    ]) {
+      try {
+        await queryExecute(sql, [id]);
+      } catch {
+        // Bảng phụ có thể chưa migrate — bỏ qua
+      }
+    }
+
+    const result = await queryExecute(
+      `DELETE FROM recruitment_campaigns WHERE id = ?`,
+      [id],
+    );
+    return (result as ResultSetHeader).affectedRows > 0;
+  } catch (e) {
+    console.error("deleteCampaignInDb:", e);
+    return false;
   }
 }

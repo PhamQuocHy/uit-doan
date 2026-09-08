@@ -18,7 +18,7 @@ const pageTitles: Record<string, string> = {
   "/admin/reserve": "Quân nhân dự bị",
   "/admin/training": "Huấn luyện & Diễn tập",
   "/admin/documents": "Công văn đến/đi",
-  "/admin/receiving": "Đơn vị nhận quân",
+  "/admin/receiving": "Nhận quân & phân quân",
   "/admin/document-archive": "Kho văn bản",
   "/admin/reports": "Báo cáo & Thống kê",
   "/admin/users": "Quản lý Thành viên",
@@ -34,12 +34,14 @@ export default function AdminLayoutClient({
   userRole,
   userHierarchyLevel,
   userFunctionalRole,
+  userUnitCode = "",
 }: {
   children: React.ReactNode;
   userName: string;
   userRole: string;
   userHierarchyLevel: string;
   userFunctionalRole: string;
+  userUnitCode?: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
@@ -64,6 +66,7 @@ export default function AdminLayoutClient({
           userRole={userRole}
           userHierarchyLevel={userHierarchyLevel}
           userFunctionalRole={userFunctionalRole}
+          userUnitCode={userUnitCode}
         />
         <div
           className="flex min-h-screen flex-col transition-[margin] duration-300 ease-[cubic-bezier(0.34,0.8,0.34,1)]"

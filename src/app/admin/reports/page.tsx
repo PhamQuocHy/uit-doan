@@ -365,7 +365,7 @@ export default function ReportsPage() {
       </section>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           title="Tổng thanh niên"
           value={overview.totalCitizens.toLocaleString("vi-VN")}
@@ -391,7 +391,14 @@ export default function ReportsPage() {
           value={overview.inService.toLocaleString("vi-VN")}
           color="forest"
           icon={<ShieldCheck size={20} />}
-          subtitle={`${overview.passed} trúng tuyển`}
+          subtitle={`${overview.passed} đạt (trúng tuyển + nhập ngũ)`}
+        />
+        <StatCard
+          title="Chưa phân quân"
+          value={(overview.unassignedReceiving ?? 0).toLocaleString("vi-VN")}
+          color="khaki"
+          icon={<ShieldCheck size={20} />}
+          subtitle={`${overview.assignedReceiving ?? 0} đã phân đơn vị`}
         />
       </div>
 

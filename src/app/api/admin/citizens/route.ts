@@ -1,15 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { db, getUnitDescendants, type Citizen } from "@/lib/data";
+import { db, getUnitDescendants, hierarchyNeedsEditPin, type Citizen } from "@/lib/data";
 import { getUnitByCode, resolveViewUnit } from "@/lib/hierarchy";
 import {
   archiveAllPendingInDb,
   archiveCitizensInDb,
+  countCitizenStatusSummaryFromDb,
   createCitizenInDb,
   filterCitizensByAgeScopeMemory,
   findCitizensFromDb,
+  type CitizenStatusSummary,
 } from "@/lib/citizens-db";
 import { type CitizenAgeScope } from "@/lib/nvqs-age";
+import { matchesCallDisplayFilter } from "@/lib/enlistment-approval";
+import { verifyEditPinAsync } from "@/lib/unit-pin";
+
+function summarizeCitizensMemory(citizens: Citizen[]): CitizenStatusSummary {
+  return {
+    du_kien_goi: citizens.filter((c) => matchesCallDisplayFilter(c, "du_kien_goi"))
+      .length,
+    du_bi: citizens.filter((c) => matchesCallDisplayFilter(c, "du_bi")).length,
+    hoan: citizens.filter((c) => c.militaryStatus === "tamhoan").length,
+    khong_goi: citizens.filter((c) => matchesCallDisplayFilter(c, "khong_goi"))
+      .length,
+  };
+}
 
 function parseAgeScope(raw: string | null): CitizenAgeScope {
   if (
@@ -52,7 +67,14 @@ export async function GET(request: NextRequest) {
   const callIntent = searchParams.get("callIntent") || undefined;
   const requestedUnit = searchParams.get("unitCode") || undefined;
   const campaignId = searchParams.get("campaignId") || undefined;
+  const educationLevel = searchParams.get("educationLevel") || undefined;
+  const healthGrade = searchParams.get("healthGrade") || undefined;
   const ageScope = parseAgeScope(searchParams.get("ageScope"));
+  // Box số liệu luôn theo tuổi NVQS đang quản lý — không theo tab "Tại ngũ" (ageScope=all)
+  const summaryAgeScope = parseAgeScope(
+    searchParams.get("summaryAgeScope") ||
+      (ageScope === "all" ? "active" : null),
+  );
 
   const isBo = session.hierarchyLevel === "bo";
   // Cấp Bộ: không chọn tỉnh → chỉ cho nationwide khi có search / nationwide=1.
@@ -69,6 +91,12 @@ export async function GET(request: NextRequest) {
       page,
       limit,
       totalPages: 0,
+      summary: {
+        du_kien_goi: 0,
+        du_bi: 0,
+        hoan: 0,
+        khong_goi: 0,
+      },
       meta: {
         requiresUnitSelection: true,
         scopeUnit: null,
@@ -94,6 +122,15 @@ export async function GET(request: NextRequest) {
       }
     : resolveUnitCodes(session, requestedUnit);
 
+  const summaryQuery = {
+    search,
+    campaignId,
+    educationLevel,
+    healthGrade,
+    unitCodes,
+    ageScope: summaryAgeScope,
+  };
+
   const fromDb = await findCitizensFromDb({
     page,
     limit,
@@ -101,13 +138,23 @@ export async function GET(request: NextRequest) {
     militaryStatus,
     callIntent,
     campaignId,
+    educationLevel,
+    healthGrade,
     unitCodes,
     ageScope,
   });
 
   if (fromDb) {
+    const summary =
+      (await countCitizenStatusSummaryFromDb(summaryQuery)) || {
+        du_kien_goi: 0,
+        du_bi: 0,
+        hoan: 0,
+        khong_goi: 0,
+      };
     return NextResponse.json({
       ...fromDb,
+      summary,
       meta: {
         requiresUnitSelection: false,
         scopeUnit: {
@@ -129,10 +176,66 @@ export async function GET(request: NextRequest) {
     campaignId,
     unitCodes,
   });
-  const filtered = filterCitizensByAgeScopeMemory(
+  let filtered = filterCitizensByAgeScopeMemory(
     all.data as Citizen[],
     ageScope,
   );
+  if (callIntent) {
+    filtered = filtered.filter((c) => matchesCallDisplayFilter(c, callIntent));
+  }
+  if (educationLevel) {
+    const levels =
+      educationLevel === "THPT" || educationLevel === "pho_thong"
+        ? ["THPT", "12/12", "9/12", "THCS", "PTTH"]
+        : educationLevel === "Sau đại học" || educationLevel === "sau_dai_hoc"
+          ? ["Sau đại học", "Thạc sĩ", "Tiến sĩ", "ThS", "TS"]
+          : [educationLevel];
+    filtered = filtered.filter((c) =>
+      levels.some(
+        (lv) => (c.educationLevel || "").toLowerCase() === lv.toLowerCase(),
+      ),
+    );
+  }
+  if (healthGrade === "none") {
+    filtered = filtered.filter((c) => !c.healthStatus);
+  } else if (healthGrade) {
+    filtered = filtered.filter(
+      (c) => c.healthStatus === `Loại ${healthGrade}`,
+    );
+  }
+
+  const allForSummary = db.citizens.findAll({
+    page: 1,
+    limit: 10000,
+    search,
+    campaignId,
+    unitCodes,
+  });
+  let summaryBase = filterCitizensByAgeScopeMemory(
+    allForSummary.data as Citizen[],
+    summaryAgeScope,
+  );
+  if (educationLevel) {
+    const levels =
+      educationLevel === "THPT" || educationLevel === "pho_thong"
+        ? ["THPT", "12/12", "9/12", "THCS", "PTTH"]
+        : educationLevel === "Sau đại học" || educationLevel === "sau_dai_hoc"
+          ? ["Sau đại học", "Thạc sĩ", "Tiến sĩ", "ThS", "TS"]
+          : [educationLevel];
+    summaryBase = summaryBase.filter((c) =>
+      levels.some(
+        (lv) => (c.educationLevel || "").toLowerCase() === lv.toLowerCase(),
+      ),
+    );
+  }
+  if (healthGrade === "none") {
+    summaryBase = summaryBase.filter((c) => !c.healthStatus);
+  } else if (healthGrade) {
+    summaryBase = summaryBase.filter(
+      (c) => c.healthStatus === `Loại ${healthGrade}`,
+    );
+  }
+
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const start = (page - 1) * limit;
@@ -146,6 +249,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ...result,
+    summary: summarizeCitizensMemory(summaryBase),
     meta: {
       requiresUnitSelection: false,
       scopeUnit: {
@@ -172,6 +276,16 @@ export async function POST(request: NextRequest) {
         { error: "Thiếu Họ tên, CCCD hoặc Ngày sinh" },
         { status: 400 },
       );
+    }
+
+    if (hierarchyNeedsEditPin(session.hierarchyLevel)) {
+      const pin = typeof body.editPin === "string" ? body.editPin : "";
+      if (!(await verifyEditPinAsync(session.unitCode, pin))) {
+        return NextResponse.json(
+          { error: "Cần mã PIN địa phương hợp lệ để lưu hồ sơ" },
+          { status: 403 },
+        );
+      }
     }
 
     let unitCode = String(body.unitCode || "").trim();

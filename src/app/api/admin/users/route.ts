@@ -12,6 +12,15 @@ import { ensureMedicalOfficerRole, findRoleById } from "@/lib/roles-db";
 import { writeAuditLog } from "@/lib/audit-log";
 import { persistUnitEditPin } from "@/lib/unit-pin";
 import type { FunctionalRole } from "@/lib/functional-roles";
+import {
+  ALL_MILITARY_UNITS,
+  isQuanKhuOrBtl,
+  MILITARY_REGIONS,
+} from "@/lib/military-regions";
+
+function isMilitaryDonvi(unitCode: string): boolean {
+  return ALL_MILITARY_UNITS.some((u) => u.code === unitCode);
+}
 
 /** Ai được quản lý thành viên trong phạm vi đơn vị (không chỉ SUPER_ADMIN). */
 function canManageMembers(session: {
@@ -22,7 +31,7 @@ function canManageMembers(session: {
   if (!session) return false;
   if (session.role === "admin") return true;
   if (!["bo", "tinh", "xa"].includes(session.hierarchyLevel)) return false;
-  // Đơn vị nhận quân không quản lý thành viên hành chính
+  // Đơn vị nhận quân (kể cả quân khu) không quản lý thành viên hành chính địa phương
   if (session.functionalRole === "nhan_quan") return false;
   return true;
 }
@@ -31,11 +40,24 @@ export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(request.url);
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "50", 10);
+  const search = searchParams.get("search") || undefined;
+  const role = searchParams.get("role") || undefined;
+  const status = searchParams.get("status") || undefined;
+
   let unitCodes: string[] | undefined;
   let levelFilter: string | undefined;
   if (session.hierarchyLevel === "bo") {
-    // Bộ: danh sách tài khoản cấp tỉnh (gọn)
-    levelFilter = "tinh";
+    if (role === "quan_khu") {
+      levelFilter = "donvi";
+      unitCodes = MILITARY_REGIONS.map((r) => r.code);
+    } else if (role === "nhan_quan") {
+      levelFilter = "donvi";
+    } else {
+      levelFilter = "tinh";
+    }
   } else if (session.hierarchyLevel === "tinh") {
     // Tỉnh: tài khoản xã thuộc tỉnh (kể cả xã tự thêm)
     unitCodes = getUnitDescendants(session.unitCode);
@@ -45,13 +67,6 @@ export async function GET(request: NextRequest) {
   } else if (session.hierarchyLevel !== "bo") {
     unitCodes = getUnitDescendants(session.unitCode);
   }
-
-  const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const limit = parseInt(searchParams.get("limit") || "50", 10);
-  const search = searchParams.get("search") || undefined;
-  const role = searchParams.get("role") || undefined;
-  const status = searchParams.get("status") || undefined;
 
   await ensureMedicalOfficerRole();
 
@@ -118,7 +133,10 @@ export async function POST(request: NextRequest) {
     }
     if (!unitCode) {
       return NextResponse.json(
-        { error: "Vui lòng chọn đơn vị (Bộ / tỉnh / xã / đơn vị nhận quân)" },
+        {
+          error:
+            "Vui lòng chọn đơn vị (tỉnh / quân khu / xã / đơn vị nhận quân)",
+        },
         { status: 400 },
       );
     }
@@ -137,31 +155,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Phân quyền tạo theo cấp: Bộ→tỉnh; Tỉnh→xã; Xã→chỉ xã mình
-    if (session.hierarchyLevel === "bo") {
-      if (unit.level !== "tinh") {
+    // Phân quyền tạo: Bộ→tỉnh hoặc đơn vị quân sự; Tỉnh→xã; Xã→chỉ xã mình
+    if (session!.hierarchyLevel === "bo") {
+      const okTinh = unit.level === "tinh";
+      const okMilitary = unit.level === "donvi" && isMilitaryDonvi(unitCode);
+      if (!okTinh && !okMilitary) {
         return NextResponse.json(
-          { error: "Cấp Bộ chỉ được tạo tài khoản cấp tỉnh / thành phố" },
+          {
+            error:
+              "Cấp Bộ chỉ được tạo tài khoản cấp tỉnh/TP, quân khu/BTL hoặc đơn vị nhận quân",
+          },
           { status: 400 },
         );
       }
-    } else if (session.hierarchyLevel === "tinh") {
-      const allowed = new Set(getUnitDescendants(session.unitCode));
+    } else if (session!.hierarchyLevel === "tinh") {
+      const allowed = new Set(getUnitDescendants(session!.unitCode));
       if (unit.level !== "xa" || !allowed.has(unitCode)) {
         return NextResponse.json(
-          { error: "Cấp tỉnh chỉ được tạo tài khoản xã / phường thuộc tỉnh mình" },
+          {
+            error:
+              "Cấp tỉnh chỉ được tạo tài khoản xã / phường thuộc tỉnh mình",
+          },
           { status: 400 },
         );
       }
-    } else if (session.hierarchyLevel === "xa") {
-      if (unitCode !== session.unitCode) {
+    } else if (session!.hierarchyLevel === "xa") {
+      if (unitCode !== session!.unitCode) {
         return NextResponse.json(
           { error: "Cấp xã chỉ được tạo tài khoản trong xã của bạn" },
           { status: 403 },
         );
       }
     } else {
-      const allowed = new Set(getUnitDescendants(session.unitCode));
+      const allowed = new Set(getUnitDescendants(session!.unitCode));
       if (!allowed.has(unitCode)) {
         return NextResponse.json(
           { error: "Không được tạo tài khoản ngoài phạm vi đơn vị của bạn" },
@@ -176,9 +202,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Vai trò không tồn tại" }, { status: 400 });
     }
 
-    const functionalRole: FunctionalRole =
+    let functionalRole: FunctionalRole =
       (body.functionalRole as FunctionalRole) ||
       inferFunctionalRoleFromRoleCode(role.code, role.name);
+
+    // Đơn vị quân sự (QK / sư đoàn…) luôn là nhận quân — không gắn tỉnh
+    if (unit.level === "donvi" && isMilitaryDonvi(unitCode)) {
+      functionalRole = "nhan_quan";
+    }
 
     const created = await createUserInDb({
       username,
@@ -204,11 +235,16 @@ export async function POST(request: NextRequest) {
         await persistUnitEditPin(unitCode, editPin);
       }
       await writeAuditLog({
-        userId: session.userId,
+        userId: session!.userId,
         actionType: "CREATE",
         targetTable: "users",
         targetId: username,
-        dataSnapshot: { unitCode, roleId, functionalRole },
+        dataSnapshot: {
+          unitCode,
+          roleId,
+          functionalRole,
+          isQuanKhu: isQuanKhuOrBtl(unitCode),
+        },
       });
       return NextResponse.json(
         { ...created, editPin: editPin || null },

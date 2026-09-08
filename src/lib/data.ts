@@ -80,8 +80,17 @@ export interface AppNotification {
   toUnit: string;
   title: string;
   message: string;
-  type: 'quota_shortage' | 'quota_assigned' | 'info';
+  type:
+    | "quota_shortage"
+    | "quota_assigned"
+    | "document_incoming"
+    | "document_outgoing"
+    | "citizen_approved"
+    | "citizen_rejected"
+    | "citizen_proposal_returned"
+    | "info";
   relatedQuotaId?: string;
+  relatedHref?: string;
   read: boolean;
   createdAt: string;
 }
@@ -120,12 +129,25 @@ export interface Citizen {
     | 'miengoi'
     | 'nhapngu';
   /** DB: call_intent — dự kiến tuyển gọi */
-  callIntent?: 'unset' | 'du_kien_goi' | 'khong_goi';
+  callIntent?: 'unset' | 'du_kien_goi' | 'khong_goi' | 'du_bi' | 'de_xuat_khong_goi';
   /** DB: approval_status — xét duyệt nhập ngũ */
   approvalStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   campaignId?: string;
+  /** DB: receiving_status — phân đơn vị nhận quân sau khi nhập ngũ */
+  receivingStatus?:
+    | "chua_phan_quan"
+    | "da_phan_quan"
+    | "submitted_to_bo"
+    | "bo_approved"
+    | "published"
+    | "unit_confirmed"
+    | null;
+  /** DB: receiving_unit_code — mã quân khu / đơn vị nhận */
+  receivingUnitCode?: string | null;
   /** DB: military_status_reason */
   militaryStatusReason?: string;
+  /** DB: approval_comment — nhận xét QK khi trả đề xuất */
+  approvalComment?: string | null;
   /** Khóa chỉnh sửa trạng thái NVQS trực tiếp sau khi đã lưu — DB: military_status_locked */
   militaryStatusLocked?: boolean;
   /** DB: archived_at — đã duyệt chuyển hồ sơ lưu trữ */
@@ -310,9 +332,16 @@ provincesData.forEach((p: any) => {
   });
 });
 
-// Đơn vị nhận quân (cấp donvi)
+// Đơn vị nhận quân (cấp donvi) — cây đầy đủ bổ sung qua military-regions.ensureMilitaryUnitsInMemory()
 hierarchyUnits.push(
+  { code: "dv-qk1", name: "Quân khu 1", level: "donvi", parentCode: "bo" },
+  { code: "dv-qk2", name: "Quân khu 2", level: "donvi", parentCode: "bo" },
+  { code: "dv-qk3", name: "Quân khu 3", level: "donvi", parentCode: "bo" },
+  { code: "dv-qk4", name: "Quân khu 4", level: "donvi", parentCode: "bo" },
+  { code: "dv-qk5", name: "Quân khu 5", level: "donvi", parentCode: "bo" },
+  { code: "dv-qk7", name: "Quân khu 7", level: "donvi", parentCode: "bo" },
   { code: "dv-qk9", name: "Quân khu 9", level: "donvi", parentCode: "bo" },
+  { code: "dv-btl-hn", name: "Bộ Tư lệnh Thủ đô Hà Nội", level: "donvi", parentCode: "bo" },
 );
 
 export function getChildUnits(parentCode: string): HierarchyUnit[] {
@@ -456,7 +485,7 @@ const users: User[] = [
   {
     id: 'u-bo',
     username: 'admin_bo',
-    password: 'scrypt$104baa5e11900d7bad4e144af121dcb8$741e911d153e76bf5dde0f38c90272963a79ec80cfbc55de6a3fdc7baabc8a466c2308231f3481d3c6172efae0e7ba7b3271f2f81cae8d46d7fad07080c6e992',
+    password: 'scrypt$f225dbfe7c9c1162f5950f8e8c93f966$8c14e64aa9c2f260da0e762b97f0b7d1b67c53174f8f2ba13d3c7a118ccd2efeb9fa5bb44a3f9b9b140375b0b9ea211bf24faab20af9008d285866d31293d261',
     name: 'Quản trị Bộ Quốc phòng',
     email: 'admin.bo@ymsa.vn',
     phone: '0900000001',
@@ -472,7 +501,7 @@ const users: User[] = [
   {
     id: 'u-ct',
     username: 'admin_cantho',
-    password: 'scrypt$ad0f2cc817c6d1c7766f9d3ce7d3dc30$43918ecd81f91875148f1f9d187cbbde0887c299d3f38ac2a7cfbd49367713da12800297ea24ef861ab4d8ab980161fafb1fccbd73367c9f99ffbdff6b40e787',
+    password: 'scrypt$f225dbfe7c9c1162f5950f8e8c93f966$8c14e64aa9c2f260da0e762b97f0b7d1b67c53174f8f2ba13d3c7a118ccd2efeb9fa5bb44a3f9b9b140375b0b9ea211bf24faab20af9008d285866d31293d261',
     name: 'CHQS Thành phố Cần Thơ',
     email: 'admin.cantho@ymsa.vn',
     phone: '0900000002',
@@ -488,7 +517,7 @@ const users: User[] = [
   {
     id: 'u-pl',
     username: 'admin_phuloc',
-    password: 'scrypt$e95816dcaff28b40db5c9b34582d1e29$423340f06fc48c25f053b68d46249faae3be7c3e318f29c8c1e2eb94ab6282ef55844cb2106cf160c68cc0d20dfbde23d048ce12e8cf6b25ee46f8de05c7750b',
+    password: 'scrypt$f225dbfe7c9c1162f5950f8e8c93f966$8c14e64aa9c2f260da0e762b97f0b7d1b67c53174f8f2ba13d3c7a118ccd2efeb9fa5bb44a3f9b9b140375b0b9ea211bf24faab20af9008d285866d31293d261',
     name: 'CHQS Xã Phú Lộc',
     email: 'admin.phuloc@ymsa.vn',
     phone: '0900000003',
@@ -504,7 +533,7 @@ const users: User[] = [
   {
     id: 'u-qk9',
     username: 'admin_qk9',
-    password: 'scrypt$0e6662a8fd04c9ce24c04c67b6a03bb1$d5edad9ea0374c853906ecbf69265603ad0d9e954a436972f1edcfe9ab0f4782ef1fefe0890c67c739c0077029e184f67cd2b00ea51a783bb390586848dfce54',
+    password: 'scrypt$f225dbfe7c9c1162f5950f8e8c93f966$8c14e64aa9c2f260da0e762b97f0b7d1b67c53174f8f2ba13d3c7a118ccd2efeb9fa5bb44a3f9b9b140375b0b9ea211bf24faab20af9008d285866d31293d261',
     name: 'Ban nhận quân — Quân khu 9',
     email: 'admin.qk9@ymsa.vn',
     phone: '0900000004',
@@ -520,7 +549,7 @@ const users: User[] = [
   {
     id: 'u-yte-ct',
     username: 'admin_yte',
-    password: 'scrypt$6f367a1f3e8752918c43bd46ba2b4d85$7083c4bd77ab61d5cd92b231ecabee0b97506691af34ab07d5751ef5273c0b49f31e1bcabc2af7b762045b119647b446e8f5e5cc3f17a4ea2d37d040ee6a23e6',
+    password: 'scrypt$f225dbfe7c9c1162f5950f8e8c93f966$8c14e64aa9c2f260da0e762b97f0b7d1b67c53174f8f2ba13d3c7a118ccd2efeb9fa5bb44a3f9b9b140375b0b9ea211bf24faab20af9008d285866d31293d261',
     name: 'Cán bộ y tế — Thành phố Cần Thơ',
     email: 'yte.cantho@ymsa.vn',
     phone: '0900000005',
@@ -597,11 +626,142 @@ const militaryDocuments: MilitaryDocument[] = [
 
 // ── Quota Store ────────────────────────────────────────────────────────────
 const quotas: Quota[] = [
-  // Bộ → Tỉnh (mã đơn vị mới: 1, 79, 48)
-  { id: 'q1', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '1', toUnitName: 'Thành phố Hà Nội', amount: 500, filled: 320, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
-  { id: 'q2', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '79', toUnitName: 'Thành phố Hồ Chí Minh', amount: 800, filled: 560, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
-  { id: 'q3', year: 2026, fromLevel: 'bo', fromUnit: 'bo', toLevel: 'tinh', toUnit: '48', toUnitName: 'Thành phố Đà Nẵng', amount: 200, filled: 150, note: 'Chỉ tiêu theo nghị quyết số 01/2026', createdAt: '2026-01-05T00:00:00Z' },
+  // Bộ → Quân khu / BTL (chỉ tiêu tuyển quân)
+  {
+    id: "q1",
+    campaignId: "camp1",
+    year: 2026,
+    fromLevel: "bo",
+    fromUnit: "bo",
+    toLevel: "donvi",
+    toUnit: "dv-btl-hn",
+    toUnitName: "Bộ Tư lệnh Thủ đô Hà Nội",
+    amount: 500,
+    filled: 0,
+    note: "Chỉ tiêu theo nghị quyết số 01/2026",
+    createdAt: "2026-01-05T00:00:00Z",
+  },
+  {
+    id: "q2",
+    campaignId: "camp1",
+    year: 2026,
+    fromLevel: "bo",
+    fromUnit: "bo",
+    toLevel: "donvi",
+    toUnit: "dv-qk7",
+    toUnitName: "Quân khu 7",
+    amount: 800,
+    filled: 0,
+    note: "Chỉ tiêu theo nghị quyết số 01/2026",
+    createdAt: "2026-01-05T00:00:00Z",
+  },
+  {
+    id: "q3",
+    campaignId: "camp1",
+    year: 2026,
+    fromLevel: "bo",
+    fromUnit: "bo",
+    toLevel: "donvi",
+    toUnit: "dv-qk5",
+    toUnitName: "Quân khu 5",
+    amount: 200,
+    filled: 0,
+    note: "Chỉ tiêu theo nghị quyết số 01/2026",
+    createdAt: "2026-01-05T00:00:00Z",
+  },
+  {
+    id: "q4",
+    campaignId: "camp1",
+    year: 2026,
+    fromLevel: "bo",
+    fromUnit: "bo",
+    toLevel: "donvi",
+    toUnit: "dv-qk9",
+    toUnitName: "Quân khu 9",
+    amount: 500,
+    filled: 0,
+    note: "Chỉ tiêu theo nghị quyết số 01/2026",
+    createdAt: "2026-01-05T00:00:00Z",
+  },
 ];
+
+/** Gỡ seed cũ Bộ→tỉnh; bổ sung mẫu Bộ→QK nếu thiếu (hot-reload / process cũ). */
+let recruitmentQuotasMigrated = false;
+export function migrateRecruitmentQuotasShape() {
+  if (recruitmentQuotasMigrated) return;
+  recruitmentQuotasMigrated = true;
+
+  for (let i = quotas.length - 1; i >= 0; i--) {
+    const q = quotas[i];
+    if (q.fromUnit === "bo" && (q.toLevel === "tinh" || /^\d+$/.test(q.toUnit))) {
+      quotas.splice(i, 1);
+    }
+  }
+
+  const hasBoToRegion = quotas.some(
+    (q) => q.fromUnit === "bo" && q.toLevel === "donvi",
+  );
+  if (hasBoToRegion) return;
+
+  quotas.push(
+    {
+      id: "q1",
+      campaignId: "camp1",
+      year: 2026,
+      fromLevel: "bo",
+      fromUnit: "bo",
+      toLevel: "donvi",
+      toUnit: "dv-btl-hn",
+      toUnitName: "Bộ Tư lệnh Thủ đô Hà Nội",
+      amount: 500,
+      filled: 0,
+      note: "Chỉ tiêu theo nghị quyết số 01/2026",
+      createdAt: "2026-01-05T00:00:00Z",
+    },
+    {
+      id: "q2",
+      campaignId: "camp1",
+      year: 2026,
+      fromLevel: "bo",
+      fromUnit: "bo",
+      toLevel: "donvi",
+      toUnit: "dv-qk7",
+      toUnitName: "Quân khu 7",
+      amount: 800,
+      filled: 0,
+      note: "Chỉ tiêu theo nghị quyết số 01/2026",
+      createdAt: "2026-01-05T00:00:00Z",
+    },
+    {
+      id: "q3",
+      campaignId: "camp1",
+      year: 2026,
+      fromLevel: "bo",
+      fromUnit: "bo",
+      toLevel: "donvi",
+      toUnit: "dv-qk5",
+      toUnitName: "Quân khu 5",
+      amount: 200,
+      filled: 0,
+      note: "Chỉ tiêu theo nghị quyết số 01/2026",
+      createdAt: "2026-01-05T00:00:00Z",
+    },
+    {
+      id: "q4",
+      campaignId: "camp1",
+      year: 2026,
+      fromLevel: "bo",
+      fromUnit: "bo",
+      toLevel: "donvi",
+      toUnit: "dv-qk9",
+      toUnitName: "Quân khu 9",
+      amount: 500,
+      filled: 0,
+      note: "Chỉ tiêu theo nghị quyết số 01/2026",
+      createdAt: "2026-01-05T00:00:00Z",
+    },
+  );
+}
 
 const notifications: AppNotification[] = [];
 // Helper to get all ancestor unit codes for a unit (including itself)
@@ -1243,9 +1403,7 @@ export const db = {
       }
       if (query?.militaryStatus) list = list.filter((c) => c.militaryStatus === query.militaryStatus);
       if (query?.campaignId)
-        list = list.filter(
-          (c) => c.campaignId === query.campaignId || !c.campaignId,
-        );
+        list = list.filter((c) => c.campaignId === query.campaignId);
       if (query?.unitCodes && query.unitCodes.length > 0) {
         const allowed = new Set(query.unitCodes);
         list = list.filter((c) => c.unitCode && allowed.has(c.unitCode));
@@ -1429,6 +1587,12 @@ export const db = {
       Object.assign(campaign, data, { updatedAt: new Date().toISOString() });
       return campaign;
     },
+    delete: (id: string) => {
+      const idx = campaigns.findIndex((item) => item.id === id);
+      if (idx === -1) return false;
+      campaigns.splice(idx, 1);
+      return true;
+    },
   },
   stats: {
     getOverview: () => ({
@@ -1504,6 +1668,8 @@ export const db = {
       notifications
         .filter((n) => n.toUnit === unitCode)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    findAll: () =>
+      [...notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     create: (data: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
       const n: AppNotification = {
         id: generateId(),
@@ -1520,9 +1686,24 @@ export const db = {
       n.read = true;
       return n;
     },
+    markReadById: (id: string) => {
+      const n = notifications.find((x) => x.id === id);
+      if (!n) return null;
+      n.read = true;
+      return n;
+    },
     markAllRead: (unitCode: string) => {
       notifications
         .filter((n) => n.toUnit === unitCode && !n.read)
+        .forEach((n) => {
+          n.read = true;
+        });
+      return true;
+    },
+    markAllReadInUnits: (unitCodes: string[]) => {
+      const allowed = new Set(unitCodes);
+      notifications
+        .filter((n) => allowed.has(n.toUnit) && !n.read)
         .forEach((n) => {
           n.read = true;
         });

@@ -1,76 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, getChildUnits, hierarchyUnits } from "@/lib/data";
+import { db, hierarchyUnits } from "@/lib/data";
 import { getSession } from "@/lib/auth";
 import {
   getUnitRecruitmentCapacity,
   getUnitEnlistedCount,
 } from "@/lib/quota-capacity";
+import {
+  getRecruitmentQuotaChildUnits,
+  isQuanKhuOrBtl,
+  ensureMilitaryUnitsInMemory,
+} from "@/lib/military-regions";
+import { createQuota, findQuotasForUnit } from "@/lib/quotas-db";
+import type { Quota } from "@/lib/data";
+import { syncOneReceivingFromRecruitment } from "@/lib/receiving-quotas-db";
+
+ensureMilitaryUnitsInMemory();
 
 function resolveUnitName(code: string): string {
   if (code === "bo") return "Bộ Quốc phòng";
   return hierarchyUnits.find((u) => u.code === code)?.name || code;
 }
 
-async function enrichQuotas(quotas: ReturnType<typeof db.quotas.findForUnit>) {
+async function loadQuotas(
+  unitCode: string,
+  hierarchyLevel: string,
+): Promise<Quota[]> {
+  const fromDb = await findQuotasForUnit(unitCode, hierarchyLevel);
+  if (fromDb) return fromDb;
+  return db.quotas.findForUnit(unitCode, hierarchyLevel);
+}
+
+async function enrichQuotas(quotas: Quota[]) {
   return Promise.all(
     quotas.map(async (q) => ({
       ...q,
-      filled: await getUnitEnlistedCount(q.toUnit),
+      filled: await getUnitEnlistedCount(q.toUnit, q.campaignId),
       fromUnitName: resolveUnitName(q.fromUnit),
     })),
   );
 }
 
+function canIssueRecruitmentQuota(level: string, unitCode: string): boolean {
+  if (level === "xa") return false;
+  if (level === "bo" || level === "tinh" || level === "huyen") return true;
+  return level === "donvi" && isQuanKhuOrBtl(unitCode);
+}
+
+function toLevelFor(
+  fromLevel: string,
+  toUnitLevel: string,
+): "bo" | "tinh" | "xa" | "donvi" {
+  if (fromLevel === "bo") return "donvi";
+  if (fromLevel === "donvi") return "tinh";
+  if (toUnitLevel === "xa" || toUnitLevel === "huyen") return "xa";
+  return "tinh";
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { searchParams } = new URL(request.url);
   const capacityFor = searchParams.get("capacityFor");
+  const children = getRecruitmentQuotaChildUnits(session.unitCode);
 
   if (capacityFor) {
-    const children = getChildUnits(session.unitCode);
     const allowed =
       session.hierarchyLevel === "bo" ||
       children.some((c) => c.code === capacityFor) ||
       capacityFor === session.unitCode;
     if (!allowed) {
-      return NextResponse.json({ error: "Không có quyền xem đơn vị này" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Không có quyền xem đơn vị này" },
+        { status: 403 },
+      );
     }
     const capacity = await getUnitRecruitmentCapacity(capacityFor);
     return NextResponse.json({ capacity });
   }
 
   const quotas = await enrichQuotas(
-    db.quotas.findForUnit(session.unitCode, session.hierarchyLevel),
-  );
-  const children = getChildUnits(session.unitCode).sort((a, b) =>
-    a.name.localeCompare(b.name, "vi"),
+    await loadQuotas(session.unitCode, session.hierarchyLevel),
   );
 
   return NextResponse.json({
     data: quotas,
     childUnits: children,
     sessionUnitName: resolveUnitName(session.unitCode),
+    canCreate: canIssueRecruitmentQuota(
+      session.hierarchyLevel,
+      session.unitCode,
+    ),
   });
 }
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (session.hierarchyLevel === "xa") {
-    return NextResponse.json({ error: "Cấp xã không thể giao chỉ tiêu" }, { status: 403 });
+  if (!canIssueRecruitmentQuota(session.hierarchyLevel, session.unitCode)) {
+    return NextResponse.json(
+      { error: "Cấp này không giao chỉ tiêu tuyển quân" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json();
   const { toUnit, toUnitName, amount, year, note, campaignId } = body;
 
   if (!toUnit || !toUnitName || !amount) {
-    return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Thiếu thông tin bắt buộc" },
+      { status: 400 },
+    );
   }
 
-  const children = getChildUnits(session.unitCode);
+  const children = getRecruitmentQuotaChildUnits(session.unitCode);
   const validChild = children.find((c) => c.code === toUnit);
   if (!validChild) {
     return NextResponse.json(
@@ -81,41 +130,54 @@ export async function POST(request: NextRequest) {
 
   const qty = Number(amount);
   if (!Number.isFinite(qty) || qty <= 0) {
-    return NextResponse.json({ error: "Số chỉ tiêu không hợp lệ" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Số chỉ tiêu không hợp lệ" },
+      { status: 400 },
+    );
   }
 
   const capacity = await getUnitRecruitmentCapacity(toUnit);
   const shortage = qty > capacity.eligible;
   const shortageAmount = Math.max(0, qty - capacity.eligible);
 
-  const levelMap: Record<string, string> = { bo: "tinh", tinh: "xa", huyen: "xa" };
-
-  const quota = db.quotas.create({
+  const payload = {
     campaignId: campaignId || undefined,
     year: year || new Date().getFullYear(),
-    fromLevel: session.hierarchyLevel as "bo" | "tinh" | "xa",
+    fromLevel: session.hierarchyLevel as "bo" | "tinh" | "xa" | "donvi",
     fromUnit: session.unitCode,
-    toLevel: (levelMap[session.hierarchyLevel] || "tinh") as "bo" | "tinh" | "xa",
+    toLevel: toLevelFor(session.hierarchyLevel, validChild.level),
     toUnit,
     toUnitName: validChild.name || toUnitName,
     amount: qty,
     filled: 0,
     note: note || "",
-  });
+  };
 
-  // Thông báo luôn khi được giao chỉ tiêu
+  const quota =
+    (await createQuota(payload)) || db.quotas.create(payload);
+
+  // Bộ → QK: chỉ tiêu nhận quân = chỉ tiêu tuyển quân (cùng đợt)
+  if (
+    session.hierarchyLevel === "bo" &&
+    isQuanKhuOrBtl(toUnit) &&
+    quota.campaignId
+  ) {
+    await syncOneReceivingFromRecruitment(quota.campaignId, toUnit);
+  }
+
   db.notifications.create({
     toUnit,
     type: "quota_assigned",
     title: "Nhận chỉ tiêu tuyển quân mới",
-    message: `${session.name} đã giao chỉ tiêu ${qty} cho ${validChild.name} (năm ${quota.year}).` +
+    message:
+      `${session.name} đã giao chỉ tiêu ${qty} cho ${validChild.name} (năm ${quota.year}).` +
       (shortage
         ? ` Cảnh báo: đơn vị chỉ có ${capacity.eligible}/${capacity.totalCitizens} hồ sơ đủ điều kiện — thiếu ${shortageAmount}.`
         : ` Hiện có ${capacity.eligible} hồ sơ đủ điều kiện tuyển.`),
     relatedQuotaId: quota.id,
+    relatedHref: "/admin/quota",
   });
 
-  // Thông báo riêng thiếu nguồn nếu không đủ
   if (shortage) {
     db.notifications.create({
       toUnit,
@@ -126,6 +188,7 @@ export async function POST(request: NextRequest) {
         `(chưa khám / đang khám / đậu) trên tổng ${capacity.totalCitizens} hồ sơ. ` +
         `Thiếu khoảng ${shortageAmount}. Vui lòng rà soát, bổ sung nguồn hoặc báo cáo cấp trên.`,
       relatedQuotaId: quota.id,
+      relatedHref: "/admin/quota",
     });
   }
 

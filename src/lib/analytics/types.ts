@@ -20,7 +20,12 @@ export interface OverviewKpi {
   exempted: number;
   inService: number;
   examining: number;
+  /** Đạt tuyển (trúng tuyển + đã nhập ngũ) */
   passed: number;
+  /** Đã nhập ngũ nhưng chưa phân quân khu */
+  unassignedReceiving: number;
+  /** Đã phân đơn vị nhận quân */
+  assignedReceiving: number;
 }
 
 export interface FunnelStep {

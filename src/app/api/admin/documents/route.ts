@@ -180,6 +180,23 @@ export async function POST(request: NextRequest) {
     files,
   });
   if (fromDb) {
+    for (const unit of toUnits) {
+      if (unit === session.unitCode) continue;
+      db.notifications.create({
+        toUnit: unit,
+        type: "document_incoming",
+        title: urgent ? "Công văn đến (khẩn)" : "Công văn đến",
+        message: `${session.name} gửi: ${title}`,
+        relatedHref: "/admin/documents",
+      });
+    }
+    db.notifications.create({
+      toUnit: session.unitCode,
+      type: "document_outgoing",
+      title: urgent ? "Công văn đi (khẩn)" : "Công văn đi",
+      message: `Đã gửi “${title}” tới ${toUnits.length} đơn vị.`,
+      relatedHref: "/admin/documents",
+    });
     return NextResponse.json(
       { data: fromDb, meta: { source: "mysql" } },
       { status: 201 },
@@ -212,6 +229,24 @@ export async function POST(request: NextRequest) {
     urgent,
     createdBy: session.userId,
     attachments,
+  });
+
+  for (const unit of toUnits) {
+    if (unit === session.unitCode) continue;
+    db.notifications.create({
+      toUnit: unit,
+      type: "document_incoming",
+      title: urgent ? "Công văn đến (khẩn)" : "Công văn đến",
+      message: `${session.name} gửi: ${title}`,
+      relatedHref: "/admin/documents",
+    });
+  }
+  db.notifications.create({
+    toUnit: session.unitCode,
+    type: "document_outgoing",
+    title: urgent ? "Công văn đi (khẩn)" : "Công văn đi",
+    message: `Đã gửi “${title}” tới ${toUnits.length} đơn vị.`,
+    relatedHref: "/admin/documents",
   });
 
   return NextResponse.json(

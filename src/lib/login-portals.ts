@@ -3,6 +3,7 @@ import type { HierarchyLevel } from "@/lib/data";
 
 export type LoginPortal =
   | "cap_bo"
+  | "quan_khu"
   | "dia_phuong"
   | "don_vi_nhan_quan"
   | "can_bo_y_te";
@@ -18,6 +19,11 @@ export const LOGIN_PORTAL_OPTIONS: {
     description: "Bộ Quốc phòng — quản lý toàn quốc",
   },
   {
+    value: "quan_khu",
+    label: "Quân khu",
+    description: "Quân khu / BTL — quản lý tỉnh thuộc địa bàn",
+  },
+  {
     value: "dia_phuong",
     label: "Địa phương",
     description: "Cấp Tỉnh/TP hoặc Phường/Xã",
@@ -25,7 +31,7 @@ export const LOGIN_PORTAL_OPTIONS: {
   {
     value: "don_vi_nhan_quan",
     label: "Đơn vị nhận quân",
-    description: "Tiếp nhận quân nhân nhập ngũ",
+    description: "Chọn QK/BTL rồi sư đoàn · trung đoàn · quân đoàn",
   },
   {
     value: "can_bo_y_te",
@@ -57,6 +63,12 @@ export function resolveLoginContext(input: {
         hierarchyLevel: "bo",
         functionalRole: "tuyen_quan",
         unitCode: "bo",
+      };
+    case "quan_khu":
+      return {
+        hierarchyLevel: "donvi",
+        functionalRole: "nhan_quan",
+        unitCode: donviCode,
       };
     case "dia_phuong":
       if (localLevel === "xa") {

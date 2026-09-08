@@ -18,6 +18,7 @@ export default async function AdminLayout({
       userRole={session.role}
       userHierarchyLevel={session.hierarchyLevel}
       userFunctionalRole={session.functionalRole || "tuyen_quan"}
+      userUnitCode={session.unitCode || ""}
     >
       {children}
     </AdminLayoutClient>

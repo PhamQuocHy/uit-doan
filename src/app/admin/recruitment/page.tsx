@@ -7,6 +7,7 @@ import {
   Plus,
   Eye,
   Edit2,
+  Trash2,
   Users,
   CheckCircle2,
   Activity,
@@ -34,6 +35,7 @@ import {
   ADMIN_TD_CLS,
   adminRowClass,
 } from "@/components/admin/list-ui";
+import { M3ConfirmDialog } from "@/components/m3";
 
 interface Candidate {
   id: string;
@@ -46,68 +48,15 @@ interface Candidate {
   note: string;
 }
 
-const mockReserves = [
-  {
-    id: "r1",
-    fullName: "Nguyễn Văn An",
-    cccd: "079300012345",
-    dob: "2002-03-14",
-    unit: "Đại đội 1/Huyện Bình Chánh",
-    discharged: "2024-12-31",
-    reserveClass: "Hạng 1",
-    specialty: "Bộ binh",
-    lastTraining: "2025-08-15",
-    status: "active",
-  },
-  {
-    id: "r2",
-    fullName: "Trần Văn Bảo",
-    cccd: "079300076543",
-    dob: "2000-05-20",
-    unit: "Đại đội 2/Huyện Củ Chi",
-    discharged: "2023-12-31",
-    reserveClass: "Hạng 1",
-    specialty: "Công binh",
-    lastTraining: "2025-07-10",
-    status: "active",
-  },
-  {
-    id: "r3",
-    fullName: "Lê Thành Công",
-    cccd: "079300034567",
-    dob: "2001-08-08",
-    unit: "Đại đội 3/Huyện Hóc Môn",
-    discharged: "2024-06-30",
-    reserveClass: "Hạng 2",
-    specialty: "Thông tin",
-    lastTraining: "2025-06-20",
-    status: "inactive",
-  },
-  {
-    id: "r4",
-    fullName: "Phạm Đức Duy",
-    cccd: "079300021098",
-    dob: "2003-01-25",
-    unit: "Đại đội 1/Huyện Bình Chánh",
-    discharged: "2025-12-31",
-    reserveClass: "Hạng 1",
-    specialty: "Bộ binh",
-    lastTraining: "2025-09-01",
-    status: "active",
-  },
-  {
-    id: "r5",
-    fullName: "Hoàng Mạnh Hùng",
-    cccd: "079300055561",
-    dob: "2001-06-15",
-    unit: "Đại đội 2/Huyện Hoàn Kiếm",
-    discharged: "2025-06-30",
-    reserveClass: "Hạng 2",
-    specialty: "Trinh sát",
-    lastTraining: "2025-05-10",
-    status: "active",
-  },
-];
+interface ReserveRow {
+  id: string;
+  fullName: string;
+  cccd: string;
+  dob: string;
+  unit: string;
+  healthStatus: string;
+  note: string;
+}
 
 const resultConfig = {
   passed: {
@@ -123,54 +72,12 @@ const resultConfig = {
     icon: XCircle,
   },
   pending: {
-    label: "Chưa khám",
+    label: "Chờ duyệt",
     color: "var(--color-m3-warning)",
     bg: "var(--color-m3-warning-container)",
     icon: Activity,
   },
 };
-
-const mockReturnedSoldiers = [
-  {
-    id: "rs1",
-    fullName: "Ngô Thành Nhân",
-    cccd: "079300011112",
-    dateOfBirth: "2001-12-05",
-    province: "tinh-hcm",
-    district: "huyen-bc",
-    commune: "xa-bh",
-    origin: "Xã Bình Hưng, Huyện Bình Chánh",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Huyết áp cao không đảm bảo sức khỏe chiến đấu",
-    reportDate: "2026-03-03",
-  },
-  {
-    id: "rs2",
-    fullName: "Trần Thế Khoa",
-    cccd: "079300055533",
-    dateOfBirth: "2003-08-15",
-    province: "tinh-hcm",
-    district: "huyen-bc",
-    commune: "xa-lh",
-    origin: "Xã Long Hòa, Huyện Bình Chánh",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Suy nhược cơ thể",
-    reportDate: "2026-03-03",
-  },
-  {
-    id: "rs3",
-    fullName: "Lê Minh Trí",
-    cccd: "079300077744",
-    dateOfBirth: "2002-01-20",
-    province: "tinh-hn",
-    district: "huyen-hk",
-    commune: "xa-hb",
-    origin: "Xã Hàng Bông, Quận Hoàn Kiếm",
-    unitReceived: "Sư đoàn 1 – Quân khu 1",
-    reason: "Thị lực giảm sút do chấn thương",
-    reportDate: "2026-03-03",
-  },
-];
 
 const CAMPAIGN_STATUS_TABS = [
   { value: "", label: "Tất cả" },
@@ -183,13 +90,7 @@ const CANDIDATE_TABS = [
   { value: "", label: "Tất cả" },
   { value: "passed", label: "Trúng tuyển" },
   { value: "failed", label: "Không đạt" },
-  { value: "pending", label: "Chưa khám" },
-] as const;
-
-const RESERVE_TABS = [
-  { value: "", label: "Tất cả" },
-  { value: "active", label: "Hoạt động" },
-  { value: "inactive", label: "Ngừng" },
+  { value: "pending", label: "Chờ duyệt" },
 ] as const;
 
 function paginateSlice<T>(items: T[], page: number, pageSize: number) {
@@ -212,9 +113,11 @@ export default function RecruitmentPage() {
   const [pageSize, setPageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [listSearch, setListSearch] = useState("");
-  const [userHierarchyLevel, setUserHierarchyLevel] = useState<string>("tinh");
+  const [userHierarchyLevel, setUserHierarchyLevel] = useState<string>("");
   const [campaignFormOpen, setCampaignFormOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<RecruitmentCampaign | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RecruitmentCampaign | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     year: new Date().getFullYear().toString(),
@@ -226,15 +129,17 @@ export default function RecruitmentPage() {
   const [campaignSaving, setCampaignSaving] = useState(false);
   const [campaignError, setCampaignError] = useState("");
   const [campaignCandidates, setCampaignCandidates] = useState<Candidate[]>([]);
+  const [campaignReserves, setCampaignReserves] = useState<ReserveRow[]>([]);
 
   const [selectedCamp, setSelectedCamp] = useState<RecruitmentCampaign | null>(null);
   const [tab, setTab] = useState<"candidates" | "reserve" | "returned">("candidates");
   const [candidateFilter, setCandidateFilter] = useState<"" | "passed" | "failed" | "pending">("");
   const [search, setSearch] = useState("");
   const [reserveSearch, setReserveSearch] = useState("");
-  const [reserveStatus, setReserveStatus] = useState("");
   const [detailPage, setDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(20);
+
+  const isBo = userHierarchyLevel === "bo";
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -270,9 +175,11 @@ export default function RecruitmentPage() {
   useEffect(() => {
     if (!selectedCamp) {
       setCampaignCandidates([]);
+      setCampaignReserves([]);
       return;
     }
-    fetch(`/api/admin/approval?campaignId=${encodeURIComponent(selectedCamp.id)}`)
+    const campId = selectedCamp.id;
+    fetch(`/api/admin/approval?campaignId=${encodeURIComponent(campId)}`)
       .then((res) => (res.ok ? res.json() : { data: [] }))
       .then((data) => {
         const mapped: Candidate[] = (data.data || []).map(
@@ -284,6 +191,7 @@ export default function RecruitmentPage() {
             unitName: string;
             status: string;
             healthResult: string;
+            note?: string;
           }) => ({
             id: row.id,
             fullName: row.fullName,
@@ -296,18 +204,57 @@ export default function RecruitmentPage() {
                 : row.status === "rejected"
                   ? "failed"
                   : "pending",
-            score: Number(row.healthResult.replace(/\D/g, "")) || 0,
-            note: row.status === "pending" ? "Chờ xét duyệt" : "",
+            score: Number(String(row.healthResult).replace(/\D/g, "")) || 0,
+            note:
+              row.status === "pending"
+                ? "Chờ xét duyệt"
+                : row.status === "rejected"
+                  ? row.note || "Không đạt xét duyệt"
+                  : row.note || "Đã duyệt gọi",
           }),
         );
         setCampaignCandidates(mapped);
       })
       .catch(() => setCampaignCandidates([]));
+
+    const reserveQuery = new URLSearchParams({
+      page: "1",
+      limit: "500",
+      ageScope: "active",
+      callIntent: "du_bi",
+      campaignId: campId,
+      nationwide: "1",
+    });
+    fetch(`/api/admin/citizens?${reserveQuery}`)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        const mapped: ReserveRow[] = (data.data || []).map(
+          (c: {
+            id: string;
+            fullName: string;
+            cccd: string;
+            dateOfBirth: string;
+            address?: string;
+            healthStatus?: string;
+            militaryStatusReason?: string;
+          }) => ({
+            id: c.id,
+            fullName: c.fullName,
+            cccd: c.cccd,
+            dob: c.dateOfBirth,
+            unit: c.address || "—",
+            healthStatus: c.healthStatus || "—",
+            note: c.militaryStatusReason || "Dự bị theo đợt",
+          }),
+        );
+        setCampaignReserves(mapped);
+      })
+      .catch(() => setCampaignReserves([]));
   }, [selectedCamp]);
 
   useEffect(() => {
     setDetailPage(1);
-  }, [tab, candidateFilter, search, reserveSearch, reserveStatus, detailPageSize]);
+  }, [tab, candidateFilter, search, reserveSearch, detailPageSize]);
 
   const openCampaignForm = (campaign?: RecruitmentCampaign) => {
     setEditingCampaign(campaign || null);
@@ -336,6 +283,10 @@ export default function RecruitmentPage() {
 
   const saveCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!isBo) {
+      setCampaignError("Chỉ cấp Bộ được tạo / sửa đợt khám tuyển");
+      return;
+    }
     setCampaignSaving(true);
     setCampaignError("");
     try {
@@ -359,6 +310,28 @@ export default function RecruitmentPage() {
       setCampaignError(cause instanceof Error ? cause.message : "Lỗi lưu đợt khám");
     } finally {
       setCampaignSaving(false);
+    }
+  };
+
+  const confirmDeleteCampaign = async () => {
+    if (!deleteTarget || !isBo) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/recruitment/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Không thể xóa đợt khám");
+      setDeleteTarget(null);
+      if (selectedCamp?.id === deleteTarget.id) setSelectedCamp(null);
+      await fetchCampaigns();
+    } catch (cause) {
+      setCampaignError(
+        cause instanceof Error ? cause.message : "Lỗi xóa đợt khám",
+      );
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -393,6 +366,23 @@ export default function RecruitmentPage() {
     return campaigns.filter((c) => c.name.toLowerCase().includes(q));
   }, [campaigns, listSearch]);
 
+  const summaryStats = useMemo(() => {
+    const ongoing = campaigns.filter((c) => c.status === "ongoing").length;
+    const totalApproved = campaigns.reduce(
+      (sum, c) => sum + (c.registeredCount || 0),
+      0,
+    );
+    const totalPassed = campaigns.reduce(
+      (sum, c) => sum + (c.passedCount || 0),
+      0,
+    );
+    const totalQuota = campaigns.reduce(
+      (sum, c) => sum + (c.targetQuota || 0),
+      0,
+    );
+    return { ongoing, totalApproved, totalPassed, totalQuota };
+  }, [campaigns]);
+
   if (selectedCamp) {
     const candidates = campaignCandidates;
     const filteredCandidates = candidates.filter((c) => {
@@ -404,55 +394,26 @@ export default function RecruitmentPage() {
       return matchResult && matchSearch;
     });
 
-    const filteredReserves = mockReserves.filter((r) => {
-      const matchSearch =
+    const filteredReserves = campaignReserves.filter((r) => {
+      return (
         !reserveSearch ||
         r.fullName.toLowerCase().includes(reserveSearch.toLowerCase()) ||
-        r.cccd.includes(reserveSearch);
-      const matchStatus = !reserveStatus || r.status === reserveStatus;
-      return matchSearch && matchStatus;
+        r.cccd.includes(reserveSearch)
+      );
     });
 
-    const returnedAggregateRows =
-      userHierarchyLevel === "tinh"
-        ? Array.from(new Set(mockReturnedSoldiers.map((s) => s.district))).map((district) => {
-            const count = mockReturnedSoldiers.filter((s) => s.district === district).length;
-            const sample = mockReturnedSoldiers.find((s) => s.district === district);
-            return {
-              id: district,
-              label: sample ? sample.origin.split(", ")[1] || district : district,
-              count,
-            };
-          })
-        : userHierarchyLevel === "huyen"
-          ? Array.from(new Set(mockReturnedSoldiers.map((s) => s.commune))).map((commune) => {
-              const count = mockReturnedSoldiers.filter((s) => s.commune === commune).length;
-              const sample = mockReturnedSoldiers.find((s) => s.commune === commune);
-              return {
-                id: commune,
-                label: sample ? sample.origin.split(", ")[0] || commune : commune,
-                count,
-              };
-            })
-          : [];
-
-    const returnedSoldierRows = mockReturnedSoldiers.map((s) => ({
-      id: s.id,
-      soldier: s,
-    }));
+    const returnedRows = candidates.filter((c) => c.healthResult === "failed");
+    const filteredReturned = returnedRows.filter((c) => {
+      return (
+        !search ||
+        c.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        c.cccd.includes(search)
+      );
+    });
 
     const pagedCandidates = paginateSlice(filteredCandidates, detailPage, detailPageSize);
     const pagedReserves = paginateSlice(filteredReserves, detailPage, detailPageSize);
-    const pagedReturnedAggregate = paginateSlice(
-      returnedAggregateRows,
-      detailPage,
-      detailPageSize,
-    );
-    const pagedReturnedSoldiers = paginateSlice(
-      returnedSoldierRows,
-      detailPage,
-      detailPageSize,
-    );
+    const pagedReturned = paginateSlice(filteredReturned, detailPage, detailPageSize);
 
     const passedCount = candidates.filter((c) => c.healthResult === "passed").length;
     const failedCount = candidates.filter((c) => c.healthResult === "failed").length;
@@ -481,7 +442,7 @@ export default function RecruitmentPage() {
             { label: "Tổng gọi khám", value: candidates.length, color: "var(--m3-on-surface, #1b1d20)" },
             { label: "Trúng tuyển", value: passedCount, color: "var(--color-m3-success)" },
             { label: "Không đạt", value: failedCount, color: "var(--m3-error, #ba1a1a)" },
-            { label: "Chưa khám", value: pendingCount, color: "var(--color-m3-warning)" },
+            { label: "Chờ duyệt", value: pendingCount, color: "var(--color-m3-warning)" },
           ].map((s) => (
             <div
               key={s.label}
@@ -499,8 +460,8 @@ export default function RecruitmentPage() {
           {(
             [
               { key: "candidates", label: `Danh sách thanh niên khám (${candidates.length})`, icon: Users },
-              { key: "reserve", label: `Danh sách dự bị (${mockReserves.length})`, icon: Shield },
-              { key: "returned", label: `Bị trả về (${mockReturnedSoldiers.length})`, icon: XCircle },
+              { key: "reserve", label: `Danh sách dự bị (${campaignReserves.length})`, icon: Shield },
+              { key: "returned", label: `Bị trả về (${returnedRows.length})`, icon: XCircle },
             ] as const
           ).map(({ key, label, icon: Icon }) => (
             <button
@@ -607,13 +568,6 @@ export default function RecruitmentPage() {
           <AdminListShell
             page={pagedReserves.safePage}
             totalPages={pagedReserves.totalPages}
-            tabs={
-              <AdminStatusTabs
-                tabs={[...RESERVE_TABS]}
-                value={reserveStatus}
-                onChange={setReserveStatus}
-              />
-            }
             toolbar={
               <AdminListToolbar
                 search={reserveSearch}
@@ -630,21 +584,19 @@ export default function RecruitmentPage() {
               />
             }
           >
-            <AdminTable minWidth="min-w-[960px]">
+            <AdminTable minWidth="min-w-[880px]">
               <AdminTHead>
                 <th className={ADMIN_TH_CLS}>Họ và Tên</th>
-                <th className={ADMIN_TH_CLS}>Đơn vị dự bị</th>
-                <th className={ADMIN_TH_CLS}>Xuất ngũ</th>
-                <th className={ADMIN_TH_CLS}>Hạng</th>
-                <th className={ADMIN_TH_CLS}>Chuyên ngành</th>
-                <th className={ADMIN_TH_CLS}>Huấn luyện gần nhất</th>
-                <th className={ADMIN_TH_CLS}>Trạng thái</th>
+                <th className={ADMIN_TH_CLS}>Ngày sinh</th>
+                <th className={ADMIN_TH_CLS}>Địa chỉ / đơn vị</th>
+                <th className={ADMIN_TH_CLS}>Sức khỏe</th>
+                <th className={ADMIN_TH_CLS}>Ghi chú</th>
               </AdminTHead>
               <tbody>
                 {pagedReserves.slice.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
-                      Không có kết quả
+                    <td colSpan={5} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
+                      Chưa có thanh niên dự bị trong đợt này. Cập nhật trạng thái “Dự bị” tại Hồ sơ công dân.
                     </td>
                   </tr>
                 ) : (
@@ -652,52 +604,24 @@ export default function RecruitmentPage() {
                     <tr key={r.id} className={adminRowClass(idx)}>
                       <td className={ADMIN_TD_CLS}>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-m3-surface-high flex items-center justify-center shrink-0">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-m3-surface-high">
                             <Shield size={12} className="text-m3-primary" />
                           </div>
                           <div>
-                            <div className="font-semibold text-[14px]">{r.fullName}</div>
-                            <div className="text-xs text-m3-on-surface-variant font-mono">{r.cccd}</div>
+                            <div className="text-[14px] font-semibold">{r.fullName}</div>
+                            <div className="font-mono text-xs text-m3-on-surface-variant">{r.cccd}</div>
                           </div>
                         </div>
                       </td>
-                      <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>{r.unit}</td>
                       <td className={ADMIN_TD_CLS}>
-                        {new Date(r.discharged).toLocaleDateString("vi-VN")}
+                        {r.dob ? new Date(r.dob).toLocaleDateString("vi-VN") : "—"}
                       </td>
-                      <td className={ADMIN_TD_CLS}>
-                        <AdminPill
-                          label={r.reserveClass}
-                          bg={
-                            r.reserveClass === "Hạng 1"
-                              ? "var(--m3-primary-container, #dae9fb)"
-                              : "var(--m3-surface-container-high, #eef1f4)"
-                          }
-                          color={
-                            r.reserveClass === "Hạng 1"
-                              ? "var(--m3-primary, #1a73e8)"
-                              : "var(--m3-on-surface-variant, #475569)"
-                          }
-                        />
+                      <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>
+                        {r.unit}
                       </td>
-                      <td className={ADMIN_TD_CLS}>{r.specialty}</td>
-                      <td className={ADMIN_TD_CLS}>
-                        {new Date(r.lastTraining).toLocaleDateString("vi-VN")}
-                      </td>
-                      <td className={ADMIN_TD_CLS}>
-                        <AdminPill
-                          label={r.status === "active" ? "Hoạt động" : "Ngừng"}
-                          bg={
-                            r.status === "active"
-                              ? "var(--color-m3-success-container)"
-                              : "var(--m3-surface-container-high, #eef1f4)"
-                          }
-                          color={
-                            r.status === "active"
-                              ? "var(--color-m3-success)"
-                              : "var(--m3-on-surface-variant, #475569)"
-                          }
-                        />
+                      <td className={ADMIN_TD_CLS}>{r.healthStatus}</td>
+                      <td className={`${ADMIN_TD_CLS} text-xs italic text-m3-on-surface-variant`}>
+                        {r.note || "—"}
                       </td>
                     </tr>
                   ))
@@ -709,93 +633,86 @@ export default function RecruitmentPage() {
 
         {tab === "returned" && (
           <AdminListShell
-            page={
-              userHierarchyLevel === "tinh" || userHierarchyLevel === "huyen"
-                ? pagedReturnedAggregate.safePage
-                : pagedReturnedSoldiers.safePage
-            }
-            totalPages={
-              userHierarchyLevel === "tinh" || userHierarchyLevel === "huyen"
-                ? pagedReturnedAggregate.totalPages
-                : pagedReturnedSoldiers.totalPages
-            }
+            page={pagedReturned.safePage}
+            totalPages={pagedReturned.totalPages}
             toolbar={
-              <div className="flex items-center gap-2 border-b border-black/[0.05] bg-red-500/[0.04] px-4 py-3">
-                <AlertTriangle size={18} className="text-m3-error" />
-                <span className="text-[13px] font-semibold text-m3-error">
-                  Danh sách quân nhân bị các đơn vị trả về
-                </span>
+              <div className="flex flex-col gap-2 border-b border-black/[0.05] bg-red-500/[0.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={18} className="text-m3-error" />
+                  <span className="text-[13px] font-semibold text-m3-error">
+                    Thanh niên không đạt xét duyệt trong đợt này
+                  </span>
+                </div>
+                <AdminListToolbar
+                  search={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Tìm họ tên, CCCD..."
+                  page={pagedReturned.safePage}
+                  pageSize={detailPageSize}
+                  totalPages={pagedReturned.totalPages}
+                  onPageChange={setDetailPage}
+                  onPageSizeChange={(size) => {
+                    setDetailPageSize(size);
+                    setDetailPage(1);
+                  }}
+                />
               </div>
             }
           >
-            <AdminTable minWidth="min-w-[720px]">
-              {userHierarchyLevel === "tinh" || userHierarchyLevel === "huyen" ? (
-                <>
-                  <AdminTHead>
-                    <th className={ADMIN_TH_CLS}>
-                      {userHierarchyLevel === "tinh" ? "Quận / Huyện" : "Xã / Phường"}
-                    </th>
-                    <th className={`${ADMIN_TH_CLS} text-center`}>Số lượng bị trả về</th>
-                  </AdminTHead>
-                  <tbody>
-                    {pagedReturnedAggregate.slice.map((row, idx) => (
-                      <tr key={row.id} className={adminRowClass(idx, "hover:bg-red-50/50")}>
-                        <td className={`${ADMIN_TD_CLS} font-semibold`}>{row.label}</td>
-                        <td className={`${ADMIN_TD_CLS} text-center font-bold text-m3-error`}>
-                          {row.count}
-                        </td>
-                      </tr>
-                    ))}
-                    {pagedReturnedAggregate.slice.length === 0 && (
-                      <tr>
-                        <td colSpan={2} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
-                          Không có kết quả
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </>
-              ) : (
-                <>
-                  <AdminTHead>
-                    <th className={ADMIN_TH_CLS}>Quân nhân</th>
-                    <th className={ADMIN_TH_CLS}>Đơn vị trả về</th>
-                    <th className={ADMIN_TH_CLS}>Lý do từ chối</th>
-                    <th className={`${ADMIN_TH_CLS} text-center`}>Ngày báo cáo</th>
-                  </AdminTHead>
-                  <tbody>
-                    {pagedReturnedSoldiers.slice.map((row, idx) => {
-                      const soldier = row.soldier;
-                      return (
-                        <tr key={row.id} className={adminRowClass(idx, "hover:bg-red-50/50")}>
-                          <td className={ADMIN_TD_CLS}>
-                            <div className="font-semibold">{soldier.fullName}</div>
-                            <div className="text-xs text-m3-on-surface-variant font-mono mt-0.5">
-                              {soldier.cccd}
+            <AdminTable minWidth="min-w-[880px]">
+              <AdminTHead>
+                <th className={ADMIN_TH_CLS}>Họ và Tên</th>
+                <th className={ADMIN_TH_CLS}>Đơn vị</th>
+                <th className={`${ADMIN_TH_CLS} text-center`}>Điểm SK</th>
+                <th className={ADMIN_TH_CLS}>Trạng thái</th>
+                <th className={ADMIN_TH_CLS}>Lý do / ghi chú</th>
+              </AdminTHead>
+              <tbody>
+                {pagedReturned.slice.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
+                      Chưa có hồ sơ không đạt trong đợt này.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedReturned.slice.map((c, idx) => {
+                    const cfg = resultConfig.failed;
+                    const Icon = cfg.icon;
+                    return (
+                      <tr key={c.id} className={adminRowClass(idx)}>
+                        <td className={ADMIN_TD_CLS}>
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-m3-surface-high">
+                              <User2 size={12} className="text-m3-error" />
                             </div>
-                          </td>
-                          <td className={`${ADMIN_TD_CLS} font-medium text-m3-on-surface-variant`}>
-                            {soldier.unitReceived}
-                          </td>
-                          <td className={`${ADMIN_TD_CLS} font-medium italic text-m3-error`}>
-                            {soldier.reason}
-                          </td>
-                          <td className={`${ADMIN_TD_CLS} text-center text-xs text-m3-on-surface-variant`}>
-                            {new Date(soldier.reportDate).toLocaleDateString("vi-VN")}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {pagedReturnedSoldiers.slice.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
-                          Không có kết quả
+                            <div>
+                              <div className="text-[14px] font-semibold">{c.fullName}</div>
+                              <div className="font-mono text-xs text-m3-on-surface-variant">{c.cccd}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>
+                          {c.unit}
+                        </td>
+                        <td className={`${ADMIN_TD_CLS} text-center font-semibold`}>
+                          {c.score > 0 ? c.score : "—"}
+                        </td>
+                        <td className={ADMIN_TD_CLS}>
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                            style={{ background: cfg.bg, color: cfg.color }}
+                          >
+                            <Icon size={11} /> {cfg.label}
+                          </span>
+                        </td>
+                        <td className={`${ADMIN_TD_CLS} text-xs italic text-m3-on-surface-variant`}>
+                          {c.note || "—"}
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                </>
-              )}
+                    );
+                  })
+                )}
+              </tbody>
             </AdminTable>
           </AdminListShell>
         )}
@@ -829,15 +746,25 @@ export default function RecruitmentPage() {
           </select>
         }
         actions={
-          <AdminPrimaryBtn tone="blue" onClick={() => openCampaignForm()}>
-            <Plus size={16} /> Tạo đợt khám mới
-          </AdminPrimaryBtn>
+          isBo ? (
+            <AdminPrimaryBtn tone="blue" onClick={() => openCampaignForm()}>
+              <Plus size={16} /> Tạo đợt khám mới
+            </AdminPrimaryBtn>
+          ) : undefined
         }
       />
 
       <p className="text-[14px] text-m3-on-surface-variant">
-        Quản lý các đợt gọi khám sức khỏe và kết quả gọi quân
+        {isBo
+          ? "Cấp Bộ tạo đợt, giao chỉ tiêu toàn quốc một lần. Tiến độ tính theo thanh niên đậu sức khỏe đã được quân khu duyệt gọi."
+          : "Theo dõi đợt khám tuyển toàn quốc. Chỉ cấp Bộ được tạo / sửa / xóa đợt và giao chỉ tiêu."}
       </p>
+
+      {campaignError && !campaignFormOpen && (
+        <div className="rounded-[14px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] font-semibold text-red-800">
+          {campaignError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center gap-4">
@@ -846,7 +773,9 @@ export default function RecruitmentPage() {
           </div>
           <div>
             <p className="text-sm text-m3-on-surface-variant font-medium">Đợt đang diễn ra</p>
-            <p className="text-2xl font-bold text-m3-on-surface">1</p>
+            <p className="text-2xl font-bold text-m3-on-surface">
+              {summaryStats.ongoing.toLocaleString("vi-VN")}
+            </p>
           </div>
         </div>
         <div className="rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center gap-4">
@@ -854,8 +783,13 @@ export default function RecruitmentPage() {
             <Users size={24} />
           </div>
           <div>
-            <p className="text-sm text-m3-on-surface-variant font-medium">Tổng gọi khám</p>
-            <p className="text-2xl font-bold text-m3-on-surface">3,200</p>
+            <p className="text-sm text-m3-on-surface-variant font-medium">Đã duyệt gọi</p>
+            <p className="text-2xl font-bold text-m3-on-surface">
+              {summaryStats.totalApproved.toLocaleString("vi-VN")}
+            </p>
+            <p className="text-[11px] text-m3-on-surface-variant mt-0.5">
+              / {summaryStats.totalQuota.toLocaleString("vi-VN")} chỉ tiêu
+            </p>
           </div>
         </div>
         <div className="rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center gap-4">
@@ -864,7 +798,9 @@ export default function RecruitmentPage() {
           </div>
           <div>
             <p className="text-sm text-m3-on-surface-variant font-medium">Đã đạt sức khỏe</p>
-            <p className="text-2xl font-bold text-m3-on-surface">450</p>
+            <p className="text-2xl font-bold text-m3-on-surface">
+              {summaryStats.totalPassed.toLocaleString("vi-VN")}
+            </p>
           </div>
         </div>
       </div>
@@ -906,7 +842,7 @@ export default function RecruitmentPage() {
           <AdminTHead>
             <th className={ADMIN_TH_CLS}>Tên đợt khám</th>
             <th className={ADMIN_TH_CLS}>Thời gian</th>
-            <th className={ADMIN_TH_CLS}>Chỉ tiêu / Lên trạm</th>
+            <th className={ADMIN_TH_CLS}>Chỉ tiêu / Đã duyệt gọi</th>
             <th className={ADMIN_TH_CLS}>Đạt sức khỏe</th>
             <th className={ADMIN_TH_CLS}>Trạng thái</th>
             <th className={`${ADMIN_TH_CLS} text-center`}>Thao tác</th>
@@ -927,8 +863,14 @@ export default function RecruitmentPage() {
             ) : (
               filteredCampaigns.map((camp, idx) => {
                 const statusInfo = getStatusInfo(camp.status);
-                const regPct = Math.round((camp.registeredCount / camp.targetQuota) * 100);
-                const passPct = Math.round((camp.passedCount / camp.targetQuota) * 100);
+                const quota = Math.max(0, camp.targetQuota || 0);
+                // registeredCount = đã duyệt gọi (thanh niên đậu + QK trả về)
+                const approved = Math.max(0, camp.registeredCount || 0);
+                const passed = Math.max(0, camp.passedCount || 0);
+                const fillPct =
+                  quota > 0 ? Math.round((approved / quota) * 100) : 0;
+                const passPct =
+                  quota > 0 ? Math.round((passed / quota) * 100) : 0;
                 return (
                   <tr
                     key={camp.id}
@@ -947,18 +889,27 @@ export default function RecruitmentPage() {
                     </td>
                     <td className={ADMIN_TD_CLS}>
                       <div className="font-semibold">
-                        {camp.targetQuota} / {camp.registeredCount}
+                        {quota.toLocaleString("vi-VN")} / {approved.toLocaleString("vi-VN")}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-m3-on-surface-variant">
+                        Duyệt gọi {quota > 0 ? `${Math.min(fillPct, 999)}% chỉ tiêu` : "—"}
                       </div>
                       <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
                         <div
                           className="bg-m3-primary-container h-1.5 rounded-full"
-                          style={{ width: `${Math.min(regPct, 100)}%` }}
+                          style={{ width: `${Math.min(fillPct, 100)}%` }}
                         />
                       </div>
                     </td>
                     <td className={ADMIN_TD_CLS}>
                       <div className="font-semibold">
-                        {camp.passedCount} ({passPct}%)
+                        {passed.toLocaleString("vi-VN")}
+                        {quota > 0 ? ` (${Math.min(passPct, 999)}%)` : ""}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-m3-on-surface-variant">
+                        {passed > 0
+                          ? `${approved.toLocaleString("vi-VN")} duyệt / ${passed.toLocaleString("vi-VN")} đậu SK`
+                          : "Chưa có thanh niên đậu SK"}
                       </div>
                       <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
                         <div
@@ -981,13 +932,24 @@ export default function RecruitmentPage() {
                         >
                           <Eye size={15} />
                         </AdminIconBtn>
-                        <AdminIconBtn
-                          title="Chỉnh sửa"
-                          tone="blue"
-                          onClick={() => openCampaignForm(camp)}
-                        >
-                          <Edit2 size={15} />
-                        </AdminIconBtn>
+                        {isBo && (
+                          <>
+                            <AdminIconBtn
+                              title="Chỉnh sửa"
+                              tone="blue"
+                              onClick={() => openCampaignForm(camp)}
+                            >
+                              <Edit2 size={15} />
+                            </AdminIconBtn>
+                            <AdminIconBtn
+                              title="Xóa đợt"
+                              tone="red"
+                              onClick={() => setDeleteTarget(camp)}
+                            >
+                              <Trash2 size={15} />
+                            </AdminIconBtn>
+                          </>
+                        )}
                       </AdminHoverActions>
                     </td>
                   </tr>
@@ -1046,7 +1008,7 @@ export default function RecruitmentPage() {
               </label>
               <label>
                 <span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">
-                  Chỉ tiêu
+                  Chỉ tiêu toàn quốc
                 </span>
                 <input
                   required
@@ -1058,6 +1020,9 @@ export default function RecruitmentPage() {
                   }
                   className="w-full rounded-xl border border-m3-outline-variant px-3 py-2 text-sm"
                 />
+                <span className="mt-1 block text-[11px] text-m3-on-surface-variant">
+                  Giao một lần cho cả nước. Tiến độ tính theo thanh niên đậu SK đã được duyệt gọi.
+                </span>
               </label>
               <label>
                 <span className="mb-1 block text-xs font-semibold text-m3-on-surface-variant">
@@ -1122,6 +1087,26 @@ export default function RecruitmentPage() {
           </form>
         </div>
       )}
+
+      <M3ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa đợt khám tuyển?"
+        description={
+          deleteTarget
+            ? `Xóa “${deleteTarget.name}”? Chỉ tiêu và liên kết hồ sơ theo đợt sẽ được gỡ.`
+            : undefined
+        }
+        confirmLabel="Xóa đợt"
+        cancelLabel="Hủy"
+        tone="danger"
+        busy={deleting}
+        onConfirm={() => {
+          void confirmDeleteCampaign();
+        }}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

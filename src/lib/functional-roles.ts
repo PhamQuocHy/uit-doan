@@ -13,7 +13,8 @@ export const FUNCTIONAL_ROLE_OPTIONS: {
   {
     value: "nhan_quan",
     label: "Nhận quân",
-    description: "Đơn vị tiếp nhận quân nhân nhập ngũ",
+    description:
+      "Quân khu phân quân; sư đoàn/quân đoàn/trung đoàn xem quân số & xác nhận nhận",
   },
   {
     value: "y_te",

@@ -11,6 +11,7 @@ import {
   type CallIntent,
 } from "@/lib/enlistment-approval";
 import { verifyEditPinAsync } from "@/lib/unit-pin";
+import { countCitizenNvqsAttachments } from "@/lib/citizen-nvqs-attachments-db";
 
 export async function GET(
   _request: NextRequest,
@@ -76,9 +77,8 @@ export async function PUT(
       );
     }
 
-    // Hồ sơ: cấp tỉnh/huyện/xã cần PIN khi gửi requireEditPin
-    const requireEditPin = body.requireEditPin === true;
-    if (requireEditPin && hierarchyNeedsEditPin(session.hierarchyLevel)) {
+    // Cấp tỉnh / huyện / xã: bắt buộc PIN khi cập nhật hồ sơ
+    if (hierarchyNeedsEditPin(session.hierarchyLevel)) {
       const pin = typeof body.editPin === "string" ? body.editPin : "";
       if (!(await verifyEditPinAsync(session.unitCode, pin))) {
         return NextResponse.json(
@@ -99,13 +99,7 @@ export async function PUT(
             { status: 403 },
           );
         }
-        const pin = typeof body.editPin === "string" ? body.editPin : "";
-        if (!(await verifyEditPinAsync(session.unitCode, pin))) {
-          return NextResponse.json(
-            { error: "Cần mã PIN hợp lệ để sửa trạng thái NVQS đã lưu" },
-            { status: 403 },
-          );
-        }
+        // PIN đã xác thực ở trên cho cấp tỉnh/xã
       }
     }
 
@@ -118,17 +112,74 @@ export async function PUT(
     const payload = { ...safeBody };
 
     if (updatesCallIntent || body.militaryStatus === "tamhoan" || body.militaryStatus === "miengoi") {
-      if (body.militaryStatus === "tamhoan" || body.militaryStatus === "miengoi") {
+      if (body.militaryStatus === "miengoi") {
         payload.callIntent = "unset";
         payload.approvalStatus = "none";
-        payload.militaryStatus = body.militaryStatus;
+        payload.militaryStatus = "miengoi";
+        payload.approvalComment = null;
+      } else if (body.militaryStatus === "tamhoan") {
+        const note = String(body.militaryStatusReason || "").trim();
+        if (!note) {
+          return NextResponse.json(
+            { error: "Vui lòng nhập ghi chú / lý do tạm hoãn kèm minh chứng" },
+            { status: 400 },
+          );
+        }
+        const files = await countCitizenNvqsAttachments(id, "tam_hoan");
+        if (files < 1) {
+          return NextResponse.json(
+            {
+              error:
+                "Đề xuất tạm hoãn cần tải lên ít nhất 1 giấy tạm hoãn (minh chứng) trước khi lưu",
+            },
+            { status: 400 },
+          );
+        }
+        const resolved = resolveCallIntentUpdate("unset", "tamhoan");
+        payload.callIntent = resolved.callIntent;
+        payload.approvalStatus = resolved.approvalStatus;
+        payload.militaryStatus = "tamhoan";
+        payload.approvalComment = null;
       } else {
         const callIntent = (body.callIntent || "unset") as CallIntent;
-        const resolved = resolveCallIntentUpdate(callIntent, existing.militaryStatus);
+        const resolved = resolveCallIntentUpdate(
+          callIntent,
+          existing.militaryStatus,
+        );
+
+        if (
+          resolved.callIntent === "de_xuat_khong_goi" &&
+          resolved.approvalStatus === "pending"
+        ) {
+          const note = String(body.militaryStatusReason || "").trim();
+          if (!note) {
+            return NextResponse.json(
+              {
+                error:
+                  "Đề xuất không gọi cần ghi chú / lý do và tệp minh chứng (giấy khám SK…)",
+              },
+              { status: 400 },
+            );
+          }
+          const files = await countCitizenNvqsAttachments(id, "khong_goi");
+          if (files < 1) {
+            return NextResponse.json(
+              {
+                error:
+                  "Đề xuất không gọi cần tải lên ít nhất 1 tệp minh chứng trước khi lưu",
+              },
+              { status: 400 },
+            );
+          }
+        }
+
         payload.callIntent = resolved.callIntent;
         payload.approvalStatus = resolved.approvalStatus;
         if (resolved.militaryStatus) {
           payload.militaryStatus = resolved.militaryStatus;
+        }
+        if (resolved.clearApprovalComment) {
+          payload.approvalComment = null;
         }
       }
     }

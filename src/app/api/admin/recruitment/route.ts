@@ -6,6 +6,22 @@ import {
   findCampaignsFromDb,
 } from "@/lib/campaigns-db";
 
+function requireBoAdmin(session: {
+  role: string;
+  hierarchyLevel: string;
+} | null) {
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.hierarchyLevel !== "bo") {
+    return NextResponse.json(
+      { error: "Chỉ cấp Bộ được tạo / sửa / xóa đợt khám tuyển" },
+      { status: 403 },
+    );
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -22,18 +38,29 @@ export async function GET(request: NextRequest) {
 
   const fromDb = await findCampaignsFromDb({ page, limit, status, year });
   if (fromDb) {
-    return NextResponse.json({ ...fromDb, meta: { source: "mysql" } });
+    return NextResponse.json({
+      ...fromDb,
+      meta: {
+        source: "mysql",
+        canManage: session.hierarchyLevel === "bo",
+      },
+    });
   }
 
   const result = db.campaigns.findAll({ page, limit, status, year });
-  return NextResponse.json({ ...result, meta: { source: "memory" } });
+  return NextResponse.json({
+    ...result,
+    meta: {
+      source: "memory",
+      canManage: session.hierarchyLevel === "bo",
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireBoAdmin(session);
+  if (denied) return denied;
 
   const body = await request.json();
   const name = String(body.name || "").trim();

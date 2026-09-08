@@ -8,6 +8,7 @@ import {
 } from "./types";
 import { getDescendantUnitCodes, resolveScopeUnit } from "./scope";
 import { medicalGradeToOrdinal, pearsonMatrix } from "./correlation";
+import { ensureCitizenReceivingColumns } from "@/lib/citizens-db";
 
 function placeholders(n: number) {
   return Array(n).fill("?").join(",");
@@ -16,6 +17,7 @@ function placeholders(n: number) {
 export async function buildAnalyticsDashboard(
   filters: AnalyticsFilters
 ): Promise<AnalyticsDashboard> {
+  await ensureCitizenReceivingColumns();
   const scopeRoot = resolveScopeUnit(
     filters.sessionUnitCode,
     filters.hierarchyLevel,
@@ -28,11 +30,12 @@ export async function buildAnalyticsDashboard(
 
   const year = filters.year ?? new Date().getFullYear();
   const inUnits = placeholders(unitCodes.length);
+  const includeNullUnit = scopeRoot === "bo";
 
-  const overview = await getOverview(unitCodes, inUnits);
-  const funnel = await getFunnel(unitCodes, inUnits);
-  const recruitmentStatsByYear = await getYearStats(unitCodes, inUnits);
-  const defermentReasons = await getDeferment(unitCodes, inUnits);
+  const overview = await getOverview(unitCodes, inUnits, year, includeNullUnit);
+  const funnel = await getFunnel(unitCodes, inUnits, includeNullUnit);
+  const recruitmentStatsByYear = await getYearStats(unitCodes, inUnits, includeNullUnit);
+  const defermentReasons = await getDeferment(unitCodes, inUnits, includeNullUnit);
   const educationVsHealth = await getEduVsHealth(unitCodes, inUnits);
   const healthGradeByYear = await getHealthByYear(unitCodes, inUnits, year);
   const unitQualifyRates = await getUnitRates(unitCodes, inUnits);
@@ -58,28 +61,92 @@ export async function buildAnalyticsDashboard(
   };
 }
 
-async function getOverview(unitCodes: string[], inUnits: string) {
-  const rows = await queryRows<(RowDataPacket & { military_status: string; cnt: number })[]>(
-    `SELECT military_status, COUNT(*) AS cnt
+function unitScopeSql(inUnits: string, includeNullUnit: boolean) {
+  return includeNullUnit
+    ? `(unit_code IN (${inUnits}) OR unit_code IS NULL)`
+    : `unit_code IN (${inUnits})`;
+}
+
+function citizenUnitScopeSql(inUnits: string, includeNullUnit: boolean, alias = "c") {
+  return includeNullUnit
+    ? `(${alias}.unit_code IN (${inUnits}) OR ${alias}.unit_code IS NULL)`
+    : `${alias}.unit_code IN (${inUnits})`;
+}
+
+async function getOverview(
+  unitCodes: string[],
+  inUnits: string,
+  year: number,
+  includeNullUnit: boolean,
+) {
+  const unitSql = unitScopeSql(inUnits, includeNullUnit);
+  const rows = await queryRows<
+    (RowDataPacket & {
+      military_status: string;
+      cnt: number;
+      unassigned: number;
+      assigned: number;
+    })[]
+  >(
+    `SELECT
+       military_status,
+       COUNT(*) AS cnt,
+       SUM(
+         CASE
+           WHEN military_status = 'nhapngu'
+            AND (
+              receiving_status = 'chua_phan_quan'
+              OR receiving_status IS NULL
+              OR receiving_unit_code IS NULL
+              OR receiving_unit_code = ''
+            )
+           THEN 1 ELSE 0
+         END
+       ) AS unassigned,
+       SUM(
+         CASE
+           WHEN military_status = 'nhapngu'
+            AND receiving_unit_code IS NOT NULL
+            AND receiving_unit_code <> ''
+            AND IFNULL(receiving_status, 'da_phan_quan') <> 'chua_phan_quan'
+           THEN 1 ELSE 0
+         END
+       ) AS assigned
      FROM citizens
-     WHERE unit_code IN (${inUnits})
+     WHERE ${unitSql}
+       AND archived_at IS NULL
+       AND (
+         campaign_id IS NULL
+         OR campaign_id IN (SELECT id FROM recruitment_campaigns WHERE year = ?)
+       )
      GROUP BY military_status`,
-    unitCodes
+    [...unitCodes, year],
   );
   const map = Object.fromEntries(rows.map((r) => [r.military_status, Number(r.cnt)]));
   const total = rows.reduce((s, r) => s + Number(r.cnt), 0);
+  const unassignedReceiving = rows.reduce((s, r) => s + Number(r.unassigned || 0), 0);
+  const assignedReceiving = rows.reduce((s, r) => s + Number(r.assigned || 0), 0);
+  const trungtuyen = map.trungtuyen || 0;
+  const nhapngu = map.nhapngu || 0;
   return {
     totalCitizens: total,
     availableForDraft: (map.chuakham || 0) + (map.dangkham || 0),
     deferred: map.tamhoan || 0,
     exempted: map.miengoi || 0,
-    inService: map.nhapngu || 0,
+    inService: nhapngu,
     examining: map.dangkham || 0,
-    passed: map.trungtuyen || 0,
+    // Đạt = trúng tuyển còn lại + đã nhập ngũ
+    passed: trungtuyen + nhapngu,
+    unassignedReceiving,
+    assignedReceiving,
   };
 }
 
-async function getFunnel(unitCodes: string[], inUnits: string) {
+async function getFunnel(
+  unitCodes: string[],
+  inUnits: string,
+  includeNullUnit: boolean,
+) {
   const order = [
     "chuakham",
     "dangkham",
@@ -90,9 +157,10 @@ async function getFunnel(unitCodes: string[], inUnits: string) {
   ];
   const rows = await queryRows<(RowDataPacket & { military_status: string; cnt: number })[]>(
     `SELECT military_status, COUNT(*) AS cnt
-     FROM citizens WHERE unit_code IN (${inUnits})
+     FROM citizens WHERE ${unitScopeSql(inUnits, includeNullUnit)}
+       AND archived_at IS NULL
      GROUP BY military_status`,
-    unitCodes
+    unitCodes,
   );
   const map = Object.fromEntries(rows.map((r) => [r.military_status, Number(r.cnt)]));
   return order.map((status) => ({
@@ -102,7 +170,12 @@ async function getFunnel(unitCodes: string[], inUnits: string) {
   }));
 }
 
-async function getYearStats(unitCodes: string[], inUnits: string) {
+async function getYearStats(
+  unitCodes: string[],
+  inUnits: string,
+  includeNullUnit: boolean,
+) {
+  const scope = citizenUnitScopeSql(inUnits, includeNullUnit);
   const rows = await queryRows<
     (RowDataPacket & {
       year: number;
@@ -123,10 +196,10 @@ async function getYearStats(unitCodes: string[], inUnits: string) {
      FROM exam_participants ep
      INNER JOIN exam_rounds er ON er.id = ep.round_id
      INNER JOIN citizens c ON c.id = ep.citizen_id
-     WHERE c.unit_code IN (${inUnits})
+     WHERE ${scope}
      GROUP BY er.year
      ORDER BY er.year`,
-    unitCodes
+    unitCodes,
   );
 
   if (rows.length > 0) {
@@ -147,10 +220,10 @@ async function getYearStats(unitCodes: string[], inUnits: string) {
     `SELECT exam_year AS year, COUNT(*) AS called, SUM(is_qualified = 1) AS passed
      FROM health_exams h
      INNER JOIN citizens c ON c.id = h.citizen_id
-     WHERE c.unit_code IN (${inUnits})
+     WHERE ${scope}
      GROUP BY exam_year
      ORDER BY exam_year`,
-    unitCodes
+    unitCodes,
   );
   return he.map((r) => ({
     year: String(r.year),
@@ -162,15 +235,20 @@ async function getYearStats(unitCodes: string[], inUnits: string) {
   }));
 }
 
-async function getDeferment(unitCodes: string[], inUnits: string) {
+async function getDeferment(
+  unitCodes: string[],
+  inUnits: string,
+  includeNullUnit: boolean,
+) {
   const rows = await queryRows<(RowDataPacket & { deferment_reason: string; cnt: number })[]>(
     `SELECT deferment_reason, COUNT(*) AS cnt
      FROM citizens
-     WHERE unit_code IN (${inUnits})
+     WHERE ${unitScopeSql(inUnits, includeNullUnit)}
        AND military_status IN ('tamhoan','miengoi')
        AND deferment_reason IS NOT NULL
+       AND archived_at IS NULL
      GROUP BY deferment_reason`,
-    unitCodes
+    unitCodes,
   );
   const total = rows.reduce((s, r) => s + Number(r.cnt), 0) || 1;
   return rows.map((r) => ({
