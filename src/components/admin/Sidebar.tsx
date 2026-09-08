@@ -7,7 +7,6 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import {
   FcHome,
   FcConferenceCall,
-  FcVoicePresentation,
   FcCameraIdentification,
   FcCalendar,
   FcBullish,
@@ -21,6 +20,8 @@ import {
   FcKey,
   FcClock,
   FcSettings,
+  FcDataSheet,
+  FcLike,
 } from "react-icons/fc";
 import { clsx } from "clsx";
 import type { FunctionalRole } from "@/lib/functional-roles";
@@ -44,13 +45,18 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin", label: "Tổng quan", icon: <FcHome size={ICON} /> },
       { href: "/admin/citizens", label: "Hồ sơ công dân", icon: <FcConferenceCall size={ICON} /> },
+      { href: "/admin/health", label: "Khám sức khỏe", icon: <FcLike size={ICON} /> },
+      { href: "/admin/citizen-archive", label: "Hồ sơ lưu trữ", icon: <FcDataSheet size={ICON} /> },
     ],
   },
   {
     name: "Nhận dạng AI",
     items: [
-      { href: "/admin/ai-voice", label: "Đọc CCCD bằng giọng nói", icon: <FcVoicePresentation size={ICON} /> },
-      { href: "/admin/ai-face", label: "Nhận diện khuôn mặt", icon: <FcCameraIdentification size={ICON} /> },
+      {
+        href: "/admin/ai-face",
+        label: "Nhận diện khuôn mặt và giọng nói",
+        icon: <FcCameraIdentification size={ICON} />,
+      },
     ],
   },
   {
@@ -132,6 +138,14 @@ function filterNavGroups(
         ["Hồ sơ thanh niên", "Tuyển quân", "Quản trị"].includes(g.name),
       )
       .map((g) => {
+        if (g.name === "Hồ sơ thanh niên") {
+          return {
+            ...g,
+            items: g.items.filter((i) =>
+              ["/admin", "/admin/citizens", "/admin/health"].includes(i.href),
+            ),
+          };
+        }
         if (g.name === "Tuyển quân") {
           return {
             ...g,
@@ -195,15 +209,14 @@ export default function Sidebar({
   return (
     <aside
       className={clsx(
-        "fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-300",
+        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-m3-surface-low text-m3-on-surface transition-all duration-300",
         collapsed ? "w-[84px]" : "w-[300px]",
       )}
-      style={{ background: "#f8fafb" }}
     >
       <div className="flex h-[64px] shrink-0 items-center gap-3 px-4">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[12px]"
-          style={{ background: "#e8f2ff" }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px]"
+          style={{ background: "var(--m3-primary-container)" }}
         >
           <img
             src="/images/logo_qd.png"
@@ -213,10 +226,10 @@ export default function Sidebar({
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-[17px] font-bold tracking-tight text-[#1f2937]">
+            <p className="truncate text-[17px] font-bold tracking-tight text-m3-on-surface">
               YMSA
             </p>
-            <p className="truncate text-[12px] font-medium text-[#6b7280]">
+            <p className="truncate text-[12px] font-medium text-m3-on-surface-variant">
               Nghĩa vụ quân sự
             </p>
           </div>
@@ -236,10 +249,10 @@ export default function Sidebar({
                     className="flex w-full items-center justify-between rounded-[10px] px-3 py-1.5"
                     onClick={() => toggleGroup(group.name)}
                   >
-                    <span className="text-[15px] font-medium text-[#9ca3af]">
+                    <span className="text-[16px] font-semibold text-m3-outline">
                       {group.name}
                     </span>
-                    <span className="text-[#c0c4cc]">
+                    <span style={{ color: "var(--m3-outline)" }}>
                       {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </span>
                   </button>
@@ -256,17 +269,22 @@ export default function Sidebar({
                   {group.items.map((item) => {
                     const isActive =
                       pathname === item.href ||
-                      (item.href !== "/admin" && pathname.startsWith(item.href));
+                      (item.href !== "/admin" &&
+                        item.href !== "/admin/citizens" &&
+                        pathname.startsWith(item.href)) ||
+                      (item.href === "/admin/citizens" &&
+                        (pathname === "/admin/citizens" ||
+                          pathname.startsWith("/admin/citizens/")));
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         title={collapsed ? item.label : undefined}
                         className={clsx(
-                          "flex min-h-[44px] items-center gap-3 rounded-[12px] px-3.5 text-[14px] font-medium transition-colors duration-150",
+                          "flex min-h-[44px] items-center gap-3 rounded-full px-3.5 text-[14px] font-semibold transition-[background-color,color] duration-200 ease-[cubic-bezier(0.34,0.8,0.34,1)]",
                           isActive
-                            ? "bg-[#e8f2ff] text-[#007aff]"
-                            : "text-[#374151] hover:bg-white/80",
+                            ? "bg-m3-secondary-container text-m3-on-secondary-container"
+                            : "text-m3-on-surface-variant hover:bg-m3-on-surface/8",
                         )}
                       >
                         <span className="shrink-0 text-[22px] leading-none">
@@ -287,11 +305,10 @@ export default function Sidebar({
       {!collapsed && (
         <div className="px-4 pb-5">
           <div
-            className="rounded-[16px] px-4 py-3"
-            style={{ background: "#ffffff" }}
+            className="rounded-[20px] px-4 py-3 bg-m3-surface-lowest"
           >
-            <p className="text-[13px] font-semibold text-[#6b7280]">YMSA v1.0.0</p>
-            <p className="mt-0.5 text-[12px] text-[#9ca3af]">© 2026 Ban Chỉ huy Quân sự</p>
+            <p className="text-[13px] font-semibold text-m3-on-surface-variant">YMSA v1.0.0</p>
+            <p className="mt-0.5 text-[12px] text-m3-outline">© 2026 Ban Chỉ huy Quân sự</p>
           </div>
         </div>
       )}

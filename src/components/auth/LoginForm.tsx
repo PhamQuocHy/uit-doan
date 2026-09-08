@@ -17,6 +17,7 @@ import Image from "next/image";
 import logoQd from "@/assets/images/logo_qd.png";
 import bg1 from "@/assets/images/bg1.png";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import { M3ThemeProvider } from "@/components/m3";
 import type { FunctionalRole } from "@/lib/functional-roles";
 import {
   LOGIN_PORTAL_OPTIONS,
@@ -32,6 +33,43 @@ const PORTAL_ICONS: Record<LoginPortal, typeof Building2> = {
   can_bo_y_te: Stethoscope,
 };
 
+const LOGIN_REMEMBER_KEY = "nvqs.login.portal-remember";
+const LOGIN_REMEMBER_TTL_MS = 24 * 60 * 60 * 1000;
+
+type RememberedLogin = {
+  loginPortal: LoginPortal;
+  localLevel: "tinh" | "xa";
+  tinhCode: string;
+  xaCode: string;
+  donviCode: string;
+  step: 2 | 3;
+  savedAt: number;
+};
+
+function loadRememberedLogin(): RememberedLogin | null {
+  try {
+    const raw = localStorage.getItem(LOGIN_REMEMBER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RememberedLogin;
+    if (!parsed?.loginPortal || !parsed?.savedAt) return null;
+    if (Date.now() - parsed.savedAt > LOGIN_REMEMBER_TTL_MS) {
+      localStorage.removeItem(LOGIN_REMEMBER_KEY);
+      return null;
+    }
+    if (!LOGIN_PORTAL_OPTIONS.some((o) => o.value === parsed.loginPortal)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveRememberedLogin(data: Omit<RememberedLogin, "savedAt">) {
+  const payload: RememberedLogin = { ...data, savedAt: Date.now() };
+  localStorage.setItem(LOGIN_REMEMBER_KEY, JSON.stringify(payload));
+}
+
 export default function LoginForm() {
   const router = useRouter();
 
@@ -41,6 +79,7 @@ export default function LoginForm() {
   const [tinhCode, setTinhCode] = useState("");
   const [xaCode, setXaCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
+  const [restoredHint, setRestoredHint] = useState("");
 
   const [units, setUnits] = useState<any[]>([]);
 
@@ -55,16 +94,39 @@ export default function LoginForm() {
       .then((res) => res.json())
       .then((data) => setUnits(data))
       .catch(console.error);
+
+    const remembered = loadRememberedLogin();
+    if (!remembered) return;
+
+    setLoginPortal(remembered.loginPortal);
+    setLocalLevel(remembered.localLevel || "tinh");
+    setTinhCode(remembered.tinhCode || "");
+    setXaCode(remembered.xaCode || "");
+    setDonviCode(remembered.donviCode || "");
+    setStep(remembered.step);
+    const portalLabel =
+      LOGIN_PORTAL_OPTIONS.find((o) => o.value === remembered.loginPortal)?.label ||
+      remembered.loginPortal;
+    setRestoredHint(`Đã nhớ lựa chọn: ${portalLabel} (trong 24 giờ)`);
   }, []);
 
   const handlePortalStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setRestoredHint("");
     if (!loginPortal) {
       setError("Vui lòng chọn loại đăng nhập");
       return;
     }
     if (loginPortal === "cap_bo") {
+      saveRememberedLogin({
+        loginPortal,
+        localLevel: "tinh",
+        tinhCode: "",
+        xaCode: "",
+        donviCode: "",
+        step: 3,
+      });
       setStep(3);
       return;
     }
@@ -72,12 +134,21 @@ export default function LoginForm() {
     setXaCode("");
     setDonviCode("");
     setLocalLevel("tinh");
+    saveRememberedLogin({
+      loginPortal,
+      localLevel: "tinh",
+      tinhCode: "",
+      xaCode: "",
+      donviCode: "",
+      step: 2,
+    });
     setStep(2);
   };
 
   const handleUnitStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setRestoredHint("");
     if (!loginPortal) return;
 
     if (loginPortal === "don_vi_nhan_quan" && !donviCode) {
@@ -94,6 +165,14 @@ export default function LoginForm() {
         return;
       }
     }
+    saveRememberedLogin({
+      loginPortal,
+      localLevel,
+      tinhCode,
+      xaCode,
+      donviCode,
+      step: 3,
+    });
     setStep(3);
   };
 
@@ -166,7 +245,11 @@ export default function LoginForm() {
     step === 1 ? "max-w-[920px]" : "max-w-[500px]";
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-white">
+    <M3ThemeProvider
+      mode="light"
+      primary="#1a73e8"
+      className="min-h-screen flex items-center justify-center relative overflow-hidden bg-m3-surface-lowest"
+    >
       <div className="absolute inset-0 z-0">
         <Image
           src={bg1}
@@ -180,19 +263,19 @@ export default function LoginForm() {
 
       <div
         className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full opacity-30 pointer-events-none blur-3xl"
-        style={{ background: "#d1d1d6" }}
+        style={{ background: "var(--m3-outline-variant, #e3e8ee)" }}
       />
       <div
         className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full opacity-30 pointer-events-none blur-3xl"
-        style={{ background: "#eedeba" }}
+        style={{ background: "var(--m3-tertiary-container, #e4e8f2)" }}
       />
 
       <div className={`relative w-full px-4 z-10 transition-all ${cardMaxWidth}`}>
         <div
           className="rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
           style={{
-            background: "#ffffff",
-            border: "1px solid #e5e5ea",
+            background: "var(--m3-surface-container-lowest, var(--m3-surface-container-lowest, #ffffff))",
+            border: "1px solid var(--m3-outline-variant, #e3e8ee)",
           }}
         >
           <div className="px-8 py-8 md:py-10 pb-5! text-center flex flex-col items-center relative">
@@ -200,8 +283,8 @@ export default function LoginForm() {
               <button
                 type="button"
                 onClick={goBack}
-                className="absolute left-6 top-8 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                style={{ color: "#007aff" }}
+                className="absolute left-6 top-8 p-2 rounded-full hover:bg-m3-surface-container transition-colors"
+                style={{ color: "var(--m3-primary, #1a73e8)" }}
               >
                 <ArrowLeft size={20} />
               </button>
@@ -218,10 +301,10 @@ export default function LoginForm() {
                 priority
               />
             </div>
-            <h1 className="text-2xl font-normal" style={{ color: "#1d1d1f" }}>
+            <h1 className="text-2xl font-normal" style={{ color: "var(--m3-on-surface, #1b1d20)" }}>
               Hệ thống Quản lý Nghĩa vụ Quân sự
             </h1>
-            <p className="mt-2 text-sm" style={{ color: "#007aff" }}>
+            <p className="mt-2 text-sm" style={{ color: "var(--m3-primary, #1a73e8)" }}>
               {stepSubtitle}
             </p>
           </div>
@@ -231,9 +314,9 @@ export default function LoginForm() {
               <div
                 className="mb-6 flex items-center gap-3 text-sm px-4 py-3 rounded-xl"
                 style={{
-                  background: "#fef2f2",
-                  border: "1px solid #fecaca",
-                  color: "#dc2626",
+                  background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
+                  border: "1px solid var(--m3-error-container, #ffdad6)",
+                  color: "var(--m3-error, #ba1a1a)",
                 }}
               >
                 <svg
@@ -251,12 +334,24 @@ export default function LoginForm() {
               </div>
             )}
 
+            {!error && restoredHint && (
+              <div
+                className="mb-4 text-center text-sm px-3 py-2 rounded-xl"
+                style={{
+                  background: "color-mix(in srgb, var(--m3-primary, #1a73e8) 8%, transparent)",
+                  color: "var(--m3-primary, #1a73e8)",
+                }}
+              >
+                {restoredHint}
+              </div>
+            )}
+
             {step === 1 ? (
               <form
                 onSubmit={handlePortalStep}
                 className="animate-in fade-in duration-300"
               >
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                   {LOGIN_PORTAL_OPTIONS.map((opt) => {
                     const selected = loginPortal === opt.value;
                     const Icon = PORTAL_ICONS[opt.value];
@@ -265,35 +360,35 @@ export default function LoginForm() {
                         key={opt.value}
                         type="button"
                         onClick={() => setLoginPortal(opt.value)}
-                        className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border px-2 py-4 text-center transition-all sm:min-h-[168px] sm:px-3"
+                        className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border px-2.5 py-5 text-center transition-all sm:min-h-[220px] sm:px-3.5"
                         style={{
-                          borderColor: selected ? "#007aff" : "#e5e5ea",
+                          borderColor: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-outline-variant, #e3e8ee)",
                           background: selected
-                            ? "rgba(0,122,255,0.06)"
+                            ? "color-mix(in srgb, var(--m3-primary, #1a73e8) 6%, transparent)"
                             : "#fff",
                           boxShadow: selected
-                            ? "0 4px 14px rgba(0,122,255,0.12)"
+                            ? "0 4px 14px color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)"
                             : "none",
                         }}
                       >
                         <div
-                          className="mb-2.5 flex h-11 w-11 items-center justify-center rounded-full sm:mb-3 sm:h-12 sm:w-12"
+                          className="mb-3 flex h-12 w-12 items-center justify-center rounded-full sm:mb-3.5 sm:h-14 sm:w-14"
                           style={{
                             background: selected
-                              ? "rgba(0,122,255,0.12)"
-                              : "#f5f5f7",
-                            color: selected ? "#007aff" : "#636366",
+                              ? "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)"
+                              : "var(--m3-surface-container-high, #eef1f4)",
+                            color: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-on-surface-variant, #475569)",
                           }}
                         >
-                          <Icon size={22} strokeWidth={1.75} />
+                          <Icon size={28} strokeWidth={1.75} />
                         </div>
                         <p
-                          className="text-[13px] font-semibold leading-tight sm:text-[14px]"
-                          style={{ color: selected ? "#007aff" : "#1d1d1f" }}
+                          className="text-[16px] font-semibold leading-tight sm:text-[18px]"
+                          style={{ color: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-on-surface, #1b1d20)" }}
                         >
                           {opt.label}
                         </p>
-                        <p className="mt-1.5 hidden text-[10px] leading-snug text-[#86868b] sm:block sm:text-[11px]">
+                        <p className="mt-2 text-[14px] leading-snug text-m3-on-surface-variant sm:text-[15px]">
                           {opt.description}
                         </p>
                       </button>
@@ -305,8 +400,8 @@ export default function LoginForm() {
                   type="submit"
                   className="w-full mt-5 py-3 rounded-xl font-normal text-lg transition-all text-white"
                   style={{
-                    background: "#007aff",
-                    boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
+                    background: "var(--m3-primary, #1a73e8)",
+                    boxShadow: "0 4px 10px color-mix(in srgb, var(--m3-primary, #1a73e8) 20%, transparent)",
                   }}
                 >
                   Tiếp tục
@@ -383,8 +478,8 @@ export default function LoginForm() {
                   type="submit"
                   className="w-full mt-4 py-3 rounded-xl font-normal text-lg transition-all text-white"
                   style={{
-                    background: "#007aff",
-                    boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
+                    background: "var(--m3-primary, #1a73e8)",
+                    boxShadow: "0 4px 10px color-mix(in srgb, var(--m3-primary, #1a73e8) 20%, transparent)",
                   }}
                 >
                   Tiếp tục
@@ -407,22 +502,22 @@ export default function LoginForm() {
                     autoComplete="username"
                     style={{
                       background: "#fff",
-                      border: "1.5px solid #e5e5ea",
-                      color: "#1d1d1f",
+                      border: "1.5px solid var(--m3-outline-variant, #e3e8ee)",
+                      color: "var(--m3-on-surface, #1b1d20)",
                     }}
                   />
                   <label
                     htmlFor="username"
-                    className="absolute left-10 px-1 text-gray-500 transition-all duration-200 cursor-text
-                               top-0 -translate-y-1/2 text-[15px] font-normal bg-white
+                    className="absolute left-10 px-1 text-m3-on-surface-variant transition-all duration-200 cursor-text
+                               top-0 -translate-y-1/2 text-[15px] font-normal bg-m3-surface-lowest
                                peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-[16px] peer-placeholder-shown:bg-transparent
-                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#007aff]"
+                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-m3-surface-lowest peer-focus:text-m3-primary"
                   >
                     Tài khoản
                   </label>
                   <div
                     className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#86868b", zIndex: 10 }}
+                    style={{ color: "var(--m3-on-surface-variant, #475569)", zIndex: 10 }}
                   >
                     <User size={18} />
                   </div>
@@ -440,30 +535,30 @@ export default function LoginForm() {
                     autoComplete="current-password"
                     style={{
                       background: "#fff",
-                      border: "1.5px solid #e5e5ea",
-                      color: "#1d1d1f",
+                      border: "1.5px solid var(--m3-outline-variant, #e3e8ee)",
+                      color: "var(--m3-on-surface, #1b1d20)",
                     }}
                   />
                   <label
                     htmlFor="password"
-                    className="absolute left-10 px-1 text-gray-500 transition-all duration-200 cursor-text
-                               top-0 -translate-y-1/2 text-[15px] font-normal bg-white
+                    className="absolute left-10 px-1 text-m3-on-surface-variant transition-all duration-200 cursor-text
+                               top-0 -translate-y-1/2 text-[15px] font-normal bg-m3-surface-lowest
                                peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-[16px] peer-placeholder-shown:bg-transparent
-                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-white peer-focus:text-[#007aff]"
+                               peer-focus:top-0 peer-focus:-translate-y-1/2 peer-focus:text-[15px] peer-focus:bg-m3-surface-lowest peer-focus:text-m3-primary"
                   >
                     Mật khẩu
                   </label>
                   <div
                     className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#86868b", zIndex: 10 }}
+                    style={{ color: "var(--m3-on-surface-variant, #475569)", zIndex: 10 }}
                   >
                     <Lock size={18} />
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors p-1.5 rounded-lg hover:bg-gray-50 z-10"
-                    style={{ color: "#86868b" }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors p-1.5 rounded-lg hover:bg-m3-surface-high z-10"
+                    style={{ color: "var(--m3-on-surface-variant, #475569)" }}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -473,7 +568,7 @@ export default function LoginForm() {
                   <button
                     type="button"
                     className="text-[15px] hover:underline transition-all"
-                    style={{ color: "#007aff" }}
+                    style={{ color: "var(--m3-primary, #1a73e8)" }}
                   >
                     Quên mật khẩu?
                   </button>
@@ -484,8 +579,8 @@ export default function LoginForm() {
                   disabled={loading}
                   className="w-full mt-1 py-3 rounded-xl font-normal text-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed text-white"
                   style={{
-                    background: loading ? "#86868b" : "#007aff",
-                    boxShadow: "0 4px 10px rgba(116,140,44,0.2)",
+                    background: loading ? "var(--m3-on-surface-variant, #475569)" : "var(--m3-primary, #1a73e8)",
+                    boxShadow: "0 4px 10px color-mix(in srgb, var(--m3-primary, #1a73e8) 20%, transparent)",
                   }}
                 >
                   {loading ? (
@@ -522,11 +617,11 @@ export default function LoginForm() {
 
         <p
           className="text-center text-[16px] mt-6 font-normal"
-          style={{ color: "#86868b" }}
+          style={{ color: "var(--m3-on-surface-variant, #475569)" }}
         >
           Coppyright © 2026 Ban Chỉ huy Quân sự
         </p>
       </div>
-    </div>
+    </M3ThemeProvider>
   );
 }

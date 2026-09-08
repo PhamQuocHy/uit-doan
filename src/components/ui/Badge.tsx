@@ -9,6 +9,7 @@ interface BadgeProps {
   dot?: boolean;
 }
 
+/** M3 Expressive status chip — tonal container, pill radius */
 export default function Badge({
   label,
   variant = "default",
@@ -17,38 +18,38 @@ export default function Badge({
 }: BadgeProps) {
   const styles = {
     success: {
-      background: "rgba(52,199,89,0.12)",
-      color: "#248a3d",
-      dot: "#34c759",
+      background: "var(--color-m3-success-container, #b5ccba)",
+      color: "var(--color-m3-on-success-container, #002110)",
+      dot: "var(--color-m3-success, #386a4a)",
     },
     danger: {
-      background: "rgba(255,59,48,0.1)",
-      color: "#ff3b30",
-      dot: "#ff3b30",
+      background: "var(--m3-error-container)",
+      color: "var(--m3-on-error-container)",
+      dot: "var(--m3-error)",
     },
     warning: {
-      background: "rgba(255,149,0,0.12)",
-      color: "#c93400",
-      dot: "#ff9500",
+      background: "var(--color-m3-warning-container, #ffdfb8)",
+      color: "var(--color-m3-on-warning-container, #2c1700)",
+      dot: "var(--color-m3-warning, #8a5800)",
     },
     info: {
-      background: "rgba(0,122,255,0.1)",
-      color: "#007aff",
-      dot: "#007aff",
+      background: "var(--m3-primary-container)",
+      color: "var(--m3-on-primary-container)",
+      dot: "var(--m3-primary)",
     },
     default: {
-      background: "#f5f5f7",
-      color: "#636366",
-      dot: "#8e8e93",
+      background: "var(--m3-secondary-container)",
+      color: "var(--m3-on-secondary-container)",
+      dot: "var(--m3-outline)",
     },
   };
   const s = styles[variant];
-  const sizeClass = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
+  const sizeClass = size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm";
 
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1.5 rounded-[8px] font-semibold tracking-wide",
+        "inline-flex items-center gap-1.5 rounded-full font-semibold tracking-wide",
         sizeClass,
       )}
       style={{ background: s.background, color: s.color }}

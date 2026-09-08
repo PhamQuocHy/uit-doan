@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { RowDataPacket } from "mysql2";
 import { pingDb, queryExecute, queryRows } from "@/lib/db";
+import { toDateOnlyString } from "@/lib/date-vn";
 
 export type LegalDocType =
   | "luat"
@@ -23,6 +24,8 @@ export type LegalDocumentMeta = {
   summary: string;
   source_url: string;
   file_name: string;
+  source_file_name?: string;
+  hierarchy_level?: string;
   tags: string[];
 };
 
@@ -58,17 +61,22 @@ export function loadCatalogFromDisk(): LegalDocumentMeta[] {
 }
 
 export function readLegalDocContent(fileName: string): string {
-  const filePath = path.join(legalDocsDir(), fileName);
+  if (!fileName.toLowerCase().endsWith(".md")) return "";
+  let filePath = path.join(legalDocsDir(), fileName);
+  if (!fs.existsSync(filePath) && fileName.endsWith(".pdf")) {
+    filePath = path.join(legalDocsDir(), fileName.replace(/\.pdf$/i, ".md"));
+  }
   if (!fs.existsSync(filePath)) return "";
   return fs.readFileSync(filePath, "utf8");
 }
 
 function enrich(meta: LegalDocumentMeta, content?: string): LegalDocument {
   const year = Number((meta.issued_date || "").slice(0, 4)) || 0;
+  const pdfFileName = meta.file_name.replace(/\.md$/i, ".pdf");
   return {
     ...meta,
-    file_path: `data/legal-docs/${meta.file_name}`,
-    public_url: `/documents/nvqs/${meta.file_name}`,
+    file_path: `data/legal-docs/${pdfFileName}`,
+    public_url: `/documents/nvqs/${pdfFileName}`,
     category: docTypeLabel(meta.doc_type),
     year,
     ...(content !== undefined ? { content } : {}),
@@ -77,14 +85,19 @@ function enrich(meta: LegalDocumentMeta, content?: string): LegalDocument {
 
 export function listLegalDocumentsFromDisk(includeContent = false): LegalDocument[] {
   return loadCatalogFromDisk().map((m) =>
-    enrich(m, includeContent ? readLegalDocContent(m.file_name) : undefined),
+    enrich(
+      m,
+      includeContent
+        ? readLegalDocContent(m.source_file_name || m.file_name)
+        : undefined,
+    ),
   );
 }
 
 export function getLegalDocumentFromDisk(id: string): LegalDocument | null {
   const meta = loadCatalogFromDisk().find((d) => d.id === id || d.code === id);
   if (!meta) return null;
-  return enrich(meta, readLegalDocContent(meta.file_name));
+  return enrich(meta, readLegalDocContent(meta.source_file_name || meta.file_name));
 }
 
 /** Văn bản ngắn gọn để đưa vào prompt AI */
@@ -193,7 +206,7 @@ export async function upsertLegalDocumentsToDb(): Promise<number> {
   return n;
 }
 
-export async function listLegalDocuments(): Promise<{
+export async function listLegalDocuments(hierarchyLevel: string): Promise<{
   data: LegalDocument[];
   source: "mysql" | "disk";
 }> {
@@ -215,13 +228,15 @@ export async function listLegalDocuments(): Promise<{
           file_name: string;
           file_path: string;
           tags_json: string | object | null;
+          hierarchy_level: string;
         })[]
       >(
         `SELECT id, code, title, issuer, issued_date, effective_date, doc_type, priority,
                 summary, source_url, file_name, file_path, tags_json
          FROM legal_documents
-         WHERE is_active = 1
+         WHERE is_active = 1 AND hierarchy_level = ?
          ORDER BY priority ASC, issued_date DESC`,
+        [hierarchyLevel],
       );
 
       if (rows.length > 0) {
@@ -237,25 +252,20 @@ export async function listLegalDocuments(): Promise<{
           } catch {
             tags = [];
           }
-          const issued =
-            r.issued_date instanceof Date
-              ? r.issued_date.toISOString().slice(0, 10)
-              : String(r.issued_date || "").slice(0, 10);
+          const issued = toDateOnlyString(r.issued_date) || "";
           return enrich({
             id: r.id,
             code: r.code,
             title: r.title,
             issuer: r.issuer,
             issued_date: issued,
-            effective_date:
-              r.effective_date instanceof Date
-                ? r.effective_date.toISOString().slice(0, 10)
-                : String(r.effective_date || "").slice(0, 10),
+            effective_date: toDateOnlyString(r.effective_date) || "",
             doc_type: r.doc_type,
             priority: r.priority,
             summary: r.summary || "",
             source_url: r.source_url || "",
             file_name: r.file_name,
+            hierarchy_level: r.hierarchy_level,
             tags,
           });
         });
@@ -269,7 +279,7 @@ export async function listLegalDocuments(): Promise<{
   return { data: listLegalDocumentsFromDisk(false), source: "disk" };
 }
 
-export async function getLegalDocument(id: string): Promise<LegalDocument | null> {
+export async function getLegalDocument(id: string, hierarchyLevel: string): Promise<LegalDocument | null> {
   const dbOk = await pingDb();
   if (dbOk) {
     try {
@@ -288,14 +298,15 @@ export async function getLegalDocument(id: string): Promise<LegalDocument | null
           file_name: string;
           content_text: string | null;
           tags_json: string | object | null;
+          hierarchy_level: string;
         })[]
       >(
         `SELECT id, code, title, issuer, issued_date, effective_date, doc_type, priority,
                 summary, source_url, file_name, content_text, tags_json
          FROM legal_documents
-         WHERE is_active = 1 AND (id = ? OR code = ?)
+         WHERE is_active = 1 AND hierarchy_level = ? AND (id = ? OR code = ?)
          LIMIT 1`,
-        [id, id],
+        [hierarchyLevel, id, id],
       );
       const r = rows[0];
       if (r) {
@@ -310,10 +321,7 @@ export async function getLegalDocument(id: string): Promise<LegalDocument | null
         } catch {
           tags = [];
         }
-        const issued =
-          r.issued_date instanceof Date
-            ? r.issued_date.toISOString().slice(0, 10)
-            : String(r.issued_date || "").slice(0, 10);
+        const issued = toDateOnlyString(r.issued_date) || "";
         const content =
           r.content_text || readLegalDocContent(r.file_name);
         return enrich(
@@ -323,15 +331,13 @@ export async function getLegalDocument(id: string): Promise<LegalDocument | null
             title: r.title,
             issuer: r.issuer,
             issued_date: issued,
-            effective_date:
-              r.effective_date instanceof Date
-                ? r.effective_date.toISOString().slice(0, 10)
-                : String(r.effective_date || "").slice(0, 10),
+            effective_date: toDateOnlyString(r.effective_date) || "",
             doc_type: r.doc_type,
             priority: r.priority,
             summary: r.summary || "",
             source_url: r.source_url || "",
             file_name: r.file_name,
+            hierarchy_level: r.hierarchy_level,
             tags,
           },
           content,
@@ -342,5 +348,5 @@ export async function getLegalDocument(id: string): Promise<LegalDocument | null
     }
   }
 
-  return getLegalDocumentFromDisk(id);
+  return null;
 }

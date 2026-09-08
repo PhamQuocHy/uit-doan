@@ -3,12 +3,15 @@ import { db } from "@/lib/data";
 import { createSession } from "@/lib/auth";
 import {
   findUserByUsernameFromDb,
+  isHashed,
   touchLastLogin,
+  upgradePasswordHash,
   verifyPassword,
   type AuthUser,
 } from "@/lib/auth-users";
 import { pingDb } from "@/lib/db";
 import type { FunctionalRole } from "@/lib/functional-roles";
+import { writeAuditLog } from "@/lib/audit-log";
 
 function fromMemory(username: string): AuthUser | null {
   const user = db.users.findByUsername(username);
@@ -115,7 +118,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (authSource === "mysql") {
+      // Tự nâng cấp mật khẩu plaintext cũ lên scrypt hash ngay khi khớp
+      if (!isHashed(user.password)) {
+        await upgradePasswordHash(user.id, password);
+      }
       await touchLastLogin(user.id);
+      const forwarded = request.headers.get("x-forwarded-for");
+      await writeAuditLog({
+        userId: user.id,
+        actionType: "LOGIN",
+        targetTable: "users",
+        targetId: user.id,
+        dataSnapshot: { username: user.username },
+        ipAddress: forwarded?.split(",")[0]?.trim() || null,
+      });
     }
 
     return NextResponse.json({

@@ -113,7 +113,7 @@ export default function AiChatWidget() {
           type="button"
           onClick={() => setOpen(true)}
           title="Trợ lý AI"
-          className="fixed bottom-5 right-5 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#007aff] text-white shadow-[0_8px_24px_rgba(0,122,255,0.35)] transition hover:bg-[#0066d6] hover:shadow-[0_10px_28px_rgba(0,122,255,0.4)]"
+          className="fixed bottom-5 right-5 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full bg-m3-primary text-white shadow-[0_8px_24px_color-mix(in srgb, var(--m3-primary, #1a73e8) 35%, transparent)] transition hover:bg-m3-primary hover:shadow-[0_10px_28px_color-mix(in srgb, var(--m3-primary, #1a73e8) 40%, transparent)]"
           aria-label="Mở chat AI"
         >
           <MessageCircle size={20} />
@@ -122,12 +122,12 @@ export default function AiChatWidget() {
 
       {open && (
         <div
-          className="fixed bottom-5 right-5 z-40 flex w-[min(100vw-2rem,400px)] flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-white shadow-[0_24px_64px_rgba(0,0,0,0.18)]"
+          className="fixed bottom-5 right-5 z-40 flex w-[min(100vw-2rem,400px)] flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-m3-surface-lowest shadow-[0_24px_64px_rgba(0,0,0,0.18)]"
           style={{ height: "min(560px, calc(100vh - 6rem))" }}
         >
-          <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-[#0a84ff] to-[#5ac8fa] px-4 py-3.5 text-white">
+          <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-m3-primary to-m3-primary px-4 py-3.5 text-white">
             <div className="flex min-w-0 items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-m3-surface-lowest/20">
                 <Sparkles size={18} />
               </div>
               <div className="min-w-0">
@@ -140,17 +140,17 @@ export default function AiChatWidget() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/20"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-m3-surface-lowest/20"
               aria-label="Đóng chat"
             >
               <X size={18} />
             </button>
           </header>
 
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f8fafb] px-3.5 py-4">
+          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-m3-surface-high px-3.5 py-4">
             {messages.length === 0 && (
               <div className="space-y-3">
-                <p className="text-[14px] leading-relaxed text-[#6e6e73]">
+                <p className="text-[14px] leading-relaxed text-m3-on-surface-variant">
                   Xin chào! Tôi đọc dữ liệu hồ sơ / NVQS trong phạm vi đơn vị của bạn
                   rồi trả lời. Thử hỏi:
                 </p>
@@ -160,7 +160,7 @@ export default function AiChatWidget() {
                       key={s}
                       type="button"
                       onClick={() => send(s)}
-                      className="rounded-[14px] border border-black/[0.06] bg-white px-3.5 py-2.5 text-left text-[13px] font-medium text-[#1d1d1f] transition hover:border-[#007aff]/30 hover:bg-[rgba(0,122,255,0.04)]"
+                      className="rounded-[14px] border border-black/[0.06] bg-m3-surface-lowest px-3.5 py-2.5 text-left text-[13px] font-medium text-m3-on-surface transition hover:border-m3-primary/30 hover:bg-m3-primary/4"
                     >
                       {s}
                     </button>
@@ -177,8 +177,8 @@ export default function AiChatWidget() {
                 <div
                   className={`max-w-[88%] whitespace-pre-wrap rounded-[16px] px-3.5 py-2.5 text-[14px] leading-relaxed ${
                     m.role === "user"
-                      ? "bg-[#007aff] text-white"
-                      : "border border-black/[0.06] bg-white text-[#1d1d1f]"
+                      ? "bg-m3-primary text-white"
+                      : "border border-black/[0.06] bg-m3-surface-lowest text-m3-on-surface"
                   }`}
                 >
                   {m.content}
@@ -187,21 +187,21 @@ export default function AiChatWidget() {
             ))}
 
             {loading && (
-              <div className="flex items-center gap-2 text-[13px] text-[#6e6e73]">
-                <Loader2 size={16} className="animate-spin text-[#007aff]" />
+              <div className="flex items-center gap-2 text-[13px] text-m3-on-surface-variant">
+                <Loader2 size={16} className="animate-spin text-m3-primary" />
                 Đang đọc dữ liệu và trả lời...
               </div>
             )}
 
             {error && (
-              <p className="rounded-[12px] bg-[rgba(255,59,48,0.08)] px-3 py-2 text-[13px] text-[#ff3b30]">
+              <p className="rounded-[12px] bg-m3-error/8 px-3 py-2 text-[13px] text-m3-error">
                 {error}
               </p>
             )}
           </div>
 
           <form
-            className="flex shrink-0 items-end gap-2 border-t border-black/[0.06] bg-white p-3"
+            className="flex shrink-0 items-end gap-2 border-t border-black/[0.06] bg-m3-surface-lowest p-3"
             onSubmit={(e) => {
               e.preventDefault();
               send(input);
@@ -219,13 +219,13 @@ export default function AiChatWidget() {
                 }
               }}
               placeholder="Hỏi về hồ sơ, trạng thái NVQS..."
-              className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[14px] border-0 bg-[#f5f5f7] px-3.5 py-3 text-[14px] text-[#1d1d1f] outline-none focus:ring-2 focus:ring-[#007aff]/20"
+              className="max-h-28 min-h-[44px] flex-1 resize-none rounded-[14px] border-0 bg-m3-surface-high px-3.5 py-3 text-[14px] text-m3-on-surface outline-none focus:ring-2 focus:ring-m3-primary/20"
               disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-[#007aff] text-white transition hover:bg-[#0066d6] disabled:opacity-40"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-m3-primary text-white transition hover:bg-m3-primary disabled:opacity-40"
               aria-label="Gửi"
             >
               <Send size={18} />

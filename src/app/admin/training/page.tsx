@@ -65,29 +65,29 @@ const statusConfig: Record<
 > = {
   upcoming: {
     label: "Sắp diễn ra",
-    color: "#2563eb",
-    bg: "#dbeafe",
+    color: "var(--m3-primary, #1a73e8)",
+    bg: "var(--m3-primary-container, #dae9fb)",
     icon: Clock,
   },
   ongoing: {
     label: "Đang diễn ra",
-    color: "#d97706",
-    bg: "#fef3c7",
+    color: "var(--color-m3-warning)",
+    bg: "var(--color-m3-warning-container)",
     icon: AlertCircle,
   },
   completed: {
     label: "Đã hoàn thành",
-    color: "#059669",
-    bg: "#d1fae5",
+    color: "var(--color-m3-success)",
+    bg: "var(--color-m3-success-container)",
     icon: CheckCircle2,
   },
 };
 
 const typeColors: Record<string, string> = {
-  "Huấn luyện định kỳ": "#007aff",
-  "Diễn tập": "#7c3aed",
-  "Huấn luyện nâng cao": "#2563eb",
-  "Kiểm tra y tế": "#d97706",
+  "Huấn luyện định kỳ": "var(--m3-primary, #1a73e8)",
+  "Diễn tập": "var(--m3-tertiary, #5a5f6e)",
+  "Huấn luyện nâng cao": "var(--m3-primary, #1a73e8)",
+  "Kiểm tra y tế": "var(--color-m3-warning)",
 };
 
 export default function TrainingPage() {
@@ -103,15 +103,15 @@ export default function TrainingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
+          <h1 className="text-[22px] font-bold tracking-tight text-m3-on-surface">
             Huấn luyện & Diễn tập
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
+          <p className="mt-1.5 text-[14px] text-m3-on-surface-variant">
             Quản lý lịch huấn luyện, diễn tập và kết quả của lực lượng dân quân,
             dự bị
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
+        <button className="flex items-center gap-2 px-4 py-2 bg-m3-primary hover:bg-m3-on-surface-variant text-white rounded-xl transition-colors text-sm font-medium">
           <Plus size={16} />
           Tạo đợt huấn luyện
         </button>
@@ -120,28 +120,28 @@ export default function TrainingPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Tổng đợt", value: mockTrainings.length, color: "#1d1d1f" },
+          { label: "Tổng đợt", value: mockTrainings.length, color: "var(--m3-on-surface, #1b1d20)" },
           {
             label: "Sắp diễn ra",
             value: mockTrainings.filter((t) => t.status === "upcoming").length,
-            color: "#2563eb",
+            color: "var(--m3-primary, #1a73e8)",
           },
           {
             label: "Đang diễn ra",
             value: mockTrainings.filter((t) => t.status === "ongoing").length,
-            color: "#d97706",
+            color: "var(--color-m3-warning)",
           },
           {
             label: "Đã hoàn thành",
             value: mockTrainings.filter((t) => t.status === "completed").length,
-            color: "#059669",
+            color: "var(--color-m3-success)",
           },
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
+            className="macos-card p-5"
           >
-            <p className="text-sm text-gray-500">{s.label}</p>
+            <p className="text-sm text-m3-on-surface-variant">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>
               {s.value}
             </p>
@@ -153,7 +153,7 @@ export default function TrainingPage() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setTypeFilter("")}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!typeFilter ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!typeFilter ? "bg-m3-primary text-white" : "bg-m3-surface-lowest border border-m3-outline-variant text-m3-on-surface-variant hover:border-m3-primary"}`}
         >
           Tất cả
         </button>
@@ -161,7 +161,7 @@ export default function TrainingPage() {
           <button
             key={t}
             onClick={() => setTypeFilter(t)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${typeFilter === t ? "bg-[#007aff] text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-[#007aff]"}`}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${typeFilter === t ? "bg-m3-primary text-white" : "bg-m3-surface-lowest border border-m3-outline-variant text-m3-on-surface-variant hover:border-m3-primary"}`}
           >
             {t}
           </button>
@@ -179,7 +179,7 @@ export default function TrainingPage() {
           return (
             <div
               key={training.id}
-              className="bg-white rounded-2xl border border-[#e5e5ea] shadow-sm p-5 space-y-4"
+              className="macos-card p-5 space-y-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -192,7 +192,7 @@ export default function TrainingPage() {
                   >
                     {training.type}
                   </span>
-                  <h3 className="font-semibold text-gray-900 leading-tight">
+                  <h3 className="font-semibold text-m3-on-surface leading-tight">
                     {training.name}
                   </h3>
                 </div>
@@ -205,20 +205,20 @@ export default function TrainingPage() {
                 </span>
               </div>
 
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-m3-on-surface-variant">
                 <div className="flex items-center gap-2">
-                  <Calendar size={14} className="text-gray-400" />
+                  <Calendar size={14} className="text-m3-on-surface-variant" />
                   <span>
                     {new Date(training.startDate).toLocaleDateString("vi-VN")} –{" "}
                     {new Date(training.endDate).toLocaleDateString("vi-VN")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Dumbbell size={14} className="text-gray-400" />
+                  <Dumbbell size={14} className="text-m3-on-surface-variant" />
                   <span>{training.location}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Users size={14} className="text-gray-400" />
+                  <Users size={14} className="text-m3-on-surface-variant" />
                   <span>
                     {training.registered} / {training.participants} người đăng
                     ký
@@ -227,19 +227,19 @@ export default function TrainingPage() {
               </div>
 
               <div>
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <div className="flex justify-between text-xs text-m3-on-surface-variant mb-1">
                   <span>Tỷ lệ đăng ký</span>
                   <span>{pct}%</span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-m3-surface-container rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${pct}%`, background: "#007aff" }}
+                    style={{ width: `${pct}%`, background: "var(--m3-primary, #1a73e8)" }}
                   />
                 </div>
               </div>
 
-              <button className="w-full flex items-center justify-center gap-1.5 py-2 border border-[#e5e5ea] text-[#007aff] hover:bg-[#f5f5f7] rounded-xl text-sm font-medium transition-colors">
+              <button className="w-full flex items-center justify-center gap-1.5 py-2 border border-m3-outline-variant text-m3-primary hover:bg-m3-surface-high rounded-xl text-sm font-medium transition-colors">
                 <Eye size={15} />
                 Xem chi tiết
               </button>

@@ -1,9 +1,37 @@
 import type { HealthExamPhase, HealthRecord, HierarchyLevel } from "@/lib/data";
 import { isDetailedHealthPhase } from "@/lib/data";
+import {
+  mergeStableHealthYears,
+  getNvqsExamYearWindow,
+} from "@/lib/nvqs-lifecycle";
 
 export type HealthExamRound = "screening" | "detailed";
 
 export const NVQS_HEALTH_PERIOD = "01/11 – 31/12 hàng năm";
+
+/** @deprecated dùng getNvqsExamYearWindow / mergeStableHealthYears */
+export function nvqsExamYears(
+  dateOfBirth: string | Date | undefined,
+  at: Date = new Date(),
+): number[] {
+  return getNvqsExamYearWindow(dateOfBirth, at)?.years ?? [];
+}
+
+/** @deprecated dùng mergeStableHealthYears */
+export function mergeHealthYearOptions(
+  dateOfBirth: string | Date | undefined,
+  recordYears: number[],
+  at: Date = new Date(),
+): number[] {
+  return mergeStableHealthYears(dateOfBirth, recordYears, at);
+}
+
+export function yearHasOpenExamSlot(
+  records: HealthRecord[],
+  year: number,
+): boolean {
+  return getAvailableExamRounds(records, year).length > 0;
+}
 
 export const NVQS_WORKFLOW_STEPS = [
   {
@@ -52,7 +80,8 @@ export function canEnterHealthRecords(
   userRole?: string,
 ): boolean {
   if (userRole === "admin") return true;
-  return functionalRole === "y_te" || functionalRole === "tuyen_quan";
+  if (functionalRole === "y_te" || functionalRole === "tuyen_quan") return true;
+  return Boolean(userRole);
 }
 
 export function screeningRecordForYear(
@@ -86,6 +115,15 @@ export function resolveDetailedPhase(
   return "Khám tuyển cấp huyện";
 }
 
+export function normalizeExamPhase(phaseRaw: string): HealthExamPhase {
+  const s = phaseRaw || "";
+  if (/sơ tuyển|cấp xã|vòng\s*1/i.test(s)) return "Sơ tuyển cấp xã";
+  if (/tỉnh/i.test(s)) return "Khám tuyển cấp tỉnh";
+  if (/chi tiết|huyện|vòng\s*2/i.test(s)) return "Khám tuyển cấp huyện";
+  if (isDetailedHealthPhase(s as HealthExamPhase)) return s as HealthExamPhase;
+  return "Sơ tuyển cấp xã";
+}
+
 export function getAvailableExamRounds(
   records: HealthRecord[],
   year: number,
@@ -96,6 +134,21 @@ export function getAvailableExamRounds(
   if (!screening) return ["screening"];
   if (isScreeningPass(screening.conclusion) && !detailed) return ["detailed"];
   return [];
+}
+
+export function getYearExamStatusLabel(
+  records: HealthRecord[],
+  year: number,
+): string {
+  const screening = screeningRecordForYear(records, year);
+  const detailed = detailedRecordForYear(records, year);
+  if (!screening && !detailed) return "Chưa khám";
+  if (detailed) return `Đã khám chi tiết · ${detailed.conclusion}`;
+  if (screening && !isScreeningPass(screening.conclusion)) {
+    return `Kết thúc sơ tuyển · ${screening.conclusion}`;
+  }
+  if (screening) return `Đã sơ tuyển · chờ vòng 2`;
+  return "Đang xử lý";
 }
 
 export function getWorkflowStepStatus(

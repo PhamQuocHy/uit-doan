@@ -23,24 +23,24 @@ export function getCallDisplayLabel(c: {
   militaryStatus?: Citizen["militaryStatus"];
 }): { label: string; color: string; bg: string } {
   if (c.militaryStatus === "tamhoan") {
-    return { label: "Tạm hoãn", color: "#007aff", bg: "rgba(0,122,255,0.12)" };
+    return { label: "Tạm hoãn", color: "var(--m3-primary, #1a73e8)", bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)" };
   }
   if (c.militaryStatus === "miengoi") {
-    return { label: "Miễn gọi", color: "#8944ab", bg: "rgba(175,82,222,0.12)" };
+    return { label: "Miễn gọi", color: "var(--m3-tertiary, #5a5f6e)", bg: "color-mix(in srgb, var(--m3-tertiary, #5a5f6e) 12%, transparent)" };
   }
   if (c.militaryStatus === "nhapngu" || c.approvalStatus === "approved") {
-    return { label: "Đã duyệt gọi", color: "#059669", bg: "#d1fae5" };
+    return { label: "Đã duyệt gọi", color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" };
   }
   if (c.callIntent === "du_kien_goi" && c.approvalStatus === "pending") {
-    return { label: "Dự kiến gọi", color: "#d97706", bg: "#fef3c7" };
+    return { label: "Dự kiến gọi", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" };
   }
   if (c.callIntent === "khong_goi" || c.approvalStatus === "rejected") {
-    return { label: "Không gọi", color: "#dc2626", bg: "#fee2e2" };
+    return { label: "Không gọi", color: "var(--m3-error, #ba1a1a)", bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" };
   }
   if (c.callIntent === "du_kien_goi") {
-    return { label: "Dự kiến gọi", color: "#007aff", bg: "rgba(0,122,255,0.12)" };
+    return { label: "Dự kiến gọi", color: "var(--m3-primary, #1a73e8)", bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)" };
   }
-  return { label: "Chưa xác định", color: "#636366", bg: "#f5f5f7" };
+  return { label: "Chưa xác định", color: "var(--m3-on-surface-variant, #475569)", bg: "var(--m3-surface-container-high, #eef1f4)" };
 }
 
 /** Khi cán bộ lưu dự kiến gọi từ hồ sơ công dân */
@@ -91,18 +91,23 @@ export function resolveApprovalAction(
   approvalStatus: ApprovalStatus;
   callIntent: CallIntent;
   militaryStatus: Citizen["militaryStatus"];
+  militaryStatusLocked: boolean;
 } {
   if (action === "approve") {
     return {
       approvalStatus: "approved",
       callIntent: "du_kien_goi",
       militaryStatus: "nhapngu",
+      // Duyệt gọi → khóa hồ sơ, không cho sửa lại
+      militaryStatusLocked: true,
     };
   }
   return {
     approvalStatus: "rejected",
+    // Đồng bộ cột Dự kiến gọi bên Hồ sơ công dân → Không gọi
     callIntent: "khong_goi",
     militaryStatus: "truottuyen",
+    militaryStatusLocked: false,
   };
 }
 
@@ -116,6 +121,7 @@ export type ApprovalRow = {
   politicalResult: string;
   status: "pending" | "approved" | "rejected";
   callIntent: CallIntent;
+  campaignId?: string;
 };
 
 export function toApprovalUiStatus(

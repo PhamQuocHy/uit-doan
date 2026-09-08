@@ -339,7 +339,7 @@ function statusByProvinceMemory(
       (c) =>
         c.unitCode &&
         [...codes].some(
-          (code) => c.unitCode === code || c.unitCode.startsWith(`${code}-`),
+          (code) => c.unitCode === code || (c.unitCode?.startsWith(`${code}-`) ?? false),
         ),
     );
   }

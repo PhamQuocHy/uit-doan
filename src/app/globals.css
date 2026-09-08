@@ -2,43 +2,94 @@
 @import "tailwindcss";
 
 /*
-  macOS-inspired dashboard — tối ưu cho người dùng ít quen công nghệ:
-  chữ lớn, khoảng cách rộng, mục tiêu chạm rõ.
+  Material 3 Expressive — token mapping cho toàn bộ UI.
+  Nguồn token: components/m3/tokens.ts (m3Light + withPrimaryAccent #1a73e8).
+  Variate theo ngữ cảnh qua <M3ThemeProvider> (admin = xanh brand, mobile = olive):
+  --m3-* được set trên provider div → utilities dưới đây resolve theo element context.
 */
-@theme {
+
+@theme inline {
   --font-sans: "Google Sans", system-ui, sans-serif;
 
-  --color-olive-50: #f5f5f7;
-  --color-olive-100: #e8e8ed;
-  --color-olive-200: #d2d2d7;
-  --color-olive-300: #a1a1a6;
-  --color-olive-400: #8e8e93;
-  --color-olive-500: #0071e3;
-  --color-olive-600: #007aff;
-  --color-olive-700: #0066d6;
-  --color-olive-800: #1d1d1f;
-  --color-olive-900: #1d1d1f;
+  /* Motion */
+  --font-m3: "Google Sans", system-ui, sans-serif;
+  --ease-m3-expressive: cubic-bezier(0.34, 0.8, 0.34, 1);
+  --ease-m3-spatial: cubic-bezier(0.38, 1.21, 0.22, 1);
+  --ease-m3-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
-  --color-khaki-100: #f5f5f7;
-  --color-khaki-200: #e8e8ed;
-  --color-khaki-300: #d2d2d7;
-  --color-khaki-400: #aeaeb2;
-  --color-khaki-500: #8e8e93;
+  /* Color roles (fallback = light palette, brand #1a73e8) */
+  --color-m3-primary: var(--m3-primary, #1a73e8);
+  --color-m3-primary-hover: var(--m3-col-primary-hover, #3582e8);
+  --color-m3-primary-active: var(--m3-col-primary-active, #5591e4);
+  --color-m3-on-primary: var(--m3-on-primary, #ffffff);
+  --color-m3-primary-container: var(--m3-primary-container, #dae9fb);
+  --color-m3-primary-container-hover: var(--m3-col-primary-container-hover, #c6d9f1);
+  --color-m3-on-primary-container: var(--m3-on-primary-container, #134992);
 
-  --color-militarygray-50: #f5f5f7;
-  --color-militarygray-100: #e5e5ea;
-  --color-militarygray-200: #d1d1d6;
-  --color-militarygray-800: #3a3a3c;
-  --color-militarygray-900: #1d1d1f;
+  --color-m3-secondary: var(--m3-secondary, #55606b);
+  --color-m3-secondary-container: var(--m3-secondary-container, #e3e9f1);
+  --color-m3-on-secondary-container: var(--m3-on-secondary-container, #131a22);
 
-  --color-macos-bg: #f5f5f7;
-  --color-macos-sidebar: rgba(246, 246, 246, 0.88);
-  --color-macos-card: #ffffff;
-  --color-macos-border: rgba(0, 0, 0, 0.06);
-  --color-macos-text: #1d1d1f;
-  --color-macos-secondary: #6e6e73;
-  --color-macos-blue: #007aff;
-  --color-macos-blue-soft: rgba(0, 122, 255, 0.12);
+  --color-m3-background: var(--m3-background, #f7f9fb);
+  --color-m3-surface: var(--m3-surface, #f7f9fb);
+  --color-m3-surface-lowest: var(--m3-surface-container-lowest, #ffffff);
+  --color-m3-surface-low: var(--m3-surface-container-low, #f4f7fb);
+  --color-m3-surface-container: var(--m3-surface-container, #eef3f8);
+  --color-m3-surface-high: var(--m3-surface-container-high, #eef1f4);
+  --color-m3-surface-highest: var(--m3-surface-container-highest, #e4eaf2);
+  --color-m3-on-surface: var(--m3-on-surface, #1b1d20);
+  --color-m3-on-surface-variant: var(--m3-on-surface-variant, #475569);
+  --color-m3-outline: var(--m3-outline, #5f6368);
+  --color-m3-outline-variant: var(--m3-outline-variant, #e3e8ee);
+
+  --color-m3-error: var(--m3-error, #ba1a1a);
+  --color-m3-on-error: var(--m3-on-error, #ffffff);
+  --color-m3-error-container: var(--m3-error-container, #ffdad6);
+  --color-m3-on-error-container: var(--m3-on-error-container, #410002);
+
+  /* Semantic extras (M3 success + warning + tertiary tonal) */
+  --color-m3-success: var(--m3-success, #386a4a);
+  --color-m3-success-container: var(--m3-success-container, #b5ccba);
+  --color-m3-on-success-container: var(--m3-on-success-container, #002110);
+  --color-m3-warning: #8a5800;
+  --color-m3-warning-container: #ffdfb8;
+  --color-m3-on-warning-container: #2c1700;
+  --color-m3-tertiary: var(--m3-tertiary, #5a5f6e);
+  --color-m3-tertiary-container: var(--m3-tertiary-container, #e4e8f2);
+  --color-m3-on-tertiary-container: var(--m3-on-tertiary-container, #171c28);
+
+  /* Legacy aliases — giữ cho class cũ không vỡ, trỏ về M3 roles */
+  --color-olive-50: #f4f7fb;
+  --color-olive-100: #eef3f8;
+  --color-olive-200: #eef1f4;
+  --color-olive-300: #e3e8ee;
+  --color-olive-400: #5f6368;
+  --color-olive-500: var(--m3-primary, #1a73e8);
+  --color-olive-600: var(--m3-primary, #1a73e8);
+  --color-olive-700: var(--m3-on-primary-container, #134992);
+  --color-olive-800: var(--m3-on-surface, #1b1d20);
+  --color-olive-900: var(--m3-on-surface, #1b1d20);
+
+  --color-khaki-100: #f4f7fb;
+  --color-khaki-200: #eef3f8;
+  --color-khaki-300: #eef1f4;
+  --color-khaki-400: #8b94a1;
+  --color-khaki-500: #5f6368;
+
+  --color-militarygray-50: #f4f7fb;
+  --color-militarygray-100: #eef3f8;
+  --color-militarygray-200: #eef1f4;
+  --color-militarygray-800: #475569;
+  --color-militarygray-900: #1b1d20;
+
+  --color-macos-bg: var(--m3-background, #f7f9fb);
+  --color-macos-sidebar: color-mix(in srgb, var(--m3-surface-low, #f4f7fb) 88%, transparent);
+  --color-macos-card: var(--m3-surface-lowest, #ffffff);
+  --color-macos-border: var(--m3-outline-variant, #e3e8ee);
+  --color-macos-text: var(--m3-on-surface, #1b1d20);
+  --color-macos-secondary: var(--m3-on-surface-variant, #475569);
+  --color-macos-blue: var(--m3-primary, #1a73e8);
+  --color-macos-blue-soft: var(--m3-primary-container, #dae9fb);
 }
 
 * {
@@ -46,14 +97,13 @@
 }
 
 html {
-  font-size: 17px;
+  font-size: 18px;
 }
 
 html,
 body {
-  font-family: "Google Sans", system-ui, sans-serif;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: var(--m3-background, #f7f9fb);
+  color: var(--m3-on-surface, #1b1d20);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -68,8 +118,8 @@ textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -77,34 +127,112 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--m3-outline-variant, #e3e8ee);
   border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.28);
-  background-clip: content-box;
+  background: var(--m3-outline, #5f6368);
 }
 
+/* M3 surface cards — Expressive corner radius (28px), soft elevation */
 .macos-card {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--m3-surface-lowest, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--m3-outline-variant, #e3e8ee) 55%, transparent);
+  border-radius: 28px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 8px 24px rgb(0 0 0 / 0.06);
+}
+
+/* Filter / search tray — cùng style trang Hồ sơ công dân */
+.admin-filter-tray {
+  border-radius: 18px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  background: var(--m3-surface-lowest, #ffffff);
+  padding: 0.75rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+.admin-filter-control {
+  height: 2.5rem;
+  min-width: 0;
+  border-radius: 10px;
+  border: 0;
+  background: var(--m3-surface-container-high, #eef1f4);
+  padding: 0 0.75rem;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--m3-on-surface, #1b1d20);
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.admin-filter-control:focus {
+  background: var(--m3-surface-container-lowest, #ffffff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--m3-primary, #1a73e8) 15%, transparent);
+}
+
+/* Bảng admin chuẩn */
+.admin-table {
+  width: 100%;
+  text-align: left;
+}
+
+.admin-table thead {
+  background: var(--m3-surface-container-high, #eef1f4);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m3-on-surface-variant, #475569);
+}
+
+.admin-table th {
+  padding: 1rem 1.25rem;
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+  color: var(--m3-on-surface, #1b1d20);
+  border-top: 1px solid color-mix(in srgb, var(--m3-outline-variant, #e3e8ee) 70%, transparent);
+}
+
+.admin-table tbody tr:hover {
+  background: color-mix(in srgb, var(--m3-surface-container-high, #eef1f4) 70%, transparent);
 }
 
 .macos-glass {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: saturate(180%) blur(22px);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: color-mix(in srgb, var(--m3-surface-lowest, #ffffff) 82%, transparent);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid color-mix(in srgb, var(--m3-outline-variant, #e3e8ee) 45%, transparent);
+}
+
+/* Elevated surface theo tonal elevation M3 */
+.m3-surface-tonal {
+  background: var(--m3-surface-container-low, #f4f7fb);
+  border-radius: 28px;
+}
+
+/* Ripple keyframes — dùng bởi components/m3/useRipple.tsx */
+@keyframes m3-ripple-expand {
+  from {
+    transform: scale(0);
+    opacity: 0.35;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
 }
 
 /* Chữ dễ đọc trên bảng / form */
 .macos-table th {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #6e6e73;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
 }
 
 .macos-table td {

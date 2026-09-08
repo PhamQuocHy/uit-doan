@@ -1,7 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Shield, Search, Filter, Eye, Edit2, Plus, User2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Shield, Plus, Eye, Edit2, User2 } from "lucide-react";
+import {
+  AdminListHeader,
+  AdminListToolbar,
+  AdminListShell,
+  AdminTable,
+  AdminTHead,
+  ADMIN_TH_CLS,
+  ADMIN_TD_CLS,
+  adminRowClass,
+  AdminHoverActions,
+  AdminIconBtn,
+  AdminPill,
+  AdminStatusTabs,
+  AdminPrimaryBtn,
+} from "@/components/admin/list-ui";
 
 const mockReserves = [
   {
@@ -54,186 +69,225 @@ const mockReserves = [
   },
 ];
 
+const STATUS_TABS = [
+  { value: "", label: "Tất cả" },
+  { value: "active", label: "Đang hoạt động" },
+  { value: "inactive", label: "Ngừng hoạt động" },
+] as const;
+
+const STAT_CARD_CLS =
+  "rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+
 export default function ReservePage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const filtered = mockReserves.filter((r) => {
-    const matchSearch =
-      r.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      r.cccd.includes(search);
-    const matchStatus = !statusFilter || r.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(
+    () =>
+      mockReserves.filter((r) => {
+        const q = search.toLowerCase();
+        const matchSearch =
+          !q ||
+          r.fullName.toLowerCase().includes(q) ||
+          r.cccd.includes(q);
+        const matchStatus = !statusFilter || r.status === statusFilter;
+        return matchSearch && matchStatus;
+      }),
+    [search, statusFilter],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
+
+  const activeCount = mockReserves.filter((r) => r.status === "active").length;
+  const inactiveCount = mockReserves.filter((r) => r.status === "inactive").length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
-            Quân nhân dự bị
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
-            Quản lý danh sách quân nhân dự bị động viên và sẵn sàng chiến đấu
-          </p>
-        </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#007aff] hover:bg-[#636366] text-white rounded-xl transition-colors text-sm font-medium">
-          <Plus size={16} />
-          Thêm quân nhân dự bị
-        </button>
-      </div>
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Quân nhân dự bị"
+        countLabel={`${mockReserves.length} hồ sơ`}
+        actions={
+          <AdminPrimaryBtn onClick={() => undefined} tone="blue">
+            <Plus size={16} />
+            Thêm quân nhân dự bị
+          </AdminPrimaryBtn>
+        }
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <p className="text-[14px] text-m3-on-surface-variant">
+        Quản lý danh sách quân nhân dự bị động viên và sẵn sàng chiến đấu
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
           {
             label: "Tổng quân nhân dự bị",
             value: mockReserves.length,
-            color: "#1d1d1f",
+            color: "var(--m3-on-surface, #1b1d20)",
           },
           {
             label: "Đang hoạt động",
-            value: mockReserves.filter((r) => r.status === "active").length,
-            color: "#059669",
+            value: activeCount,
+            color: "var(--color-m3-success)",
           },
           {
             label: "Ngừng hoạt động",
-            value: mockReserves.filter((r) => r.status === "inactive").length,
-            color: "#9ca3af",
+            value: inactiveCount,
+            color: "var(--m3-on-surface-variant, #475569)",
           },
         ].map((s) => (
-          <div
-            key={s.label}
-            className="bg-white rounded-2xl p-5 border border-[#e5e5ea] shadow-sm"
-          >
-            <div className="flex items-center gap-2 mb-2">
+          <div key={s.label} className={STAT_CARD_CLS}>
+            <div className="mb-2 flex items-center gap-2">
               <Shield size={18} style={{ color: s.color }} />
-              <p className="text-sm text-gray-500">{s.label}</p>
+              <p className="text-[13px] text-m3-on-surface-variant">{s.label}</p>
             </div>
-            <p className="text-3xl font-bold" style={{ color: s.color }}>
+            <p className="text-[28px] font-bold" style={{ color: s.color }}>
               {s.value}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
-            />
-            <input
-              type="text"
-              placeholder="Tìm theo họ tên, số CCCD..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="relative">
-            <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
-            />
-            <select
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] bg-white cursor-pointer"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="active">Đang hoạt động</option>
-              <option value="inactive">Ngừng hoạt động</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+      <AdminListShell
+        page={page}
+        totalPages={totalPages}
+        tabs={
+          <AdminStatusTabs
+            tabs={[...STATUS_TABS]}
+            value={statusFilter}
+            onChange={(v) => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
+          />
+        }
+        toolbar={
+          <AdminListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm theo họ tên, số CCCD..."
+            page={page}
+            pageSize={pageSize}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        <AdminTable minWidth="min-w-[960px]">
+          <AdminTHead>
+            <th className={ADMIN_TH_CLS}>Họ và tên</th>
+            <th className={ADMIN_TH_CLS}>Đơn vị dự bị</th>
+            <th className={ADMIN_TH_CLS}>Xuất ngũ</th>
+            <th className={ADMIN_TH_CLS}>Hạng dự bị</th>
+            <th className={ADMIN_TH_CLS}>Chuyên ngành</th>
+            <th className={ADMIN_TH_CLS}>Huấn luyện gần nhất</th>
+            <th className={ADMIN_TH_CLS}>Trạng thái</th>
+            <th className={ADMIN_TH_CLS}>Thao tác</th>
+          </AdminTHead>
+          <tbody>
+            {paginated.length === 0 ? (
               <tr>
-                <th className="px-6 py-4">Họ và Tên</th>
-                <th className="px-6 py-4">Đơn vị dự bị</th>
-                <th className="px-6 py-4">Xuất ngũ</th>
-                <th className="px-6 py-4">Hạng dự bị</th>
-                <th className="px-6 py-4">Chuyên ngành</th>
-                <th className="px-6 py-4">Huấn luyện gần nhất</th>
-                <th className="px-6 py-4">Trạng thái</th>
-                <th className="px-6 py-4 text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((row) => (
-                <tr
-                  key={row.id}
-                  className="hover:bg-gray-50/50 transition-colors"
+                <td
+                  colSpan={8}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
                 >
-                  <td className="px-6 py-4">
+                  Không có kết quả phù hợp.
+                </td>
+              </tr>
+            ) : (
+              paginated.map((row, idx) => (
+                <tr key={row.id} className={adminRowClass(idx)}>
+                  <td className={ADMIN_TD_CLS}>
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-[#f5f5f7] flex items-center justify-center shrink-0">
-                        <User2 size={14} style={{ color: "#007aff" }} />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-m3-surface-high">
+                        <User2
+                          size={14}
+                          style={{ color: "var(--m3-primary, #1a73e8)" }}
+                        />
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">
+                        <div className="text-[14px] font-bold text-m3-on-surface">
                           {row.fullName}
                         </div>
-                        <div className="text-xs text-gray-500 font-mono">
+                        <div className="font-mono text-[12px] text-m3-on-surface-variant">
                           {row.cccd}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-600 text-xs">
+                  <td className={`${ADMIN_TD_CLS} text-[12px] text-m3-on-surface-variant`}>
                     {row.unit}
                   </td>
-                  <td className="px-6 py-4 text-gray-600">
+                  <td className={ADMIN_TD_CLS}>
                     {new Date(row.discharged).toLocaleDateString("vi-VN")}
                   </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className="px-2.5 py-1 rounded-full text-xs font-medium"
-                      style={
+                  <td className={ADMIN_TD_CLS}>
+                    <AdminPill
+                      label={row.reserveClass}
+                      bg={
                         row.reserveClass === "Hạng 1"
-                          ? { background: "#dbeafe", color: "#2563eb" }
-                          : { background: "#f3f4f6", color: "#6b7280" }
+                          ? "var(--m3-primary-container, #dae9fb)"
+                          : "var(--m3-surface-container-high, #eef1f4)"
                       }
-                    >
-                      {row.reserveClass}
-                    </span>
+                      color={
+                        row.reserveClass === "Hạng 1"
+                          ? "var(--m3-primary, #1a73e8)"
+                          : "var(--m3-on-surface-variant, #475569)"
+                      }
+                    />
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{row.specialty}</td>
-                  <td className="px-6 py-4 text-gray-600">
+                  <td className={`${ADMIN_TD_CLS} text-m3-on-surface-variant`}>
+                    {row.specialty}
+                  </td>
+                  <td className={`${ADMIN_TD_CLS} text-m3-on-surface-variant`}>
                     {new Date(row.lastTraining).toLocaleDateString("vi-VN")}
                   </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium"
-                      style={
+                  <td className={ADMIN_TD_CLS}>
+                    <AdminPill
+                      label={row.status === "active" ? "Hoạt động" : "Ngừng"}
+                      bg={
                         row.status === "active"
-                          ? { background: "#d1fae5", color: "#059669" }
-                          : { background: "#f3f4f6", color: "#9ca3af" }
+                          ? "var(--color-m3-success-container)"
+                          : "var(--m3-surface-container-high, #eef1f4)"
                       }
-                    >
-                      {row.status === "active" ? "Hoạt động" : "Ngừng"}
-                    </span>
+                      color={
+                        row.status === "active"
+                          ? "var(--color-m3-success)"
+                          : "var(--m3-on-surface-variant, #475569)"
+                      }
+                    />
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button className="p-1.5 text-gray-400 hover:text-[#007aff] hover:bg-[#f5f5f7] rounded-lg transition-colors">
+                  <td className={`relative ${ADMIN_TD_CLS}`}>
+                    <span className="text-[13px] text-m3-on-surface-variant">—</span>
+                    <AdminHoverActions>
+                      <AdminIconBtn title="Xem" onClick={() => undefined} tone="gray">
                         <Eye size={15} />
-                      </button>
-                      <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                      </AdminIconBtn>
+                      <AdminIconBtn title="Sửa" onClick={() => undefined} tone="blue">
                         <Edit2 size={15} />
-                      </button>
-                    </div>
+                      </AdminIconBtn>
+                    </AdminHoverActions>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              ))
+            )}
+          </tbody>
+        </AdminTable>
+      </AdminListShell>
     </div>
   );
 }

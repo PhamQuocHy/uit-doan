@@ -87,7 +87,7 @@ export interface AnalyticsDashboard {
     year: number | null;
     unitCode: string;
     generatedAt: string;
-    source: "mysql";
+    source: "mysql" | "demo";
   };
 }
 

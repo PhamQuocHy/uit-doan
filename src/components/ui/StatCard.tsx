@@ -11,27 +11,28 @@ interface StatCardProps {
 
 const colorMap = {
   olive: {
-    bg: "rgba(0,122,255,0.12)",
-    text: "#007aff",
+    bg: "var(--m3-primary-container)",
+    text: "var(--m3-on-primary-container)",
   },
   khaki: {
-    bg: "rgba(255,149,0,0.14)",
-    text: "#ff9500",
+    bg: "var(--color-m3-warning-container, #ffdfb8)",
+    text: "var(--color-m3-on-warning-container, #2c1700)",
   },
   forest: {
-    bg: "rgba(52,199,89,0.14)",
-    text: "#34c759",
+    bg: "var(--color-m3-success-container, #b5ccba)",
+    text: "var(--color-m3-on-success-container, #002110)",
   },
   earth: {
-    bg: "rgba(90,200,250,0.16)",
-    text: "#5ac8fa",
+    bg: "var(--m3-secondary-container)",
+    text: "var(--m3-on-secondary-container)",
   },
   alert: {
-    bg: "rgba(255,59,48,0.12)",
-    text: "#ff3b30",
+    bg: "var(--m3-error-container)",
+    text: "var(--m3-on-error-container)",
   },
 };
 
+/** M3 Expressive elevated card with tonal icon container */
 export default function StatCard({
   title,
   value,
@@ -45,28 +46,25 @@ export default function StatCard({
 
   return (
     <div
-      className="rounded-[22px] p-6 transition-transform duration-200 hover:-translate-y-0.5"
-      style={{
-        background: "#ffffff",
-        border: "1px solid rgba(0,0,0,0.06)",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.03), 0 12px 32px rgba(0,0,0,0.05)",
-      }}
+      className="macos-card p-6 transition-transform duration-[400ms] ease-[cubic-bezier(0.38,1.21,0.22,1)] hover:-translate-y-1"
     >
       <div className="flex items-start justify-between gap-3">
         <div
-          className="rounded-[16px] p-3.5"
+          className="rounded-full p-3.5"
           style={{ background: c.bg, color: c.text }}
         >
           {icon}
         </div>
         {trend && (
           <span
-            className="rounded-[10px] px-2.5 py-1 text-[13px] font-bold"
+            className="rounded-full px-2.5 py-1 text-[13px] font-bold"
             style={{
-              color: trendUp ? "#248a3d" : "#ff3b30",
+              color: trendUp
+                ? "var(--color-m3-on-success-container, #002110)"
+                : "var(--m3-on-error-container)",
               background: trendUp
-                ? "rgba(52,199,89,0.12)"
-                : "rgba(255,59,48,0.1)",
+                ? "var(--color-m3-success-container, #b5ccba)"
+                : "var(--m3-error-container)",
             }}
           >
             {trendUp ? "▲" : "▼"} {Math.abs(trend.value)}% {trend.label}
@@ -74,12 +72,12 @@ export default function StatCard({
         )}
       </div>
       <div className="mt-5">
-        <p className="text-[36px] font-bold leading-none tracking-tight text-[#1d1d1f]">
+        <p className="text-[36px] font-bold leading-none tracking-tight text-m3-on-surface">
           {value}
         </p>
-        <p className="mt-2.5 text-[16px] font-semibold text-[#1d1d1f]">{title}</p>
+        <p className="mt-2.5 text-[16px] font-semibold text-m3-on-surface">{title}</p>
         {subtitle && (
-          <p className="mt-1 text-[14px] font-medium text-[#6e6e73]">{subtitle}</p>
+          <p className="mt-1 text-[14px] font-medium text-m3-on-surface-variant">{subtitle}</p>
         )}
       </div>
     </div>

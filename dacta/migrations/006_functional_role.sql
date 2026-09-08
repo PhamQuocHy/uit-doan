@@ -23,9 +23,8 @@ WHERE `username` = 'admin_qk9';
 INSERT INTO `users`
   (`id`, `username`, `password_hash`, `full_name`, `email`, `phone`, `role_id`, `unit_code`, `functional_role`, `status`)
 VALUES
-  ('u-yte-ct', 'admin_yte', '123', 'NV Y tế — Thành phố Cần Thơ', 'yte.cantho@ymsa.vn', '0900000005', 3, '92', 'y_te', 'active')
+  ('u-yte-ct', 'admin_yte', 'scrypt$6f367a1f3e8752918c43bd46ba2b4d85$7083c4bd77ab61d5cd92b231ecabee0b97506691af34ab07d5751ef5273c0b49f31e1bcabc2af7b762045b119647b446e8f5e5cc3f17a4ea2d37d040ee6a23e6', 'NV Y tế — Thành phố Cần Thơ', 'yte.cantho@ymsa.vn', '0900000005', 3, '92', 'y_te', 'active')
 ON DUPLICATE KEY UPDATE
-  `password_hash` = VALUES(`password_hash`),
   `full_name` = VALUES(`full_name`),
   `role_id` = VALUES(`role_id`),
   `unit_code` = VALUES(`unit_code`),

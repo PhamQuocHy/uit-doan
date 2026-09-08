@@ -2,6 +2,14 @@ import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
 import type { Citizen } from "@/lib/data";
 import { getUnitDescendants } from "@/lib/data";
+import { toDateOnlyString } from "@/lib/date-vn";
+import {
+  calcAgeYears,
+  NVQS_AGE_MAX,
+  NVQS_AGE_MIN,
+  sqlAgeYear,
+  type CitizenAgeScope,
+} from "@/lib/nvqs-age";
 
 type CitizenRow = RowDataPacket & {
   id: string;
@@ -22,9 +30,19 @@ type CitizenRow = RowDataPacket & {
   military_status_locked: number | null;
   call_intent: Citizen["callIntent"] | null;
   approval_status: Citizen["approvalStatus"] | null;
+  campaign_id: string | null;
   health_grade: number | null;
   education_level: string | null;
   job: string | null;
+  school_name?: string | null;
+  identification_features?: string | null;
+  issue_date?: string | Date | null;
+  expiry_date?: string | Date | null;
+  old_id_number?: string | null;
+  father_name?: string | null;
+  mother_name?: string | null;
+  avatar_url?: string | null;
+  archived_at?: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
 };
@@ -37,12 +55,16 @@ function toIso(d: string | Date | null | undefined): string {
   return new Date(s).toISOString();
 }
 
+function toDateOnly(d: string | Date | null | undefined): string | undefined {
+  return toDateOnlyString(d);
+}
+
 function mapCitizen(row: CitizenRow): Citizen {
   return {
     id: row.id,
     fullName: row.full_name,
     cccd: row.cccd,
-    dateOfBirth: toIso(row.date_of_birth).slice(0, 10),
+    dateOfBirth: toDateOnly(row.date_of_birth) || "",
     gender: row.gender === "female" ? "female" : "male",
     nationality: row.nationality || undefined,
     ethnicity: row.ethnicity || undefined,
@@ -53,13 +75,23 @@ function mapCitizen(row: CitizenRow): Citizen {
     phone: row.phone || "",
     educationLevel: row.education_level || "12/12",
     job: row.job || "",
+    schoolName: row.school_name || undefined,
     healthStatus:
       row.health_grade != null ? `Loại ${row.health_grade}` : undefined,
+    identificationFeatures: row.identification_features || undefined,
+    issueDate: toDateOnly(row.issue_date),
+    expiryDate: toDateOnly(row.expiry_date),
+    oldIdNumber: row.old_id_number || undefined,
+    fatherName: row.father_name || undefined,
+    motherName: row.mother_name || undefined,
+    avatar: row.avatar_url || undefined,
     militaryStatus: row.military_status,
     militaryStatusReason: row.military_status_reason || undefined,
     militaryStatusLocked: Boolean(row.military_status_locked),
     callIntent: (row.call_intent || "unset") as Citizen["callIntent"],
     approvalStatus: (row.approval_status || "none") as Citizen["approvalStatus"],
+    campaignId: row.campaign_id || undefined,
+    archivedAt: row.archived_at ? toIso(row.archived_at) : null,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
@@ -69,13 +101,162 @@ function placeholders(n: number) {
   return Array.from({ length: n }, () => "?").join(",");
 }
 
+let archivedColumnReady: boolean | null = null;
+
+/** Đảm bảo avatar_url đủ chỗ lưu ảnh chip (base64). */
+export async function ensureCitizenAvatarColumn(): Promise<void> {
+  if (!(await pingDb())) return;
+  try {
+    const cols = await queryRows<RowDataPacket[]>(
+      `SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS len
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizen_identities'
+         AND COLUMN_NAME = 'avatar_url'
+       LIMIT 1`,
+    );
+    const col = cols[0] as { DATA_TYPE?: string; len?: number } | undefined;
+    if (!col) {
+      await queryExecute(
+        `ALTER TABLE citizen_identities ADD COLUMN avatar_url MEDIUMTEXT NULL`,
+      );
+      return;
+    }
+    if (String(col.DATA_TYPE).toLowerCase() === "text") {
+      await queryExecute(
+        `ALTER TABLE citizen_identities MODIFY COLUMN avatar_url MEDIUMTEXT NULL`,
+      );
+    }
+  } catch (e) {
+    console.warn("ensureCitizenAvatarColumn:", e);
+  }
+}
+
+/** Đảm bảo cột archived_at tồn tại (idempotent). */
+export async function ensureCitizenArchivedAtColumn(): Promise<boolean> {
+  if (archivedColumnReady === true) return true;
+  if (!(await pingDb())) {
+    archivedColumnReady = false;
+    return false;
+  }
+  try {
+    const cols = await queryRows<RowDataPacket[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizens'
+         AND COLUMN_NAME = 'archived_at'
+       LIMIT 1`,
+    );
+    if (cols.length === 0) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN archived_at DATETIME NULL DEFAULT NULL
+         COMMENT 'Thời điểm duyệt chuyển hồ sơ lưu trữ'`,
+      );
+    }
+    try {
+      await queryExecute(
+        `CREATE INDEX idx_citizens_archived_at ON citizens (archived_at)`,
+      );
+    } catch {
+      /* index đã tồn tại */
+    }
+    archivedColumnReady = true;
+    return true;
+  } catch (e) {
+    console.error("ensureCitizenArchivedAtColumn:", e);
+    archivedColumnReady = false;
+    return false;
+  }
+}
+
+function applyAgeScope(where: string[], ageScope: CitizenAgeScope) {
+  const ageExpr = sqlAgeYear("c.date_of_birth");
+  if (ageScope === "active") {
+    where.push(`c.archived_at IS NULL`);
+    where.push(`${ageExpr} BETWEEN ${NVQS_AGE_MIN} AND ${NVQS_AGE_MAX}`);
+  } else if (ageScope === "pending") {
+    where.push(`c.archived_at IS NULL`);
+    where.push(`${ageExpr} > ${NVQS_AGE_MAX}`);
+  } else if (ageScope === "archive") {
+    where.push(`c.archived_at IS NOT NULL`);
+  }
+}
+
+export function filterCitizensByAgeScopeMemory(
+  items: Citizen[],
+  ageScope: CitizenAgeScope,
+): Citizen[] {
+  if (ageScope === "all") return items;
+  return items.filter((c) => {
+    const age = calcAgeYears(c.dateOfBirth);
+    const archived = Boolean(c.archivedAt);
+    if (ageScope === "archive") return archived;
+    if (ageScope === "pending") return !archived && age > NVQS_AGE_MAX;
+    return !archived && age >= NVQS_AGE_MIN && age <= NVQS_AGE_MAX;
+  });
+}
+
+export async function archiveCitizensInDb(ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  if (!(await pingDb())) return 0;
+  await ensureCitizenArchivedAtColumn();
+  try {
+    const result = await queryExecute(
+      `UPDATE citizens
+       SET archived_at = NOW(), updated_at = NOW()
+       WHERE id IN (${placeholders(ids.length)})
+         AND archived_at IS NULL
+         AND ${sqlAgeYear("date_of_birth")} > ${NVQS_AGE_MAX}`,
+      ids,
+    );
+    return Number(result.affectedRows || 0);
+  } catch (e) {
+    console.error("archiveCitizensInDb:", e);
+    return 0;
+  }
+}
+
+export async function archiveAllPendingInDb(unitCodes?: string[]): Promise<number> {
+  if (!(await pingDb())) return 0;
+  await ensureCitizenArchivedAtColumn();
+  const where = [
+    "archived_at IS NULL",
+    `${sqlAgeYear("date_of_birth")} > ${NVQS_AGE_MAX}`,
+  ];
+  const params: unknown[] = [];
+  if (unitCodes && unitCodes.length > 0) {
+    if (unitCodes.length <= 500) {
+      where.push(`unit_code IN (${placeholders(unitCodes.length)})`);
+      params.push(...unitCodes);
+    } else {
+      const root = unitCodes[0]?.split("-")[0] || unitCodes[0];
+      where.push("(unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))");
+      params.push(root, root);
+    }
+  }
+  try {
+    const result = await queryExecute(
+      `UPDATE citizens SET archived_at = NOW(), updated_at = NOW() WHERE ${where.join(" AND ")}`,
+      params,
+    );
+    return Number(result.affectedRows || 0);
+  } catch (e) {
+    console.error("archiveAllPendingInDb:", e);
+    return 0;
+  }
+}
+
 export async function findCitizensFromDb(query: {
   search?: string;
   militaryStatus?: string;
   callIntent?: string;
+  campaignId?: string;
   unitCodes?: string[];
   page?: number;
   limit?: number;
+  /** active = 18–27 chưa lưu trữ; pending = hết tuổi chờ duyệt; archive = đã duyệt */
+  ageScope?: CitizenAgeScope;
 }): Promise<{
   data: Citizen[];
   total: number;
@@ -85,6 +266,8 @@ export async function findCitizensFromDb(query: {
 } | null> {
   const ok = await pingDb();
   if (!ok) return null;
+  await ensureCitizenArchivedAtColumn();
+  await ensureCitizenAvatarColumn();
 
   const page = query.page || 1;
   const limit = query.limit || 10;
@@ -93,23 +276,32 @@ export async function findCitizensFromDb(query: {
   const where: string[] = ["1=1"];
   const params: unknown[] = [];
 
-  if (query.unitCodes && query.unitCodes.length > 0) {
-    // tránh query quá dài: nếu lọc theo tỉnh (code không có '-'), dùng LIKE
-    const onlyTinh =
-      query.unitCodes.length > 1 &&
-      query.unitCodes.every((c) => c === query.unitCodes![0] || c.startsWith(`${query.unitCodes![0]}-`));
+  applyAgeScope(where, query.ageScope || "active");
 
-    if (onlyTinh && query.unitCodes[0] && !query.unitCodes[0].includes("-")) {
-      const root = query.unitCodes[0];
-      where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
-      params.push(root, root);
-    } else if (query.unitCodes.length <= 500) {
-      where.push(`c.unit_code IN (${placeholders(query.unitCodes.length)})`);
-      params.push(...query.unitCodes);
+  if (query.unitCodes && query.unitCodes.length > 0) {
+    const root0 = query.unitCodes[0];
+    // Phạm vi Bộ (code "bo"): không lọc unit_code — tránh LIKE "bo-%" sai với mã tỉnh "92-…"
+    if (root0 === "bo") {
+      // nationwide — bỏ filter địa phương
     } else {
-      const root = query.unitCodes[0]?.split("-")[0] || query.unitCodes[0];
-      where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
-      params.push(root, root);
+      // tránh query quá dài: nếu lọc theo tỉnh (code không có '-'), dùng LIKE
+      const onlyTinh =
+        query.unitCodes.length > 1 &&
+        query.unitCodes.every(
+          (c) => c === root0 || c.startsWith(`${root0}-`),
+        );
+
+      if (onlyTinh && root0 && !root0.includes("-")) {
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root0, root0);
+      } else if (query.unitCodes.length <= 500) {
+        where.push(`c.unit_code IN (${placeholders(query.unitCodes.length)})`);
+        params.push(...query.unitCodes);
+      } else {
+        const root = root0?.split("-")[0] || root0;
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root, root);
+      }
     }
   }
 
@@ -121,6 +313,11 @@ export async function findCitizensFromDb(query: {
   if (query.callIntent) {
     where.push("c.call_intent = ?");
     params.push(query.callIntent);
+  }
+  if (query.campaignId) {
+    // Chọn đợt: gồm hồ sơ thuộc đợt + hồ sơ chưa gán đợt (tránh “mất” công dân)
+    where.push("(c.campaign_id = ? OR c.campaign_id IS NULL)");
+    params.push(query.campaignId);
   }
 
   if (query.search) {
@@ -147,12 +344,20 @@ export async function findCitizensFromDb(query: {
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.military_status_locked,
          c.call_intent, c.approval_status,
-         c.health_grade, c.created_at, c.updated_at,
+         c.health_grade, c.campaign_id, c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
-         edu.major AS job
+         edu.major AS job,
+         edu.school_name AS school_name,
+         ci.identification_features,
+         ci.issue_date,
+         ci.expiry_date,
+         ci.old_id_number,
+         ci.avatar_url,
+         fam.father_name,
+         fam.mother_name
        FROM citizens c
        LEFT JOIN (
-         SELECT e1.citizen_id, e1.level, e1.major
+         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
          FROM citizen_education e1
          INNER JOIN (
            SELECT citizen_id, MAX(id) AS max_id
@@ -160,6 +365,16 @@ export async function findCitizensFromDb(query: {
            GROUP BY citizen_id
          ) latest ON latest.max_id = e1.id
        ) edu ON edu.citizen_id = c.id
+       LEFT JOIN citizen_identities ci ON ci.citizen_id = c.id
+       LEFT JOIN (
+         SELECT
+           citizen_id,
+           MAX(CASE WHEN relationship = 'Cha' THEN rel_name END) AS father_name,
+           MAX(CASE WHEN relationship = 'Me' THEN rel_name END) AS mother_name
+         FROM citizen_family
+         WHERE relationship IN ('Cha', 'Me')
+         GROUP BY citizen_id
+       ) fam ON fam.citizen_id = c.id
        WHERE ${whereSql}
        ORDER BY c.updated_at DESC
        LIMIT ? OFFSET ?`,
@@ -179,23 +394,26 @@ export async function findCitizensFromDb(query: {
   }
 }
 
-export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null> {
-  const ok = await pingDb();
-  if (!ok) return null;
-  try {
-    const rows = await queryRows<CitizenRow[]>(
-      `SELECT
+const CITIZEN_SELECT_SQL = `SELECT
          c.id, c.full_name, c.cccd, c.date_of_birth, c.gender,
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.military_status_locked,
          c.call_intent, c.approval_status,
-         c.health_grade, c.created_at, c.updated_at,
+         c.health_grade, c.campaign_id, c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
-         edu.major AS job
+         edu.major AS job,
+         edu.school_name AS school_name,
+         ci.identification_features,
+         ci.issue_date,
+         ci.expiry_date,
+         ci.old_id_number,
+         ci.avatar_url,
+         fam.father_name,
+         fam.mother_name
        FROM citizens c
        LEFT JOIN (
-         SELECT e1.citizen_id, e1.level, e1.major
+         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
          FROM citizen_education e1
          INNER JOIN (
            SELECT citizen_id, MAX(id) AS max_id
@@ -203,13 +421,181 @@ export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null>
            GROUP BY citizen_id
          ) latest ON latest.max_id = e1.id
        ) edu ON edu.citizen_id = c.id
+       LEFT JOIN citizen_identities ci ON ci.citizen_id = c.id
+       LEFT JOIN (
+         SELECT
+           citizen_id,
+           MAX(CASE WHEN relationship = 'Cha' THEN rel_name END) AS father_name,
+           MAX(CASE WHEN relationship = 'Me' THEN rel_name END) AS mother_name
+         FROM citizen_family
+         WHERE relationship IN ('Cha', 'Me')
+         GROUP BY citizen_id
+       ) fam ON fam.citizen_id = c.id`;
+
+export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null> {
+  const ok = await pingDb();
+  if (!ok) return null;
+  await ensureCitizenArchivedAtColumn();
+  await ensureCitizenAvatarColumn();
+  try {
+    const rows = await queryRows<CitizenRow[]>(
+      `${CITIZEN_SELECT_SQL}
        WHERE c.id = ?
        LIMIT 1`,
       [id],
     );
     return rows[0] ? mapCitizen(rows[0]) : null;
-  } catch {
+  } catch (e) {
+    console.error("findCitizenByIdFromDb:", e);
     return null;
+  }
+}
+
+export async function findCitizenByCccdFromDb(
+  cccd: string,
+): Promise<Citizen | null> {
+  const ok = await pingDb();
+  if (!ok) return null;
+  await ensureCitizenArchivedAtColumn();
+  await ensureCitizenAvatarColumn();
+  const digits = String(cccd || "").replace(/\D/g, "");
+  if (!digits) return null;
+  try {
+    const rows = await queryRows<CitizenRow[]>(
+      `${CITIZEN_SELECT_SQL}
+       WHERE c.cccd = ?
+       LIMIT 1`,
+      [digits],
+    );
+    return rows[0] ? mapCitizen(rows[0]) : null;
+  } catch (e) {
+    console.error("findCitizenByCccdFromDb:", e);
+    return null;
+  }
+}
+
+/** Hồ sơ có ảnh CCCD/3x4 — dùng nhận dạng khuôn mặt 1:N */
+export async function findCitizensWithAvatarFromDb(query: {
+  unitCodes?: string[];
+  limit?: number;
+  ageScope?: CitizenAgeScope;
+}): Promise<Citizen[] | null> {
+  const ok = await pingDb();
+  if (!ok) return null;
+  await ensureCitizenArchivedAtColumn();
+  await ensureCitizenAvatarColumn();
+
+  const where: string[] = [
+    "ci.avatar_url IS NOT NULL",
+    "TRIM(ci.avatar_url) <> ''",
+  ];
+  const params: unknown[] = [];
+  applyAgeScope(where, query.ageScope || "active");
+
+  if (query.unitCodes && query.unitCodes.length > 0) {
+    const root0 = query.unitCodes[0];
+    if (root0 !== "bo") {
+      const onlyTinh =
+        query.unitCodes.length > 1 &&
+        query.unitCodes.every(
+          (c) => c === root0 || c.startsWith(`${root0}-`),
+        );
+      if (onlyTinh && root0 && !root0.includes("-")) {
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root0, root0);
+      } else if (query.unitCodes.length <= 500) {
+        where.push(`c.unit_code IN (${placeholders(query.unitCodes.length)})`);
+        params.push(...query.unitCodes);
+      } else {
+        const root = root0?.split("-")[0] || root0;
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root, root);
+      }
+    }
+  }
+
+  const limit = Math.min(Math.max(query.limit || 40, 1), 80);
+  try {
+    const rows = await queryRows<CitizenRow[]>(
+      `${CITIZEN_SELECT_SQL}
+       WHERE ${where.join(" AND ")}
+       ORDER BY c.updated_at DESC
+       LIMIT ?`,
+      [...params, limit],
+    );
+    return rows.map(mapCitizen);
+  } catch (e) {
+    console.error("findCitizensWithAvatarFromDb:", e);
+    return null;
+  }
+}
+
+async function upsertCitizenIdentity(
+  citizenId: string,
+  data: Partial<Citizen>,
+): Promise<void> {
+  const hasAny =
+    data.identificationFeatures !== undefined ||
+    data.issueDate !== undefined ||
+    data.expiryDate !== undefined ||
+    data.oldIdNumber !== undefined ||
+    data.avatar !== undefined;
+  if (!hasAny) return;
+
+  await queryExecute(
+    `INSERT INTO citizen_identities
+      (citizen_id, identification_features, issue_date, expiry_date, old_id_number, avatar_url)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       identification_features = COALESCE(VALUES(identification_features), identification_features),
+       issue_date = COALESCE(VALUES(issue_date), issue_date),
+       expiry_date = COALESCE(VALUES(expiry_date), expiry_date),
+       old_id_number = COALESCE(VALUES(old_id_number), old_id_number),
+       avatar_url = COALESCE(VALUES(avatar_url), avatar_url)`,
+    [
+      citizenId,
+      data.identificationFeatures ?? null,
+      data.issueDate ?? null,
+      data.expiryDate ?? null,
+      data.oldIdNumber ?? null,
+      data.avatar ?? null,
+    ],
+  );
+}
+
+async function upsertCitizenParents(
+  citizenId: string,
+  data: Partial<Citizen>,
+): Promise<void> {
+  if (data.fatherName !== undefined && data.fatherName.trim()) {
+    await queryExecute(
+      `INSERT INTO citizen_family (citizen_id, rel_name, relationship)
+       SELECT ?, ?, 'Cha'
+       FROM DUAL
+       WHERE NOT EXISTS (
+         SELECT 1 FROM citizen_family WHERE citizen_id = ? AND relationship = 'Cha'
+       )`,
+      [citizenId, data.fatherName.trim(), citizenId],
+    );
+    await queryExecute(
+      `UPDATE citizen_family SET rel_name = ? WHERE citizen_id = ? AND relationship = 'Cha'`,
+      [data.fatherName.trim(), citizenId],
+    );
+  }
+  if (data.motherName !== undefined && data.motherName.trim()) {
+    await queryExecute(
+      `INSERT INTO citizen_family (citizen_id, rel_name, relationship)
+       SELECT ?, ?, 'Me'
+       FROM DUAL
+       WHERE NOT EXISTS (
+         SELECT 1 FROM citizen_family WHERE citizen_id = ? AND relationship = 'Me'
+       )`,
+      [citizenId, data.motherName.trim(), citizenId],
+    );
+    await queryExecute(
+      `UPDATE citizen_family SET rel_name = ? WHERE citizen_id = ? AND relationship = 'Me'`,
+      [data.motherName.trim(), citizenId],
+    );
   }
 }
 
@@ -228,6 +614,10 @@ export async function updateCitizenInDb(
     cccd: data.cccd,
     date_of_birth: data.dateOfBirth,
     gender: data.gender,
+    nationality: data.nationality,
+    ethnicity: data.ethnicity,
+    religion: data.religion,
+    origin_place: data.originPlace,
     phone: data.phone,
     permanent_address: data.address,
     current_address: data.address,
@@ -235,6 +625,7 @@ export async function updateCitizenInDb(
     military_status_reason: data.militaryStatusReason,
     call_intent: data.callIntent,
     approval_status: data.approvalStatus,
+    campaign_id: data.campaignId || null,
     military_status_locked:
       data.militaryStatusLocked === undefined
         ? undefined
@@ -254,17 +645,157 @@ export async function updateCitizenInDb(
     }
   }
 
-  if (!fields.length) return findCitizenByIdFromDb(id);
-
   try {
-    await queryExecute(
-      `UPDATE citizens SET ${fields.join(", ")}, updated_at = NOW() WHERE id = ?`,
-      [...params, id],
-    );
+    if (fields.length) {
+      await queryExecute(
+        `UPDATE citizens SET ${fields.join(", ")}, updated_at = NOW() WHERE id = ?`,
+        [...params, id],
+      );
+    }
+    await upsertCitizenIdentity(id, data);
+    await upsertCitizenParents(id, data);
+
+    if (
+      data.educationLevel !== undefined ||
+      data.job !== undefined ||
+      data.schoolName !== undefined
+    ) {
+      const existingEdu = await queryRows<RowDataPacket[]>(
+        `SELECT id FROM citizen_education WHERE citizen_id = ? ORDER BY id DESC LIMIT 1`,
+        [id],
+      );
+      const school =
+        data.schoolName !== undefined
+          ? data.schoolName.trim() || null
+          : undefined;
+      if (existingEdu[0]?.id) {
+        const eduFields: string[] = [];
+        const eduParams: unknown[] = [];
+        if (data.educationLevel !== undefined) {
+          eduFields.push("level = ?");
+          eduParams.push(data.educationLevel || null);
+        }
+        if (data.job !== undefined) {
+          eduFields.push("major = ?");
+          eduParams.push(data.job || null);
+        }
+        if (school !== undefined) {
+          eduFields.push("school_name = ?");
+          eduParams.push(school);
+        }
+        if (eduFields.length) {
+          await queryExecute(
+            `UPDATE citizen_education SET ${eduFields.join(", ")} WHERE id = ?`,
+            [...eduParams, existingEdu[0].id],
+          );
+        }
+      } else if (data.educationLevel || data.job || school) {
+        await queryExecute(
+          `INSERT INTO citizen_education (citizen_id, school_name, level, major)
+           VALUES (?, ?, ?, ?)`,
+          [
+            id,
+            school ?? null,
+            data.educationLevel || null,
+            data.job || null,
+          ],
+        );
+      }
+    }
+
     return findCitizenByIdFromDb(id);
   } catch (e) {
     console.error("updateCitizenInDb:", e);
     return null;
+  }
+}
+
+export type CreateCitizenResult =
+  | { ok: true; data: Citizen }
+  | { ok: false; error: string; code: "DUPLICATE_CCCD" | "DB_ERROR" };
+
+export async function createCitizenInDb(
+  data: Partial<Citizen> & {
+    fullName: string;
+    cccd: string;
+    dateOfBirth: string;
+  },
+): Promise<CreateCitizenResult | null> {
+  const ok = await pingDb();
+  if (!ok) return null;
+  await ensureCitizenAvatarColumn();
+
+  const id = data.id || `C-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  try {
+    await queryExecute(
+      `INSERT INTO citizens (
+        id, full_name, cccd, date_of_birth, gender, nationality, ethnicity, religion,
+        origin_place, permanent_address, current_address, phone, unit_code,
+        military_status, military_status_reason, military_status_locked,
+        call_intent, approval_status, campaign_id, health_grade, is_blacklisted
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        id,
+        data.fullName,
+        data.cccd,
+        data.dateOfBirth,
+        data.gender || "male",
+        data.nationality || "Việt Nam",
+        data.ethnicity || "Kinh",
+        data.religion || "Không",
+        data.originPlace || null,
+        data.address || "",
+        data.address || "",
+        data.phone || "",
+        data.unitCode || null,
+        data.militaryStatus || "chuakham",
+        data.militaryStatusReason || null,
+        data.militaryStatusLocked ? 1 : 0,
+        data.callIntent || "unset",
+        data.approvalStatus || "none",
+        data.campaignId || null,
+        data.healthStatus?.match(/\d+/)?.[0]
+          ? Number(data.healthStatus.match(/\d+/)![0])
+          : null,
+      ],
+    );
+
+    if (data.educationLevel || data.job || data.schoolName?.trim()) {
+      await queryExecute(
+        `INSERT INTO citizen_education (citizen_id, school_name, level, major)
+         VALUES (?, ?, ?, ?)`,
+        [
+          id,
+          data.schoolName?.trim() || null,
+          data.educationLevel || null,
+          data.job || null,
+        ],
+      );
+    }
+
+    await upsertCitizenIdentity(id, data);
+    await upsertCitizenParents(id, data);
+
+    const created = await findCitizenByIdFromDb(id);
+    if (!created) {
+      return { ok: false, error: "Đã ghi DB nhưng không đọc lại được hồ sơ", code: "DB_ERROR" };
+    }
+    return { ok: true, data: created };
+  } catch (e) {
+    console.error("createCitizenInDb:", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/Duplicate entry|ER_DUP_ENTRY|uk_cccd/i.test(msg)) {
+      return {
+        ok: false,
+        error: `Số CCCD ${data.cccd} đã có trong hệ thống. Không thể thêm trùng.`,
+        code: "DUPLICATE_CCCD",
+      };
+    }
+    return {
+      ok: false,
+      error: "Không lưu được hồ sơ vào cơ sở dữ liệu. Thử lại hoặc kiểm tra kết nối DB.",
+      code: "DB_ERROR",
+    };
   }
 }
 

@@ -49,33 +49,33 @@ export default function SettingsClient({
   return (
     <div className="max-w-2xl space-y-6">
       {/* Profile Card */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+      <div className="macos-card p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-blue-50 rounded-xl">
-            <User size={20} className="text-blue-600" />
+          <div className="p-2 bg-m3-primary-container rounded-xl">
+            <User size={20} className="text-m3-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900">
+            <h3 className="font-semibold text-m3-on-surface">
               Thông tin tài khoản
             </h3>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-m3-on-surface-variant">
               Thông tin hồ sơ quản trị viên
             </p>
           </div>
         </div>
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-m3-primary-container to-m3-primary-container flex items-center justify-center flex-shrink-0">
             <span className="text-2xl font-bold text-white">
               {userName.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">{userName}</p>
-            <p className="text-sm text-slate-500">
+            <p className="text-lg font-semibold text-m3-on-surface">{userName}</p>
+            <p className="text-sm text-m3-on-surface-variant">
               {userEmail || "admin@ymsa.edu.vn"}
             </p>
-            <span className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-m3-primary-container text-m3-on-primary-container ring-1 ring-inset ring-m3-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-m3-primary-container" />
               Quản trị viên
             </span>
           </div>
@@ -83,32 +83,32 @@ export default function SettingsClient({
       </div>
 
       {/* Change Password */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+      <div className="macos-card p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-amber-50 rounded-xl">
-            <Lock size={20} className="text-amber-600" />
+          <div className="p-2 bg-m3-warning-container rounded-xl">
+            <Lock size={20} className="text-m3-on-warning-container" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900">Đổi mật khẩu</h3>
-            <p className="text-sm text-slate-400">
+            <h3 className="font-semibold text-m3-on-surface">Đổi mật khẩu</h3>
+            <p className="text-sm text-m3-on-surface-variant">
               Cập nhật mật khẩu để bảo mật tài khoản
             </p>
           </div>
         </div>
         <form onSubmit={handleChangePassword} className="space-y-4">
           {pwdError && (
-            <div className="bg-red-50 border border-red-100 text-red-700 text-sm px-4 py-2.5 rounded-xl">
+            <div className="bg-m3-error-container border border-m3-error text-m3-on-error-container text-sm px-4 py-2.5 rounded-xl">
               {pwdError}
             </div>
           )}
           {pwdSuccess && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm px-4 py-2.5 rounded-xl">
+            <div className="bg-m3-success-container border border-m3-success text-m3-on-success-container text-sm px-4 py-2.5 rounded-xl">
               {pwdSuccess}
             </div>
           )}
           <div className="relative">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Mật khẩu hiện tại <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-m3-on-surface-variant mb-1.5">
+              Mật khẩu hiện tại <span className="text-m3-error">*</span>
             </label>
             <div className="relative">
               <input
@@ -116,20 +116,20 @@ export default function SettingsClient({
                 value={oldPwd}
                 onChange={(e) => setOldPwd(e.target.value)}
                 placeholder="Nhập mật khẩu hiện tại"
-                className="w-full px-3 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
+                className="w-full px-3 py-2.5 pr-11 rounded-xl border border-m3-outline-variant bg-m3-surface-high text-sm focus:outline-none focus:ring-2 focus:ring-m3-primary focus:border-transparent focus:bg-m3-surface-lowest transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowOld(!showOld)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-m3-on-surface-variant hover:text-m3-on-surface-variant"
               >
                 {showOld ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Mật khẩu mới <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-m3-on-surface-variant mb-1.5">
+              Mật khẩu mới <span className="text-m3-error">*</span>
             </label>
             <div className="relative">
               <input
@@ -137,12 +137,12 @@ export default function SettingsClient({
                 value={newPwd}
                 onChange={(e) => setNewPwd(e.target.value)}
                 placeholder="Ít nhất 6 ký tự"
-                className="w-full px-3 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
+                className="w-full px-3 py-2.5 pr-11 rounded-xl border border-m3-outline-variant bg-m3-surface-high text-sm focus:outline-none focus:ring-2 focus:ring-m3-primary focus:border-transparent focus:bg-m3-surface-lowest transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowNew(!showNew)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-m3-on-surface-variant hover:text-m3-on-surface-variant"
               >
                 {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -171,8 +171,8 @@ export default function SettingsClient({
       </div>
 
       {/* System Info */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="font-semibold text-slate-900 mb-4">
+      <div className="macos-card p-6">
+        <h3 className="font-semibold text-m3-on-surface mb-4">
           Thông tin hệ thống
         </h3>
         <div className="space-y-3 text-sm">
@@ -184,10 +184,10 @@ export default function SettingsClient({
           ].map((item) => (
             <div
               key={item.label}
-              className="flex justify-between py-2 border-b border-slate-50 last:border-0"
+              className="flex justify-between py-2 border-b border-m3-outline-variant last:border-0"
             >
-              <span className="text-slate-500">{item.label}</span>
-              <span className="font-medium text-slate-700">{item.value}</span>
+              <span className="text-m3-on-surface-variant">{item.label}</span>
+              <span className="font-medium text-m3-on-surface-variant">{item.value}</span>
             </div>
           ))}
         </div>

@@ -5,7 +5,6 @@ import {
   FcConferenceCall,
   FcCalendar,
   FcBullish,
-  FcVoicePresentation,
   FcCameraIdentification,
   FcBarChart,
   FcDocument,
@@ -73,27 +72,27 @@ export default async function AdminDashboard({ searchParams }: Props) {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       {/* Cấp hiện tại */}
-      <section className="rounded-[22px] bg-[#f8fafb] px-5 py-4.5 sm:px-6 sm:py-5">
+      <section className="rounded-[22px] bg-m3-surface-high px-5 py-4.5 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[16px] bg-[#f8fafb]">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[16px] bg-m3-surface-high">
               <LevelIcon size={32} />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[rgba(0,122,255,0.12)] px-3 py-1 text-[13px] font-bold text-[#007aff]">
+                <span className="rounded-full bg-m3-primary/12 px-3 py-1 text-[13px] font-bold text-m3-primary">
                   Cấp {levelLabel}
                 </span>
                 {viewUnit.code !== session.unitCode && (
-                  <span className="rounded-full bg-[#f5f5f7] px-3 py-1 text-[12px] font-semibold text-[#6e6e73]">
+                  <span className="rounded-full bg-m3-surface-high px-3 py-1 text-[12px] font-semibold text-m3-on-surface-variant">
                     Đang xem đơn vị cấp dưới
                   </span>
                 )}
               </div>
-              <h1 className="mt-1 truncate text-[22px] font-bold tracking-tight text-[#1d1d1f] sm:text-[24px]">
+              <h1 className="mt-1 truncate text-[22px] font-bold tracking-tight text-m3-on-surface sm:text-[24px]">
                 {viewUnit.name}
               </h1>
-              <p className="truncate text-[15px] font-normal text-[#6e6e73]">
+              <p className="truncate text-[15px] font-normal text-m3-on-surface-variant">
                 Xin chào {session.name} — làm việc trong phạm vi đơn vị này
               </p>
             </div>
@@ -113,13 +112,13 @@ export default async function AdminDashboard({ searchParams }: Props) {
               const isLast = i === crumbs.length - 1;
               return (
                 <span key={c.code} className="flex items-center gap-1">
-                  {i > 0 && <ChevronRight size={14} className="text-[#c7c7cc]" />}
+                  {i > 0 && <ChevronRight size={14} className="text-m3-outline-variant" />}
                   {isLast || !canClick ? (
-                    <span className="font-bold text-[#1d1d1f]">{c.name}</span>
+                    <span className="font-bold text-m3-on-surface">{c.name}</span>
                   ) : (
                     <Link
                       href={href}
-                      className="font-semibold text-[#007aff] hover:underline"
+                      className="font-semibold text-m3-primary hover:underline"
                     >
                       {c.name}
                     </Link>
@@ -141,13 +140,13 @@ export default async function AdminDashboard({ searchParams }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center justify-center gap-2.5 rounded-[20px] bg-[#f8fafb] px-3 py-5 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+                className="flex flex-col items-center justify-center gap-2.5 rounded-[20px] bg-m3-surface-high px-3 py-5 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
                 
               >
                 <div className="flex h-14 w-14 items-center justify-center">
                   <Icon size={50} />
                 </div>
-                <span className="text-center text-[15px] font-normal text-[#1d1d1f]">
+                <span className="text-center text-[15px] font-normal text-m3-on-surface">
                   {item.label}
                 </span>
               </Link>
@@ -159,24 +158,24 @@ export default async function AdminDashboard({ searchParams }: Props) {
       {/* Danh sách cấp dưới — Bộ / Tỉnh */}
       {childTitle && (
         <section
-          className="rounded-[22px] bg-[#f8fafb] p-5 sm:p-6"
+          className="rounded-[22px] bg-m3-surface-high p-5 sm:p-6"
         
         >
           <div className="mb-3.5 flex items-end justify-between gap-3">
             <div>
-              <h2 className="text-[17px] font-bold text-[#1d1d1f]">{childTitle}</h2>
+              <h2 className="text-[17px] font-bold text-m3-on-surface">{childTitle}</h2>
               
             </div>
             <Link
               href={`/admin/reports?unitCode=${encodeURIComponent(viewUnit.code)}`}
-              className="shrink-0 text-[14px] font-normal text-[#007aff]"
+              className="shrink-0 text-[14px] font-normal text-m3-primary"
             >
               Báo cáo chi tiết
             </Link>
           </div>
 
           {childUnits.length === 0 ? (
-            <p className="py-5 text-center text-[15px] text-[#8e8e93]">
+            <p className="py-5 text-center text-[15px] text-m3-on-surface-variant">
               Không có đơn vị cấp dưới.
             </p>
           ) : (
@@ -186,17 +185,17 @@ export default async function AdminDashboard({ searchParams }: Props) {
                   <Link
                     key={u.code}
                     href={`/admin?scope=${encodeURIComponent(u.code)}`}
-                    className="flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] bg-white px-4 py-3.5 transition-colors hover:bg-[rgba(0,122,255,0.08)]"
+                    className="flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] bg-m3-surface-lowest px-4 py-3.5 transition-colors hover:bg-m3-primary/8"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[15px] font-medium text-[#1d1d1f]">
+                      <p className="truncate text-[15px] font-medium text-m3-on-surface">
                         {u.name}
                       </p>
-                      <p className="text-[13px] font-normal text-[#8e8e93]">
+                      <p className="text-[13px] font-normal text-m3-on-surface-variant">
                         {LEVEL_LABEL[u.level]} · mã {u.code}
                       </p>
                     </div>
-                    <ChevronRight size={18} className="shrink-0 text-[#c7c7cc]" />
+                    <ChevronRight size={18} className="shrink-0 text-m3-outline-variant" />
                   </Link>
                 ))}
               </div>
@@ -205,7 +204,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 <div className="mt-3.5 text-center">
                   <Link
                     href={showAllChildren ? childListBase : childListExpandHref}
-                    className="inline-flex min-h-[44px] items-center justify-center rounded-[12px] px-5 text-[15px] font-normal text-[#007aff] transition-colors hover:bg-[rgba(0,122,255,0.08)]"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-[12px] px-5 text-[15px] font-normal text-m3-primary transition-colors hover:bg-m3-primary/8"
                   >
                     {showAllChildren
                       ? "Thu gọn"
@@ -221,26 +220,26 @@ export default async function AdminDashboard({ searchParams }: Props) {
       {/* Cấp xã: không có cấp dưới — nhấn mạnh việc địa phương */}
       {level === "xa" && (
         <section
-          className="rounded-[22px] bg-white p-5 sm:p-6"
+          className="rounded-[22px] bg-m3-surface-lowest p-5 sm:p-6"
           style={{
             border: "1px solid rgba(0,0,0,0.05)",
             boxShadow: "0 1px 2px rgba(0,0,0,0.02), 0 8px 24px rgba(0,0,0,0.04)",
           }}
         >
-          <h2 className="text-[17px] font-bold text-[#1d1d1f]">Công việc tại xã</h2>
-          <p className="mt-1 text-[14px] font-medium text-[#6e6e73]">
+          <h2 className="text-[17px] font-bold text-m3-on-surface">Công việc tại xã</h2>
+          <p className="mt-1 text-[14px] font-medium text-m3-on-surface-variant">
             Cấp xã quản lý trực tiếp hồ sơ thanh niên trên địa bàn.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Link
               href="/admin/citizens"
-              className="rounded-[16px] bg-[#f5f5f7] px-4 py-4 text-[15px] font-bold text-[#1d1d1f] hover:bg-[rgba(0,122,255,0.08)]"
+              className="rounded-[16px] bg-m3-surface-high px-4 py-4 text-[15px] font-bold text-m3-on-surface hover:bg-m3-primary/8"
             >
               Cập nhật danh sách công dân →
             </Link>
             <Link
-              href="/admin/ai-voice"
-              className="rounded-[16px] bg-[#f5f5f7] px-4 py-4 text-[15px] font-bold text-[#1d1d1f] hover:bg-[rgba(0,122,255,0.08)]"
+              href="/admin/ai-face?tab=voice"
+              className="rounded-[16px] bg-m3-surface-high px-4 py-4 text-[15px] font-bold text-m3-on-surface hover:bg-m3-primary/8"
             >
               Tra cứu CCCD bằng giọng nói →
             </Link>
@@ -256,8 +255,11 @@ function shortcutsForLevel(level: string) {
     { href: "/admin/citizens", label: "Công dân", icon: FcConferenceCall },
     { href: "/admin/recruitment", label: "Khám tuyển", icon: FcCalendar },
     { href: "/admin/quota", label: "Chỉ tiêu", icon: FcBullish },
-    { href: "/admin/ai-voice", label: "Đọc CCCD", icon: FcVoicePresentation },
-    { href: "/admin/ai-face", label: "Khuôn mặt", icon: FcCameraIdentification },
+    {
+      href: "/admin/ai-face",
+      label: "Khuôn mặt & giọng nói",
+      icon: FcCameraIdentification,
+    },
     { href: "/admin/reports", label: "Báo cáo", icon: FcBarChart },
     { href: "/admin/documents", label: "Công văn", icon: FcDocument },
   ];
@@ -265,9 +267,12 @@ function shortcutsForLevel(level: string) {
   // Xã: ưu tiên thao tác địa phương, ít mục hơn cho dễ dùng
   if (level === "xa") {
     return all.filter((x) =>
-      ["/admin/citizens", "/admin/ai-voice", "/admin/ai-face", "/admin/documents", "/admin/reports"].includes(
-        x.href
-      )
+      [
+        "/admin/citizens",
+        "/admin/ai-face",
+        "/admin/documents",
+        "/admin/reports",
+      ].includes(x.href),
     );
   }
   return all;

@@ -1,5 +1,5 @@
 /**
- * Seed hồ sơ công dân đủ 34 tỉnh/TP, mỗi tỉnh ≥ 30 hồ sơ.
+ * Seed hồ sơ công dân đủ 34 tỉnh/TP, mỗi tỉnh ≥ 300 hồ sơ.
  * Usage: npx tsx scripts/seed-citizens-34.ts [--force]
  */
 import path from "path";
@@ -9,7 +9,8 @@ import { loadEnv } from "./load-env";
 
 loadEnv();
 
-const PER_PROVINCE = 30;
+const PER_PROVINCE = 300;
+const LATEST_CAMPAIGN_ID = "camp1";
 
 const STATUSES = [
   "chuakham",
@@ -90,6 +91,21 @@ async function ensureColumns(conn: Connection) {
       `ALTER TABLE citizens ADD COLUMN military_status_locked TINYINT(1) NOT NULL DEFAULT 0 AFTER military_status_reason`,
     );
   }
+  if (!(await has("call_intent"))) {
+    await conn.query(
+      `ALTER TABLE citizens ADD COLUMN call_intent ENUM('unset','du_kien_goi','khong_goi') NOT NULL DEFAULT 'unset' AFTER military_status_locked`,
+    );
+  }
+  if (!(await has("approval_status"))) {
+    await conn.query(
+      `ALTER TABLE citizens ADD COLUMN approval_status ENUM('none','pending','approved','rejected') NOT NULL DEFAULT 'none' AFTER call_intent`,
+    );
+  }
+  if (!(await has("campaign_id"))) {
+    await conn.query(
+      `ALTER TABLE citizens ADD COLUMN campaign_id VARCHAR(64) NULL AFTER approval_status, ADD INDEX idx_citizens_campaign (campaign_id)`,
+    );
+  }
 
   // mở rộng ENUM nếu thiếu truottuyen
   const [enumRows] = await conn.query(
@@ -132,7 +148,7 @@ async function ensureHierarchy(conn: Connection): Promise<
       [tinhCode, p.name],
     );
 
-    const wardList = (p.wards || []).slice(0, 12);
+    const wardList = p.wards || [];
     const wards: Array<{ code: string; name: string }> = [];
 
     for (const w of wardList) {
@@ -229,7 +245,11 @@ export async function main() {
       await conn.query("SET FOREIGN_KEY_CHECKS = 1");
     }
 
-    let seq = existing + 1;
+    const [sequenceRows] = await conn.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(id, '-', -1) AS UNSIGNED)), 0) AS max_seq
+       FROM citizens WHERE id LIKE 'c34-%'`,
+    );
+    let seq = Number((sequenceRows as { max_seq: number }[])[0].max_seq) + 1;
     let insertedTotal = 0;
 
     for (const p of provinces) {
@@ -247,6 +267,8 @@ export async function main() {
 
       const citizenValues: unknown[][] = [];
       const eduValues: unknown[][] = [];
+      const identityValues: unknown[][] = [];
+      const familyValues: unknown[][] = [];
 
       for (let i = 0; i < need; i++) {
         const ward = pick(p.wards);
@@ -264,6 +286,33 @@ export async function main() {
         const job = pick(JOBS);
         const locked =
           status === "tamhoan" || status === "truottuyen" || status === "nhapngu" ? 1 : 0;
+        const callIntent =
+          status === "trungtuyen" || status === "nhapngu"
+            ? "du_kien_goi"
+            : status === "truottuyen"
+              ? "khong_goi"
+              : "unset";
+        const approvalStatus =
+          status === "nhapngu"
+            ? "approved"
+            : status === "trungtuyen"
+              ? "pending"
+              : status === "truottuyen"
+                ? "rejected"
+                : "none";
+
+        const issueYear = randInt(2021, 2024);
+        const issueMonth = randInt(1, 12);
+        const issueDay = randInt(1, 28);
+        const issueDate = `${issueYear}-${String(issueMonth).padStart(2, "0")}-${String(issueDay).padStart(2, "0")}`;
+        const expiryDate = `${issueYear + 15}-${String(issueMonth).padStart(2, "0")}-${String(issueDay).padStart(2, "0")}`;
+        const features = [
+          "Nốt ruồi cách 1cm dưới đuôi mắt phải",
+          "Sẹo nhỏ trên trán bên trái",
+          "Không có đặc điểm đặc biệt",
+          "Nốt ruồi trên cánh mũi trái",
+          "Sẹo dài 1cm ở cằm",
+        ][randInt(0, 4)];
 
         citizenValues.push([
           id,
@@ -282,6 +331,9 @@ export async function main() {
           status,
           reason,
           locked,
+          callIntent,
+          approvalStatus,
+          LATEST_CAMPAIGN_ID,
           grade,
           0,
         ]);
@@ -295,6 +347,18 @@ export async function main() {
           Math.round((Math.random() * 2 + 2) * 100) / 100,
         ]);
 
+        identityValues.push([
+          id,
+          features,
+          issueDate,
+          expiryDate,
+          cccd.slice(-9),
+        ]);
+
+        const surname = name.split(/\s+/)[0] || "Nguyễn";
+        familyValues.push([id, `${surname} Văn ${pick(LAST)}`, "Cha"]);
+        familyValues.push([id, `${pick(FIRST)} Thị ${pick(LAST)}`, "Me"]);
+
         seq += 1;
       }
 
@@ -303,12 +367,14 @@ export async function main() {
       for (let b = 0; b < citizenValues.length; b += batch) {
         const slice = citizenValues.slice(b, b + batch);
         const eduSlice = eduValues.slice(b, b + batch);
+        const idSlice = identityValues.slice(b, b + batch);
+        const famSlice = familyValues.slice(b * 2, b * 2 + batch * 2);
         await conn.query(
           `INSERT INTO citizens (
             id, full_name, cccd, date_of_birth, gender, nationality, ethnicity, religion,
             origin_place, permanent_address, current_address, phone, unit_code,
             military_status, military_status_reason, military_status_locked,
-            health_grade, is_blacklisted
+            call_intent, approval_status, campaign_id, health_grade, is_blacklisted
           ) VALUES ?`,
           [slice],
         );
@@ -316,6 +382,20 @@ export async function main() {
           `INSERT INTO citizen_education (citizen_id, school_name, level, major, graduation_year, gpa) VALUES ?`,
           [eduSlice],
         );
+        if (idSlice.length) {
+          await conn.query(
+            `INSERT INTO citizen_identities
+              (citizen_id, identification_features, issue_date, expiry_date, old_id_number)
+             VALUES ?`,
+            [idSlice],
+          );
+        }
+        if (famSlice.length) {
+          await conn.query(
+            `INSERT INTO citizen_family (citizen_id, rel_name, relationship) VALUES ?`,
+            [famSlice],
+          );
+        }
       }
 
       insertedTotal += need;

@@ -33,31 +33,32 @@ import type { AnalyticsDashboard } from "@/lib/analytics/types";
 import StatCard from "@/components/ui/StatCard";
 
 const OLIVE = {
-  deep: "#1d1d1f",
-  forest: "#1d1d1f",
-  primary: "#007aff",
-  mid: "#86868b",
-  soft: "#64b5ff",
-  wash: "#e5e5ea",
-  canvas: "#f5f5f7",
-  muted: "#636366",
+  deep: "var(--m3-on-surface)",
+  forest: "var(--m3-on-surface)",
+  primary: "var(--m3-primary, #1a73e8)",
+  mid: "var(--m3-on-surface-variant)",
+  soft: "var(--m3-col-primary-hover, #3582e8)",
+  wash: "var(--m3-outline-variant)",
+  canvas: "var(--m3-surface-container-low, #f4f7fb)",
+  muted: "var(--m3-on-surface-variant)",
 };
 
+// Recharts màu theo bảng màu M3 (container/tonal phân biệt được từng series)
 const CHART = {
-  called: "#c7e0ff",
-  passed: "#007aff",
-  enlisted: "#0055b3",
-  funnel: "#007aff",
-  quotaBg: "#e5e5ea",
-  quotaFill: "#007aff",
-  pie: ["#007aff", "#5ac8fa", "#34c759", "#ff9500", "#af52de", "#8e8e93"],
+  called: "#dae9fb",
+  passed: "#1a73e8",
+  enlisted: "#134992",
+  funnel: "#1a73e8",
+  quotaBg: "#e4eaf2",
+  quotaFill: "#1a73e8",
+  pie: ["#1a73e8", "#64b5ff", "#386a4a", "#8a5800", "#5a5f6e", "#5f6368"],
 };
 
 const tooltipStyle = {
-  background: "#ffffff",
-  border: `1px solid ${OLIVE.wash}`,
-  borderRadius: 12,
-  boxShadow: "0 12px 40px rgba(43,48,18,0.08)",
+  background: "var(--m3-surface-container-lowest, #ffffff)",
+  border: `1px solid var(--m3-outline-variant)`,
+  borderRadius: 16,
+  boxShadow: "0 12px 40px rgba(0,0,0,0.08)",
   fontSize: 12,
 };
 
@@ -195,17 +196,18 @@ export default function ReportsPage() {
       <div
         className="rounded-3xl p-8"
         style={{
-          background: "linear-gradient(145deg, #fff5f5 0%, #ffffff 60%)",
-          border: "1px solid #fecaca",
+          background:
+            "linear-gradient(145deg, var(--m3-error-container, #ffdad6) 0%, var(--m3-surface-container-lowest, #ffffff) 60%)",
+          border: "1px solid var(--m3-error, #ba1a1a)",
         }}
       >
-        <h1 className="text-xl font-bold" style={{ color: "#991b1b" }}>
+        <h1 className="text-xl font-bold" style={{ color: "var(--m3-error)" }}>
           Không tải được analytics
         </h1>
-        <p className="mt-2 text-sm text-red-700">{error}</p>
-        <p className="mt-1 text-xs text-red-500">
-          Chạy <code className="rounded bg-red-100 px-1">npm run db:migrate</code> rồi{" "}
-          <code className="rounded bg-red-100 px-1">npm run db:seed-analytics</code>
+        <p className="mt-2 text-sm text-m3-on-error-container">{error}</p>
+        <p className="mt-1 text-xs text-m3-error">
+          Chạy <code className="rounded bg-m3-error-container px-1">npm run db:migrate</code> rồi{" "}
+          <code className="rounded bg-m3-error-container px-1">npm run db:seed-analytics</code>
         </p>
         <button
           onClick={() => {
@@ -213,7 +215,7 @@ export default function ReportsPage() {
             fetchData();
           }}
           className="mt-5 inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#b91c1c" }}
+          style={{ background: "var(--m3-error)" }}
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           Thử lại
@@ -223,17 +225,17 @@ export default function ReportsPage() {
             type="button"
             onClick={fetchAiAnalysis}
             disabled={aiLoading}
-            className="mt-3 ml-0 inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-2.5 text-sm font-semibold text-red-800 transition hover:bg-red-50 disabled:opacity-50"
+            className="mt-3 ml-0 inline-flex items-center gap-2 rounded-2xl border border-m3-error bg-m3-surface-lowest px-5 py-2.5 text-sm font-semibold text-m3-on-error-container transition hover:bg-m3-error-container disabled:opacity-50"
           >
             <Sparkles size={16} className={aiLoading ? "animate-pulse" : ""} />
             {aiLoading ? "Đang phân tích..." : "Phân tích AI (dữ liệu demo)"}
           </button>
         )}
         {aiError && (
-          <p className="mt-3 text-sm text-red-600">{aiError}</p>
+          <p className="mt-3 text-sm text-m3-on-error-container">{aiError}</p>
         )}
         {aiAnalysis && (
-          <div className="mt-4 whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm text-[#1d1d1f]">
+          <div className="mt-4 whitespace-pre-wrap rounded-2xl bg-m3-surface-lowest p-4 text-sm text-m3-on-surface">
             {aiAnalysis}
           </div>
         )}
@@ -255,8 +257,8 @@ export default function ReportsPage() {
         className="relative overflow-hidden rounded-3xl px-6 py-7 text-white md:px-8"
         style={{
           background:
-            "linear-gradient(135deg, #0a84ff 0%, #007aff 45%, #5ac8fa 100%)",
-          boxShadow: "0 16px 40px rgba(0,122,255,0.22)",
+            "linear-gradient(135deg, var(--m3-col-primary-active, #5591e4) 0%, var(--m3-primary, #1a73e8) 45%, var(--m3-col-primary-hover, #3582e8) 100%)",
+          boxShadow: "0 16px 40px color-mix(in srgb, var(--m3-primary, #1a73e8) 22%, transparent)",
         }}
       >
         <div
@@ -310,7 +312,7 @@ export default function ReportsPage() {
             <select
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
-              className="rounded-xl border-0 bg-white/95 px-3 py-2.5 text-sm font-medium outline-none"
+              className="rounded-xl border-0 bg-m3-surface-lowest/95 px-3 py-2.5 text-sm font-medium outline-none"
               style={{ color: OLIVE.forest }}
             >
               {[2023, 2024, 2025, 2026, 2027].map((y) => (
@@ -324,7 +326,7 @@ export default function ReportsPage() {
                 value={unitCode}
                 onChange={(e) => setUnitCode(e.target.value)}
                 placeholder="Mã đơn vị"
-                className="w-32 rounded-xl border-0 bg-white/95 px-3 py-2.5 text-sm outline-none"
+                className="w-32 rounded-xl border-0 bg-m3-surface-lowest/95 px-3 py-2.5 text-sm outline-none"
                 style={{ color: OLIVE.forest }}
               />
             )}
@@ -333,7 +335,7 @@ export default function ReportsPage() {
                 setRefreshing(true);
                 fetchData();
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3.5 py-2.5 text-sm font-medium text-white transition hover:bg-white/25"
+              className="inline-flex items-center gap-2 rounded-xl bg-m3-surface-lowest/15 px-3.5 py-2.5 text-sm font-medium text-white transition hover:bg-m3-surface-lowest/25"
             >
               <RefreshCw size={15} className={refreshing || loading ? "animate-spin" : ""} />
               Làm mới
@@ -398,8 +400,9 @@ export default function ReportsPage() {
           className="rounded-3xl border p-5 md:p-6"
           style={{
             borderColor: OLIVE.wash,
-            background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
-            boxShadow: "0 8px 30px rgba(0,122,255,0.06)",
+            background:
+              "linear-gradient(180deg, var(--m3-primary-container, #dae9fb) 0%, var(--m3-surface-container-lowest, #ffffff) 100%)",
+            boxShadow: "0 8px 30px color-mix(in srgb, var(--m3-primary, #1a73e8) 6%, transparent)",
           }}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -422,7 +425,7 @@ export default function ReportsPage() {
               onClick={fetchAiAnalysis}
               disabled={aiLoading}
               className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
-              style={{ background: OLIVE.primary, color: "#fff" }}
+              style={{ background: OLIVE.primary, color: "var(--m3-on-primary, #ffffff)" }}
             >
               <RefreshCw size={14} className={aiLoading ? "animate-spin" : ""} />
               Tạo lại
@@ -436,7 +439,7 @@ export default function ReportsPage() {
           )}
 
           {aiError && (
-            <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{aiError}</p>
+            <p className="mt-4 rounded-xl bg-m3-error-container px-4 py-3 text-sm text-m3-on-error-container">{aiError}</p>
           )}
 
           {aiAnalysis && !aiLoading && (
@@ -473,7 +476,7 @@ export default function ReportsPage() {
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  tick={{ fill: "#5f6368", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -516,7 +519,7 @@ export default function ReportsPage() {
                         innerRadius={58}
                         outerRadius={88}
                         paddingAngle={3}
-                        stroke="#fff"
+                        stroke="var(--m3-surface-container-lowest, #fff)"
                         strokeWidth={2}
                       >
                         {data.defermentReasons.map((_, i) => (
@@ -607,7 +610,7 @@ export default function ReportsPage() {
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: "#94a3b8", fontSize: 11 }}
+                    tick={{ fill: "#5f6368", fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -642,7 +645,7 @@ export default function ReportsPage() {
               data.unitQualifyRates.map((u) => (
                 <div
                   key={u.unitCode}
-                  className="rounded-2xl px-3.5 py-3 transition hover:bg-[#f5f5f7]"
+                  className="rounded-2xl px-3.5 py-3 transition hover:bg-m3-surface-high"
                   style={{ border: `1px solid ${OLIVE.wash}` }}
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -697,7 +700,7 @@ export default function ReportsPage() {
                 {data.educationVsHealth.map((c, i) => (
                   <tr
                     key={i}
-                    className="transition hover:bg-[#f5f5f7]"
+                    className="transition hover:bg-m3-surface-high"
                     style={{ borderTop: `1px solid ${OLIVE.wash}` }}
                   >
                     <td className="px-4 py-3 font-medium" style={{ color: OLIVE.forest }}>
@@ -707,8 +710,12 @@ export default function ReportsPage() {
                       <span
                         className="rounded-full px-2.5 py-1 text-xs font-semibold"
                         style={{
-                          background: c.col.includes("Đạt") ? OLIVE.canvas : "#fef2f2",
-                          color: c.col.includes("Đạt") ? OLIVE.primary : "#dc2626",
+                          background: c.col.includes("Đạt")
+                            ? OLIVE.canvas
+                            : "var(--m3-error-container)",
+                          color: c.col.includes("Đạt")
+                            ? OLIVE.primary
+                            : "var(--m3-on-error-container)",
                         }}
                       >
                         {c.col}
@@ -789,7 +796,7 @@ function MetaChip({ icon, text }: { icon: ReactNode; text: string }) {
       style={{
         background: "rgba(255,255,255,0.12)",
         border: "1px solid rgba(255,255,255,0.16)",
-        color: "#e5e5ea",
+        color: "var(--m3-surface-container-lowest, #ffffff)",
       }}
     >
       {icon}
@@ -815,14 +822,14 @@ function Panel({
     <section
       className={`overflow-hidden rounded-3xl ${className}`}
       style={{
-        background: "#ffffff",
+        background: "var(--m3-surface-container-lowest, #ffffff)",
         border: `1px solid ${OLIVE.wash}`,
         boxShadow: "0 8px 30px rgba(0,0,0,0.03)",
       }}
     >
       <div
         className="flex items-start justify-between gap-3 px-5 py-4 md:px-6"
-        style={{ borderBottom: "1px solid #e5e5ea" }}
+        style={{ borderBottom: "1px solid var(--m3-outline-variant)" }}
       >
         <div className="flex items-start gap-3">
           {icon && (
@@ -881,18 +888,18 @@ function ReportsSkeleton() {
           <div
             key={i}
             className="h-32 rounded-3xl"
-            style={{ background: "#fff", border: `1px solid ${OLIVE.wash}` }}
+            style={{ background: "var(--m3-surface-container-lowest, #fff)", border: `1px solid ${OLIVE.wash}` }}
           />
         ))}
       </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <div
           className="h-96 rounded-3xl xl:col-span-3"
-          style={{ background: "#fff", border: `1px solid ${OLIVE.wash}` }}
+          style={{ background: "var(--m3-surface-container-lowest, #fff)", border: `1px solid ${OLIVE.wash}` }}
         />
         <div
           className="h-96 rounded-3xl xl:col-span-2"
-          style={{ background: "#fff", border: `1px solid ${OLIVE.wash}` }}
+          style={{ background: "var(--m3-surface-container-lowest, #fff)", border: `1px solid ${OLIVE.wash}` }}
         />
       </div>
     </div>
@@ -901,8 +908,7 @@ function ReportsSkeleton() {
 
 function corrColor(v: number) {
   const t = Math.max(-1, Math.min(1, v));
-  if (t >= 0) {
-    return `rgba(0, 122, 255, ${0.12 + t * 0.78})`;
-  }
-  return `rgba(255, 59, 48, ${0.12 + -t * 0.78})`;
+  const pct = Math.round((0.12 + Math.abs(t) * 0.78) * 100);
+  const base = t >= 0 ? "#1a73e8" : "#ba1a1a";
+  return `color-mix(in srgb, ${base} ${pct}%, transparent)`;
 }

@@ -1,177 +1,289 @@
 "use client";
 
-import { History, Search, Filter } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { History } from "lucide-react";
+import {
+  AdminListHeader,
+  AdminListShell,
+  AdminListToolbar,
+  AdminStatusTabs,
+  AdminTable,
+  AdminTHead,
+  AdminPill,
+  ADMIN_TH_CLS,
+  ADMIN_TD_CLS,
+  adminRowClass,
+} from "@/components/admin/list-ui";
+
+type AuditLog = {
+  id: number;
+  username: string | null;
+  fullName: string | null;
+  actionType: string;
+  targetTable: string | null;
+  targetId: string | null;
+  dataSnapshot: string | null;
+  logTime: string;
+};
+
+const ACTION_TABS = [
+  { value: "", label: "Tất cả" },
+  { value: "CREATE", label: "Thêm mới" },
+  { value: "UPDATE", label: "Cập nhật" },
+  { value: "DELETE", label: "Xóa" },
+  { value: "LOGIN", label: "Đăng nhập" },
+  { value: "EXPORT", label: "Xuất dữ liệu" },
+] as const;
+
+function relativeTimeVi(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return iso;
+  const diff = Date.now() - t;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "Vừa xong";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} phút trước`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} giờ trước`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return "Hôm qua";
+  if (day < 7) return `${day} ngày trước`;
+  return new Date(iso).toLocaleString("vi-VN");
+}
+
+function actionUi(type: string): { bg: string; color: string; label: string } {
+  switch (type) {
+    case "CREATE":
+      return {
+        bg: "var(--color-m3-success-container)",
+        color: "var(--color-m3-success)",
+        label: "THÊM MỚI",
+      };
+    case "UPDATE":
+      return {
+        bg: "var(--m3-primary-container, #dae9fb)",
+        color: "var(--m3-primary, #1a73e8)",
+        label: "CẬP NHẬT",
+      };
+    case "DELETE":
+      return {
+        bg: "var(--m3-error-container, #ffdad6)",
+        color: "var(--m3-error, #ba1a1a)",
+        label: "XÓA",
+      };
+    case "EXPORT":
+      return {
+        bg: "var(--m3-secondary-container, #e8e8e8)",
+        color: "var(--m3-on-secondary-container, #1b1d20)",
+        label: "XUẤT",
+      };
+    case "VIEW_SENSITIVE":
+      return {
+        bg: "var(--m3-secondary-container, #e8e8e8)",
+        color: "var(--m3-on-secondary-container, #1b1d20)",
+        label: "XEM",
+      };
+    case "LOGIN":
+    default:
+      return {
+        bg: "var(--m3-surface-container-high, #eef1f4)",
+        color: "var(--m3-on-surface-variant, #475569)",
+        label: "HỆ THỐNG",
+      };
+  }
+}
+
+function describeAction(log: AuditLog): string {
+  if (log.actionType === "LOGIN") return "Đăng nhập hệ thống";
+  if (log.actionType === "UPDATE" && log.targetTable === "users") {
+    try {
+      const snap = log.dataSnapshot ? JSON.parse(log.dataSnapshot) : null;
+      if (Array.isArray(snap?.fields) && snap.fields.includes("password")) {
+        return "Cập nhật mật khẩu tài khoản";
+      }
+    } catch {
+      /* ignore */
+    }
+    return "Cập nhật tài khoản người dùng";
+  }
+  if (log.actionType === "CREATE") return `Thêm mới (${log.targetTable || "bản ghi"})`;
+  if (log.actionType === "DELETE") return `Xóa (${log.targetTable || "bản ghi"})`;
+  if (log.actionType === "EXPORT") return "Xuất dữ liệu";
+  if (log.actionType === "VIEW_SENSITIVE") return "Xem dữ liệu nhạy cảm";
+  return `Thao tác ${log.actionType} trên ${log.targetTable || "hệ thống"}`;
+}
+
+function describeTarget(log: AuditLog): string {
+  if (log.actionType === "LOGIN") {
+    return log.username || log.targetId || "—";
+  }
+  if (log.targetTable === "users") {
+    try {
+      const snap = log.dataSnapshot ? JSON.parse(log.dataSnapshot) : null;
+      if (snap?.targetUsername) return String(snap.targetUsername);
+      if (snap?.username) return String(snap.username);
+    } catch {
+      /* ignore */
+    }
+  }
+  if (log.targetId) {
+    return log.targetTable ? `${log.targetTable}: ${log.targetId}` : log.targetId;
+  }
+  return log.targetTable || "—";
+}
 
 export default function LogsPage() {
-  const logs = [
-    {
-      id: 1,
-      action: "Cập nhật hồ sơ công dân",
-      target: "Nguyễn Văn Nam (079098...)",
-      user: "bich.tt",
-      time: "10 phút trước",
-      type: "update",
-    },
-    {
-      id: 2,
-      action: "Thêm mới kết quả khám sức khỏe",
-      target: "Trần Bình B",
-      user: "nam.lh",
-      time: "1 giờ trước",
-      type: "create",
-    },
-    {
-      id: 3,
-      action: "Duyệt đơn xin tạm hoãn",
-      target: "Lê Hoàng C",
-      user: "admin",
-      time: "Hôm qua",
-      type: "approve",
-    },
-    {
-      id: 4,
-      action: "Khởi tạo đợt khám tuyển mới",
-      target: "Đợt 1 năm 2026",
-      user: "admin",
-      time: "Hôm qua",
-      type: "create",
-    },
-    {
-      id: 5,
-      action: "Đăng nhập hệ thống",
-      target: "bich.tt",
-      user: "bich.tt",
-      time: "2 ngày trước",
-      type: "system",
-    },
-    {
-      id: 6,
-      action: "Xóa tài khoản",
-      target: "user03",
-      user: "admin",
-      time: "2 ngày trước",
-      type: "delete",
-    },
-  ];
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [actionType, setActionType] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const getTypeStyle = (type: string) => {
-    switch (type) {
-      case "create":
-        return "bg-green-100 text-green-700";
-      case "update":
-        return "bg-blue-100 text-blue-700";
-      case "delete":
-        return "bg-red-100 text-red-700";
-      case "approve":
-        return "bg-purple-100 text-purple-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pageSize),
+      });
+      if (search) params.set("search", search);
+      if (actionType) params.set("actionType", actionType);
+      const res = await fetch(`/api/admin/logs?${params}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Không tải được nhật ký");
+        setLogs([]);
+        return;
+      }
+      setLogs(Array.isArray(data.data) ? data.data : []);
+      setTotal(Number(data.total || 0));
+    } catch {
+      setError("Không kết nối được máy chủ");
+      setLogs([]);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [page, pageSize, search, actionType]);
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "create":
-        return "THÊM MỚI";
-      case "update":
-        return "CẬP NHẬT";
-      case "delete":
-        return "XÓA";
-      case "approve":
-        return "PHÊ DUYỆT";
-      default:
-        return "HỆ THỐNG";
-    }
-  };
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#1d1d1f" }}>
-            Nhật ký Hệ thống (Logs)
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#007aff" }}>
-            Theo dõi mọi hoạt động, thay đổi dữ liệu của người dùng trên toàn hệ
-            thống
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Nhật ký Hệ thống (Logs)"
+        countLabel={total > 0 ? `${total.toLocaleString("vi-VN")} bản ghi` : undefined}
+      />
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#e5e5ea] overflow-hidden">
-        <div className="p-4 border-b border-[#e5e5ea] flex gap-4 flex-col sm:flex-row">
-          <div className="relative flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
-            />
-            <input
-              type="text"
-              placeholder="Tìm kiếm log theo hành động, user..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007aff] transition-colors"
-            />
-          </div>
-          <div className="relative">
-            <Filter
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
-            />
-            <select className="pl-10 pr-8 py-2 border border-gray-200 rounded-xl text-sm appearance-none focus:outline-none focus:border-[#007aff] transition-colors bg-white cursor-pointer">
-              <option value="">Tất cả thao tác</option>
-              <option value="create">Thêm mới</option>
-              <option value="update">Cập nhật</option>
-              <option value="delete">Xóa</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#f5f5f7]/50 text-[#636366] font-medium border-b border-[#e5e5ea]">
+      <AdminListShell
+        page={page}
+        totalPages={totalPages}
+        loading={loading}
+        tabs={
+          <AdminStatusTabs
+            tabs={[...ACTION_TABS]}
+            value={actionType}
+            onChange={(v) => {
+              setActionType(v);
+              setPage(1);
+            }}
+          />
+        }
+        toolbar={
+          <AdminListToolbar
+            search={searchInput}
+            onSearchChange={(v) => setSearchInput(v)}
+            searchPlaceholder="Tìm kiếm log theo hành động, user..."
+            page={page}
+            pageSize={pageSize}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        <AdminTable minWidth="min-w-[960px]">
+          <AdminTHead>
+            <th className={ADMIN_TH_CLS}>Thời gian</th>
+            <th className={ADMIN_TH_CLS}>Người thực hiện</th>
+            <th className={ADMIN_TH_CLS}>Loại hình</th>
+            <th className={ADMIN_TH_CLS}>Nội dung thao tác</th>
+            <th className={ADMIN_TH_CLS}>Đối tượng tác động</th>
+          </AdminTHead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th className="px-6 py-4">Thời gian</th>
-                <th className="px-6 py-4">Người thực hiện</th>
-                <th className="px-6 py-4">Loại hình</th>
-                <th className="px-6 py-4">Nội dung thao tác</th>
-                <th className="px-6 py-4">Đối tượng tác động</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {logs.map((log) => (
-                <tr
-                  key={log.id}
-                  className="hover:bg-gray-50/50 transition-colors"
+                <td
+                  colSpan={5}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
                 >
-                  <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">
-                    {log.time}
-                  </td>
-                  <td className="px-6 py-4 font-medium text-gray-900 border-l border-transparent hover:border-l hover:border-[#007aff]">
-                    {log.user}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded ${getTypeStyle(log.type)}`}
-                    >
-                      {getTypeLabel(log.type)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-700">{log.action}</td>
-                  <td className="px-6 py-4 text-gray-500 italic">
-                    {log.target}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="p-4 border-t border-[#e5e5ea] flex items-center justify-between text-sm">
-          <span className="text-gray-500">Hiển thị 10 log gần nhất</span>
-          <button className="px-4 py-1.5 text-[#636366] bg-[#f5f5f7] hover:bg-[#e5e5ea] rounded-lg transition-colors font-medium">
-            Tải thêm...
-          </button>
-        </div>
-      </div>
+                  Đang tải nhật ký...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-12 text-center text-[14px] text-m3-error">
+                  {error}
+                </td>
+              </tr>
+            ) : logs.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <History size={28} className="text-m3-on-surface-variant/50" />
+                    Chưa có nhật ký nào được ghi nhận.
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              logs.map((log, idx) => {
+                const ui = actionUi(log.actionType);
+                return (
+                  <tr key={log.id} className={adminRowClass(idx)}>
+                    <td className={`${ADMIN_TD_CLS} whitespace-nowrap text-[12px] text-m3-on-surface-variant`}>
+                      {relativeTimeVi(log.logTime)}
+                    </td>
+                    <td className={`${ADMIN_TD_CLS} font-semibold`}>
+                      {log.username || log.fullName || "—"}
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      <AdminPill label={ui.label} bg={ui.bg} color={ui.color} />
+                    </td>
+                    <td className={`${ADMIN_TD_CLS} text-m3-on-surface-variant`}>
+                      {describeAction(log)}
+                    </td>
+                    <td className={`${ADMIN_TD_CLS} italic text-m3-on-surface-variant`}>
+                      {describeTarget(log)}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </AdminTable>
+      </AdminListShell>
     </div>
   );
 }

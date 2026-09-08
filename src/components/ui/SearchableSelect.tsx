@@ -17,6 +17,7 @@ interface SearchableSelectProps {
   disabled?: boolean;
 }
 
+/** M3 Expressive searchable select — filled surface trigger, elevated menu */
 export default function SearchableSelect({
   label,
   options,
@@ -50,56 +51,52 @@ export default function SearchableSelect({
 
   return (
     <div
-      className={`space-y-1 relative ${isOpen ? "z-50" : "z-10"}`}
+      className={`relative space-y-1 ${isOpen ? "z-50" : "z-10"}`}
       ref={dropdownRef}
     >
       {label && (
-        <label className="text-sm font-medium" style={{ color: "#636366" }}>
+        <label className="text-[12px] font-medium" style={{ color: "var(--m3-on-surface-variant)" }}>
           {label}
         </label>
       )}
       <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3.5 text-[16px] rounded-xl transition-all outline-none flex justify-between items-center ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-        style={{
-          background: "#fff",
-          border: isOpen ? "1.5px solid #007aff" : "1.5px solid #e5e5ea",
-          color: "#1d1d1f",
-          boxShadow: isOpen ? "0 0 0 3px rgba(116,140,44,0.1)" : "none",
-        }}
+        className={
+          "flex w-full cursor-pointer items-center justify-between rounded-[16px] bg-m3-surface-low px-4 py-3 text-[16px] outline-none " +
+          "border border-transparent transition-[background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,0.8,0.34,1)] " +
+          "focus-within:bg-m3-surface-lowest " +
+          (isOpen
+            ? "bg-m3-surface-lowest border-m3-primary ring-2 ring-m3-primary/15 "
+            : "") +
+          (disabled ? "cursor-not-allowed opacity-40" : "")
+        }
+        style={{ color: "var(--m3-on-surface)" }}
       >
-        <span className={selected ? "" : "text-gray-500"}>
+        <span className={selected ? "" : "text-m3-outline"}>
           {selected ? selected.label : placeholder}
         </span>
         <ChevronDown
           size={20}
           className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-          style={{ color: "#86868b" }}
+          style={{ color: "var(--m3-outline)" }}
         />
       </div>
 
       {isOpen && !disabled && (
         <div
-          className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border overflow-hidden"
-          style={{
-            borderColor: "#e5e5ea",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-          }}
+          className="m3-menu-in absolute z-50 mt-2 w-full overflow-hidden rounded-[20px] bg-m3-surface-lowest shadow-[0_16px_48px_rgba(0,0,0,0.18)] ring-1 ring-m3-outline-variant/40"
         >
-          <div
-            className="p-2 border-b"
-            style={{ borderColor: "#e5e5ea", backgroundColor: "#f5f5f7" }}
-          >
+          <div className="border-b border-m3-outline-variant/40 bg-m3-surface-low p-2">
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                style={{ color: "#86868b" }}
+                className="absolute left-3 top-1/2 -translate-y-1/2"
+                style={{ color: "var(--m3-outline)" }}
               />
               <input
                 type="text"
                 autoFocus
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg outline-none bg-white border border-[#e5e5ea] focus:border-[#007aff] transition-colors"
+                className="w-full rounded-full border border-transparent bg-m3-surface-container py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-m3-primary"
                 placeholder="Tìm kiếm..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -109,19 +106,24 @@ export default function SearchableSelect({
           </div>
           <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {filtered.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-gray-500 text-center">
+              <div className="px-4 py-4 text-center text-sm text-m3-outline">
                 Không tìm thấy kết quả
               </div>
             ) : (
               filtered.map((opt) => (
                 <div
                   key={opt.value}
-                  className={`px-4 py-3 text-sm cursor-pointer transition-colors ${
-                    value === opt.value ? "font-medium" : "hover:bg-gray-50"
-                  }`}
+                  className={
+                    "cursor-pointer px-4 py-3 text-sm transition-colors duration-150 " +
+                    (value === opt.value
+                      ? "bg-m3-primary-container font-semibold"
+                      : "hover:bg-m3-on-surface/8")
+                  }
                   style={{
-                    color: value === opt.value ? "#007aff" : "#1d1d1f",
-                    backgroundColor: value === opt.value ? "#e5e5ea" : "",
+                    color:
+                      value === opt.value
+                        ? "var(--m3-on-primary-container)"
+                        : "var(--m3-on-surface)",
                   }}
                   onClick={() => {
                     onChange(opt.value);
@@ -136,6 +138,13 @@ export default function SearchableSelect({
           </div>
         </div>
       )}
+      <style>{`
+        @keyframes m3MenuIn {
+          from { opacity: 0; transform: scale(0.92) translateY(-6px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .m3-menu-in { animation: m3MenuIn 250ms cubic-bezier(0.38,1.21,0.22,1) both; transform-origin: top center; }
+      `}</style>
     </div>
   );
 }

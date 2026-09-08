@@ -1,28 +1,17 @@
 import type { Metadata } from "next";
-import "../globals.css";
+import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Quét NFC – NVQS",
-  description: "Trang quét NFC CCCD gắn chip dành cho điện thoại",
+  title: "Nhận dạng AI",
+  description: "Ứng dụng iOS quét NFC và OCR CCCD cho hệ thống NVQS",
+  icons: { apple: "/app-icon.png" },
+  appleWebApp: {
+    capable: true,
+    title: "Nhận dạng AI",
+    statusBarStyle: "default",
+  },
 };
 
-export default function MobileLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="vi">
-      <head>
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1"
-        />
-        <style>
-          {`@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap');`}
-        </style>
-      </head>
-      <body className="font-sans antialiased">{children}</body>
-    </html>
-  );
+export default function MobileLayout({ children }: { children: ReactNode }) {
+  return <div className="min-h-[100dvh]">{children}</div>;
 }

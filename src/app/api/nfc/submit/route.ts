@@ -1,28 +1,13 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/data';
+import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { getSessionByCode, saveScanResult, updateSessionStatus } from "@/lib/mobile/sessions";
+import { compareNfcAndOcr } from "@/lib/mobile/verify";
 
-// Simplified type for NFC session result
-type NfcSession = {
-  sessionId: string;
-  code: string;
-  createdAt: number;
-  status: 'waiting' | 'connected' | 'completed';
-  result?: {
-    found: boolean;
-    citizen?: Record<string, string>;
-    prefill?: Record<string, string>;
-  };
-};
-
-declare global {
-  // eslint-disable-next-line no-var
-  var nfcSessions: Map<string, NfcSession> | undefined;
-}
-global.nfcSessions = global.nfcSessions ?? new Map();
-
-// POST /api/nfc/submit – Mobile submits NFC data
+/** Compatibility wrapper — prefer POST /api/mobile/scan-result */
 export async function POST(req: Request) {
-  const { code, nfcData } = await req.json() as {
+  const auth = await getSession();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { code, nfcData } = (await req.json()) as {
     code: string;
     nfcData: {
       cccd?: string;
@@ -33,48 +18,29 @@ export async function POST(req: Request) {
     };
   };
 
-  const sessions = global.nfcSessions!;
-  const session = sessions.get((code as string).toUpperCase());
-  if (!session) {
-    return NextResponse.json({ error: 'Session not found or expired' }, { status: 404 });
+  const row = await getSessionByCode(code);
+  if (!row) {
+    return NextResponse.json({ error: "Session not found or expired" }, { status: 404 });
   }
 
-  // Look up citizen by CCCD
-  const cccd = nfcData?.cccd ?? '';
-  const allResult = db.citizens.findAll({});
-  // findAll returns { data: Citizen[], total, page, limit } or Citizen[]
-  const rawList = Array.isArray(allResult) ? allResult : (allResult as { data: unknown[] }).data ?? [];
-  const existing = rawList.find(
-    (c) => (c as { cccd: string }).cccd === cccd
-  ) as Record<string, string> | undefined;
-
-  if (existing) {
-    session.status = 'completed';
-    session.result = {
-      found: true,
-      citizen: {
-        id: String(existing.id ?? ''),
-        fullName: String(existing.fullName ?? ''),
-        cccd: String(existing.cccd ?? ''),
-        dateOfBirth: String(existing.dateOfBirth ?? ''),
-        address: String(existing.address ?? ''),
-        militaryStatus: String(existing.militaryStatus ?? ''),
-      },
-    };
-  } else {
-    // Pre-fill data from NFC chip
-    session.status = 'completed';
-    session.result = {
-      found: false,
-      prefill: {
-        fullName: nfcData.fullName ?? '',
-        cccd,
-        dateOfBirth: nfcData.dateOfBirth ?? '',
-        gender: nfcData.gender ?? 'male',
-        address: nfcData.address ?? '',
-      },
-    };
-  }
-
-  return NextResponse.json({ ok: true, found: !!existing });
+  const nfc = {
+    fullName: nfcData.fullName ?? "",
+    personalId: nfcData.cccd ?? "",
+    dateOfBirth: nfcData.dateOfBirth ?? "",
+    gender: nfcData.gender ?? "",
+    nationality: "Việt Nam",
+    placeOfOrigin: "",
+    placeOfResidence: nfcData.address ?? "",
+  };
+  const verification = compareNfcAndOcr(nfc, nfc);
+  await updateSessionStatus(row.id, "PROCESSING");
+  const saved = await saveScanResult({
+    sessionId: row.id,
+    scanId: crypto.randomUUID(),
+    nfc,
+    ocr: nfc,
+    verification,
+    device: { platform: "legacy-web" },
+  });
+  return NextResponse.json({ ok: true, found: saved.citizenFound });
 }

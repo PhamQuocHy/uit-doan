@@ -17,7 +17,7 @@ export interface HierarchyUnit {
 export interface User {
   id: string;
   username: string;
-  password: string; // plaintext for demo; use bcrypt in production
+  password: string; // scrypt hash: `scrypt$<salt>$<hash>` — src/lib/password.ts
   name: string;
   email: string;
   phone: string;
@@ -26,10 +26,21 @@ export interface User {
   hierarchyLevel: HierarchyLevel;
   unitCode: string; // e.g. 'bo', 'tinh-hn', 'huyen-hk', 'xa-hb'
   functionalRole: FunctionalRole;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'locked';
+  /** Mã PIN đơn vị (tỉnh/huyện/xã) — dùng xác thực khi sửa hồ sơ */
+  editPin?: string | null;
   avatar?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MilitaryDocumentAttachment {
+  id: string;
+  fileName: string;
+  /** URL công khai, vd /uploads/cong-van/... */
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface MilitaryDocument {
@@ -45,10 +56,12 @@ export interface MilitaryDocument {
   urgent: boolean;
   createdBy: string; // userId
   createdAt: string;
+  attachments?: MilitaryDocumentAttachment[];
 }
 
 export interface Quota {
   id: string;
+  campaignId?: string;
   year: number;
   fromLevel: HierarchyLevel;
   fromUnit: string;
@@ -89,6 +102,8 @@ export interface Citizen {
   phone: string;
   educationLevel: string;
   job: string;
+  /** Tên trường / cơ sở đào tạo — citizen_education.school_name */
+  schoolName?: string;
   healthStatus?: string;
   identificationFeatures?: string;
   issueDate?: string;
@@ -108,10 +123,15 @@ export interface Citizen {
   callIntent?: 'unset' | 'du_kien_goi' | 'khong_goi';
   /** DB: approval_status — xét duyệt nhập ngũ */
   approvalStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  campaignId?: string;
   /** DB: military_status_reason */
   militaryStatusReason?: string;
   /** Khóa chỉnh sửa trạng thái NVQS trực tiếp sau khi đã lưu — DB: military_status_locked */
   militaryStatusLocked?: boolean;
+  /** DB: archived_at — đã duyệt chuyển hồ sơ lưu trữ */
+  archivedAt?: string | null;
+  /** Ảnh 3x4 từ chip / upload — citizen_identities.avatar_url */
+  avatar?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -304,10 +324,22 @@ export function getChildUnits(parentCode: string): HierarchyUnit[] {
 export const unitEditPins: Record<string, string> = {
   '92': '123456',
   '92-31756': '654321',
+  '92-31201': '654321',
 };
 
 export function hierarchyNeedsEditPin(level: HierarchyLevel | string): boolean {
   return level === 'tinh' || level === 'huyen' || level === 'xa';
+}
+
+export function getUnitEditPin(unitCode: string): string | null {
+  const pin = unitEditPins[unitCode];
+  return pin ? pin : null;
+}
+
+export function setUnitEditPin(unitCode: string, pin: string): void {
+  const trimmed = pin.trim();
+  if (!unitCode || unitCode === 'bo' || !trimmed) return;
+  unitEditPins[unitCode] = trimmed;
 }
 
 export function verifyUnitEditPin(unitCode: string, pin: string): boolean {
@@ -424,7 +456,7 @@ const users: User[] = [
   {
     id: 'u-bo',
     username: 'admin_bo',
-    password: '123',
+    password: 'scrypt$104baa5e11900d7bad4e144af121dcb8$741e911d153e76bf5dde0f38c90272963a79ec80cfbc55de6a3fdc7baabc8a466c2308231f3481d3c6172efae0e7ba7b3271f2f81cae8d46d7fad07080c6e992',
     name: 'Quản trị Bộ Quốc phòng',
     email: 'admin.bo@ymsa.vn',
     phone: '0900000001',
@@ -440,7 +472,7 @@ const users: User[] = [
   {
     id: 'u-ct',
     username: 'admin_cantho',
-    password: '123',
+    password: 'scrypt$ad0f2cc817c6d1c7766f9d3ce7d3dc30$43918ecd81f91875148f1f9d187cbbde0887c299d3f38ac2a7cfbd49367713da12800297ea24ef861ab4d8ab980161fafb1fccbd73367c9f99ffbdff6b40e787',
     name: 'CHQS Thành phố Cần Thơ',
     email: 'admin.cantho@ymsa.vn',
     phone: '0900000002',
@@ -456,7 +488,7 @@ const users: User[] = [
   {
     id: 'u-pl',
     username: 'admin_phuloc',
-    password: '123',
+    password: 'scrypt$e95816dcaff28b40db5c9b34582d1e29$423340f06fc48c25f053b68d46249faae3be7c3e318f29c8c1e2eb94ab6282ef55844cb2106cf160c68cc0d20dfbde23d048ce12e8cf6b25ee46f8de05c7750b',
     name: 'CHQS Xã Phú Lộc',
     email: 'admin.phuloc@ymsa.vn',
     phone: '0900000003',
@@ -472,7 +504,7 @@ const users: User[] = [
   {
     id: 'u-qk9',
     username: 'admin_qk9',
-    password: '123',
+    password: 'scrypt$0e6662a8fd04c9ce24c04c67b6a03bb1$d5edad9ea0374c853906ecbf69265603ad0d9e954a436972f1edcfe9ab0f4782ef1fefe0890c67c739c0077029e184f67cd2b00ea51a783bb390586848dfce54',
     name: 'Ban nhận quân — Quân khu 9',
     email: 'admin.qk9@ymsa.vn',
     phone: '0900000004',
@@ -488,8 +520,8 @@ const users: User[] = [
   {
     id: 'u-yte-ct',
     username: 'admin_yte',
-    password: '123',
-    name: 'NV Y tế — Thành phố Cần Thơ',
+    password: 'scrypt$6f367a1f3e8752918c43bd46ba2b4d85$7083c4bd77ab61d5cd92b231ecabee0b97506691af34ab07d5751ef5273c0b49f31e1bcabc2af7b762045b119647b446e8f5e5cc3f17a4ea2d37d040ee6a23e6',
+    name: 'Cán bộ y tế — Thành phố Cần Thơ',
     email: 'yte.cantho@ymsa.vn',
     phone: '0900000005',
     role: 'user',
@@ -1101,7 +1133,10 @@ export const db = {
       const limit = query?.limit || 10;
       const start = (page - 1) * limit;
       return {
-        data: list.slice(start, start + limit).map(({ password: _, ...u }) => u),
+        data: list.slice(start, start + limit).map(({ password: _, ...u }) => ({
+          ...u,
+          editPin: getUnitEditPin(u.unitCode),
+        })),
         total,
         page,
         limit,
@@ -1112,22 +1147,27 @@ export const db = {
       const u = users.find((u) => u.id === id);
       if (!u) return null;
       const { password: _, ...rest } = u;
-      return rest;
+      return { ...rest, editPin: getUnitEditPin(u.unitCode) };
     },
     findByUsername: (username: string) => users.find((u) => u.username === username) || null,
     create: (data: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
       const user: User = { id: generateId(), ...data, createdAt: now, updatedAt: now };
       users.push(user);
+      if (data.editPin) setUnitEditPin(user.unitCode, data.editPin);
       const { password: _, ...rest } = user;
-      return rest;
+      return { ...rest, editPin: getUnitEditPin(user.unitCode) };
     },
     update: (id: string, data: Partial<Omit<User, 'id' | 'createdAt'>>) => {
       const idx = users.findIndex((u) => u.id === id);
       if (idx === -1) return null;
-      users[idx] = { ...users[idx], ...data, updatedAt: new Date().toISOString() };
-      const { password: _, ...rest } = users[idx];
-      return rest;
+      const { editPin, ...rest } = data;
+      users[idx] = { ...users[idx], ...rest, updatedAt: new Date().toISOString() };
+      if (typeof editPin === 'string') {
+        setUnitEditPin(users[idx].unitCode, editPin);
+      }
+      const { password: _, ...safe } = users[idx];
+      return { ...safe, editPin: getUnitEditPin(users[idx].unitCode) };
     },
     delete: (id: string) => {
       const idx = users.findIndex((u) => u.id === id);
@@ -1185,6 +1225,7 @@ export const db = {
     findAll: (query?: {
       search?: string;
       militaryStatus?: string;
+      campaignId?: string;
       unitCodes?: string[];
       page?: number;
       limit?: number;
@@ -1201,6 +1242,10 @@ export const db = {
         );
       }
       if (query?.militaryStatus) list = list.filter((c) => c.militaryStatus === query.militaryStatus);
+      if (query?.campaignId)
+        list = list.filter(
+          (c) => c.campaignId === query.campaignId || !c.campaignId,
+        );
       if (query?.unitCodes && query.unitCodes.length > 0) {
         const allowed = new Set(query.unitCodes);
         list = list.filter((c) => c.unitCode && allowed.has(c.unitCode));
@@ -1365,6 +1410,25 @@ export const db = {
         totalPages: Math.ceil(total / limit),
       };
     },
+    create: (data: Omit<RecruitmentCampaign, 'id' | 'createdAt' | 'updatedAt' | 'registeredCount' | 'passedCount'>) => {
+      const now = new Date().toISOString();
+      const campaign: RecruitmentCampaign = {
+        id: generateId(),
+        ...data,
+        registeredCount: 0,
+        passedCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      campaigns.push(campaign);
+      return campaign;
+    },
+    update: (id: string, data: Partial<Omit<RecruitmentCampaign, 'id' | 'createdAt' | 'updatedAt'>>) => {
+      const campaign = campaigns.find((item) => item.id === id);
+      if (!campaign) return null;
+      Object.assign(campaign, data, { updatedAt: new Date().toISOString() });
+      return campaign;
+    },
   },
   stats: {
     getOverview: () => ({
@@ -1391,6 +1455,7 @@ export const db = {
       const doc: MilitaryDocument = {
         id: generateId(),
         ...data,
+        attachments: data.attachments || [],
         createdAt: new Date().toISOString(),
       };
       militaryDocuments.push(doc);
@@ -1420,6 +1485,18 @@ export const db = {
       };
       quotas.push(quota);
       return quota;
+    },
+    update: (id: string, data: Partial<Omit<Quota, 'id' | 'createdAt'>>) => {
+      const quota = quotas.find((item) => item.id === id);
+      if (!quota) return null;
+      Object.assign(quota, data);
+      return quota;
+    },
+    delete: (id: string) => {
+      const index = quotas.findIndex((item) => item.id === id);
+      if (index === -1) return false;
+      quotas.splice(index, 1);
+      return true;
     },
   },
   notifications: {
