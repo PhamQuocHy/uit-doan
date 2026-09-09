@@ -173,27 +173,18 @@ function filterNavGroups(
   }
 
   if (functionalRole === "y_te") {
-    return navGroups
-      .filter((g) =>
-        ["Hồ sơ thanh niên", "Tuyển quân", "Quản trị"].includes(g.name),
-      )
-      .map((g) => {
-        if (g.name === "Hồ sơ thanh niên") {
-          return {
-            ...g,
-            items: g.items.filter((i) =>
-              ["/admin", "/admin/citizens", "/admin/health"].includes(i.href),
-            ),
-          };
-        }
-        if (g.name === "Tuyển quân") {
-          return {
-            ...g,
-            items: g.items.filter((i) => i.href === "/admin/recruitment"),
-          };
-        }
-        return g;
-      });
+    return [
+      {
+        name: "Khám sức khỏe",
+        items: [
+          {
+            href: "/admin/health",
+            label: "Khám sức khỏe",
+            icon: <FcLike size={ICON} />,
+          },
+        ],
+      },
+    ];
   }
 
   // tuyen_quan — theo cấp đơn vị hành chính / quân khu
@@ -266,15 +257,6 @@ function filterNavGroups(
                 }
               : item,
           ),
-        };
-      }
-      if (
-        (hierarchyLevel === "xa" || hierarchyLevel === "tinh") &&
-        group.name === "Tuyển quân"
-      ) {
-        return {
-          ...group,
-          items: group.items.filter((i) => i.href !== "/admin/approval"),
         };
       }
       return group;

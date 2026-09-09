@@ -23,6 +23,7 @@ import {
   MILITARY_REGIONS,
   MILITARY_SUB_UNITS,
 } from "@/lib/military-regions";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 type SystemRole = {
   id: number;
@@ -850,24 +851,26 @@ export default function UsersClient() {
                   <label className="mb-1.5 block text-[13px] font-medium text-m3-on-surface">
                     {unitFieldLabel} <span className="text-m3-error">*</span>
                   </label>
-                  <select
-                    className={SELECT_CLS}
+                  <SearchableSelect
                     value={form.unitCode}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, unitCode: e.target.value }))
+                    onChange={(code) =>
+                      setForm((f) => ({ ...f, unitCode: code }))
                     }
-                  >
-                    <option value="">
-                      — Chọn {unitFieldLabel.toLowerCase()} —
-                    </option>
-                    {(sessionLevel === "bo" ? boUnitOptions : unitOptions).map(
-                      (u) => (
-                        <option key={u.code} value={u.code}>
-                          {u.name}
-                        </option>
-                      ),
-                    )}
-                  </select>
+                    placeholder={`— Chọn ${unitFieldLabel.toLowerCase()} —`}
+                    options={[
+                      {
+                        value: "",
+                        label: `— Chọn ${unitFieldLabel.toLowerCase()} —`,
+                      },
+                      ...(sessionLevel === "bo"
+                        ? boUnitOptions
+                        : unitOptions
+                      ).map((u) => ({
+                        value: u.code,
+                        label: u.name,
+                      })),
+                    ]}
+                  />
                 </div>
               </>
             )}

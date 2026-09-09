@@ -24,6 +24,7 @@ import {
   Send,
   UserCheck,
   UserX,
+  Undo2,
   CornerDownLeft,
 } from "lucide-react";
 import Link from "next/link";
@@ -251,11 +252,17 @@ export default function Topbar({
       if (!res.ok) return;
       const data = await res.json();
       const dismissed = readDismissedSys();
-      const list: Noti[] = (data.data || []).map((n: Noti) =>
-        n.id.startsWith("sys-") && dismissed.has(n.id)
-          ? { ...n, read: true }
-          : n,
-      );
+      const list: Noti[] = (data.data || [])
+        .map((n: Noti) =>
+          n.id.startsWith("sys-") && dismissed.has(n.id)
+            ? { ...n, read: true }
+            : n,
+        )
+        .sort((a: Noti, b: Noti) => {
+          const tb = Date.parse(b.createdAt) || 0;
+          const ta = Date.parse(a.createdAt) || 0;
+          return tb - ta;
+        });
       setNotifications(list);
       setUnread(list.filter((n) => !n.read).length);
     } catch {
@@ -360,14 +367,15 @@ export default function Topbar({
   };
 
   const notiIcon = (type: string) => {
-    if (type === "quota_shortage") return <AlertTriangle size={16} />;
-    if (type === "approval_pending") return <ClipboardCheck size={16} />;
-    if (type === "archive_pending") return <Archive size={16} />;
-    if (type === "document_incoming") return <FileText size={16} />;
-    if (type === "document_outgoing") return <Send size={16} />;
-    if (type === "citizen_approved") return <UserCheck size={16} />;
-    if (type === "citizen_rejected") return <UserX size={16} />;
-    return <Target size={16} />;
+    if (type === "quota_shortage") return <AlertTriangle size={18} />;
+    if (type === "approval_pending") return <ClipboardCheck size={18} />;
+    if (type === "archive_pending") return <Archive size={18} />;
+    if (type === "document_incoming") return <FileText size={18} />;
+    if (type === "document_outgoing") return <Send size={18} />;
+    if (type === "citizen_approved") return <UserCheck size={18} />;
+    if (type === "citizen_rejected") return <UserX size={18} />;
+    if (type === "citizen_proposal_returned") return <Undo2 size={18} />;
+    return <Target size={18} />;
   };
 
   return (
@@ -481,25 +489,25 @@ export default function Topbar({
           </button>
 
           {notiOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,360px)] overflow-hidden rounded-[28px] macos-glass shadow-[0_16px_48px_rgba(0,0,0,0.14)]">
-              <div className="flex items-center justify-between border-b border-m3-outline-variant/40 px-4 py-3">
-                <p className="text-[15px] font-bold text-m3-on-surface">
+            <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,460px)] overflow-hidden rounded-[24px] border border-m3-outline-variant/40 bg-white shadow-[0_16px_48px_rgba(0,0,0,0.14)]">
+              <div className="flex items-center justify-between border-b border-m3-outline-variant/40 px-5 py-3.5">
+                <p className="text-[17px] font-bold text-m3-on-surface">
                   Thông báo
                 </p>
                 {unread > 0 && (
                   <button
                     type="button"
                     onClick={markAllRead}
-                    className="text-[12px] font-semibold text-m3-primary"
+                    className="text-[14px] font-semibold text-m3-primary"
                   >
                     Đánh dấu đã đọc
                   </button>
                 )}
               </div>
-              <div className="max-h-[360px] overflow-y-auto">
+              <div className="max-h-[480px] overflow-y-auto">
                 {notifications.length === 0 ? (
                   <p
-                    className="px-4 py-8 text-center text-[14px]"
+                    className="px-5 py-10 text-center text-[15px]"
                     style={{ color: "var(--m3-outline)" }}
                   >
                     Chưa có thông báo
@@ -510,32 +518,53 @@ export default function Topbar({
                       key={n.id}
                       type="button"
                       onClick={() => void openNoti(n)}
-                      className={`flex w-full gap-3 border-b border-m3-outline-variant/30 px-4 py-3 text-left transition hover:bg-m3-on-surface/8 ${
-                        n.read ? "opacity-70" : "bg-m3-primary-container/40"
+                      className={`flex w-full gap-3.5 border-b border-m3-outline-variant/30 px-5 py-3.5 text-left transition ${
+                        n.read
+                          ? "hover:brightness-[0.98]"
+                          : "bg-m3-primary-container/40 hover:bg-m3-on-surface/8"
                       }`}
+                      style={
+                        n.read ? { backgroundColor: "#f7f9fb" } : undefined
+                      }
                     >
                       <div
-                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                          n.type === "quota_shortage" ||
-                          n.type === "archive_pending" ||
-                          n.type === "citizen_rejected"
-                            ? "bg-m3-warning-container text-m3-on-warning-container"
-                            : n.type === "citizen_approved"
-                              ? "bg-m3-success-container text-m3-on-success-container"
-                              : "bg-m3-primary-container text-m3-on-primary-container"
+                        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                          n.read
+                            ? "bg-m3-surface-container text-m3-on-surface-variant"
+                            : n.type === "quota_shortage" ||
+                                n.type === "archive_pending"
+                              ? "bg-m3-warning-container text-m3-on-warning-container"
+                              : n.type === "citizen_rejected" ||
+                                  n.type === "citizen_proposal_returned"
+                                ? "bg-m3-error-container text-m3-on-error-container"
+                                : n.type === "citizen_approved"
+                                  ? "bg-m3-success-container text-m3-on-success-container"
+                                  : "bg-m3-primary-container text-m3-on-primary-container"
                         }`}
                       >
                         {notiIcon(n.type)}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[14px] font-semibold text-m3-on-surface">
+                        <p
+                          className={`text-[15px] font-semibold leading-snug ${
+                            n.read
+                              ? "text-m3-on-surface-variant"
+                              : "text-m3-on-surface"
+                          }`}
+                        >
                           {n.title}
                         </p>
-                        <p className="mt-0.5 text-[13px] leading-snug text-m3-on-surface-variant">
+                        <p
+                          className={`mt-1 text-[14px] leading-relaxed ${
+                            n.read
+                              ? "text-m3-outline"
+                              : "text-m3-on-surface-variant"
+                          }`}
+                        >
                           {n.message}
                         </p>
                         <p
-                          className="mt-1 text-[11px]"
+                          className="mt-1.5 text-[12px]"
                           style={{ color: "var(--m3-outline)" }}
                         >
                           {new Date(n.createdAt).toLocaleString("vi-VN")}
@@ -545,25 +574,25 @@ export default function Topbar({
                   ))
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-m3-outline-variant/40 px-4 py-2.5">
+              <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-m3-outline-variant/40 px-5 py-3">
                 <Link
                   href="/admin/documents"
                   onClick={() => setNotiOpen(false)}
-                  className="text-[13px] font-semibold text-m3-primary"
+                  className="text-[14px] font-semibold text-m3-primary"
                 >
                   Công văn →
                 </Link>
                 <Link
                   href="/admin/quota"
                   onClick={() => setNotiOpen(false)}
-                  className="text-[13px] font-semibold text-m3-primary"
+                  className="text-[14px] font-semibold text-m3-primary"
                 >
                   Chỉ tiêu →
                 </Link>
                 <Link
                   href="/admin/approval"
                   onClick={() => setNotiOpen(false)}
-                  className="text-[13px] font-semibold text-m3-primary"
+                  className="text-[14px] font-semibold text-m3-primary"
                 >
                   Xét duyệt →
                 </Link>

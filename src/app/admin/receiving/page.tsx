@@ -29,6 +29,7 @@ import {
   type M3SnackbarTone,
 } from "@/components/m3";
 import type { HierarchyUnit } from "@/lib/data";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const SELECT_CLS =
   "h-9 min-w-[200px] rounded-full border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium outline-none";
@@ -119,7 +120,7 @@ function pill(status: string) {
 /** Bộ: giao chỉ tiêu QK + duyệt + công bố */
 function BoView({ session }: { session: Session }) {
   const { campaigns, campaignId, setCampaignId } = useCampaigns();
-  const [tab, setTab] = useState<"quota" | "final">("quota");
+  const [tab, setTab] = useState<"quota" | "final">("final");
   const [quotas, setQuotas] = useState<
     {
       id: string;
@@ -141,6 +142,10 @@ function BoView({ session }: { session: Session }) {
     published: 0,
   });
   const [statusFilter, setStatusFilter] = useState("submitted_to_bo");
+  const [quanKhuCode, setQuanKhuCode] = useState("");
+  const [militaryRegions, setMilitaryRegions] = useState<
+    { code: string; name: string }[]
+  >([]);
   const [toast, setToast] = useState<{ message: string; tone: M3SnackbarTone } | null>(
     null,
   );
@@ -157,12 +162,15 @@ function BoView({ session }: { session: Session }) {
     if (!res.ok) return;
     const d = await res.json();
     setQuotas(d.data || []);
-    setRegions((d.regions || []).map((r: { code: string; name: string }) => r));
+    const regs = (d.regions || []).map((r: { code: string; name: string }) => r);
+    setRegions(regs);
+    if (regs.length) setMilitaryRegions(regs);
   }, [campaignId]);
 
   const loadList = useCallback(async () => {
     if (!campaignId) return;
     const params = new URLSearchParams({ campaignId, status: statusFilter });
+    if (quanKhuCode) params.set("quanKhuCode", quanKhuCode);
     const res = await fetch(`/api/admin/receiving?${params}`);
     if (!res.ok) return;
     const d = await res.json();
@@ -172,14 +180,17 @@ function BoView({ session }: { session: Session }) {
       bo_approved: d.counts?.bo_approved || 0,
       published: d.counts?.published || 0,
     });
-  }, [campaignId, statusFilter]);
+    if (Array.isArray(d.militaryRegions) && d.militaryRegions.length) {
+      setMilitaryRegions(d.militaryRegions);
+    }
+  }, [campaignId, statusFilter, quanKhuCode]);
 
   useEffect(() => {
     void loadQuota();
   }, [loadQuota]);
   useEffect(() => {
-    if (tab === "final") void loadList();
-  }, [tab, loadList]);
+    if (campaignId) void loadList();
+  }, [campaignId, loadList]);
 
   const syncAll = async () => {
     if (!campaignId) return;
@@ -243,7 +254,11 @@ function BoView({ session }: { session: Session }) {
       const res = await fetch("/api/admin/receiving", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, campaignId }),
+        body: JSON.stringify({
+          action,
+          campaignId,
+          ...(quanKhuCode && { quanKhuCode }),
+        }),
       });
       const d = await res.json().catch(() => ({}));
       setConfirmAction(null);
@@ -259,27 +274,53 @@ function BoView({ session }: { session: Session }) {
     }
   };
 
+  const selectedQuanKhuName =
+    militaryRegions.find((r) => r.code === quanKhuCode)?.name || "";
+
   return (
     <div className="space-y-4 pb-6">
       <AdminListHeader
         title="Chỉ tiêu QK · Duyệt & công bố"
         countLabel={session.name}
         filters={
-          <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+          <>
+            <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+            {tab === "final" && (
+              <select
+                className={ADMIN_SELECT_CLS}
+                value={quanKhuCode}
+                onChange={(e) => setQuanKhuCode(e.target.value)}
+                aria-label="Lọc theo quân khu gửi lên"
+              >
+                <option value="">Tất cả quân khu</option>
+                {militaryRegions.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
         }
         actions={
-          tab === "final" ? (
-            <>
-              <AdminPrimaryBtn tone="green" onClick={() => setConfirmAction("approve")}>
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                Duyệt ({counts.submitted_to_bo})
-              </AdminPrimaryBtn>
-              <AdminPrimaryBtn tone="blue" onClick={() => setConfirmAction("publish")}>
-                <Globe size={14} />
-                Công bố ({counts.bo_approved})
-              </AdminPrimaryBtn>
-            </>
-          ) : undefined
+          <>
+            <AdminPrimaryBtn
+              tone="green"
+              disabled={busy || !campaignId}
+              onClick={() => setConfirmAction("approve")}
+            >
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              Duyệt ({counts.submitted_to_bo})
+            </AdminPrimaryBtn>
+            <AdminPrimaryBtn
+              tone="blue"
+              disabled={busy || !campaignId}
+              onClick={() => setConfirmAction("publish")}
+            >
+              <Globe size={14} />
+              Công bố ({counts.bo_approved})
+            </AdminPrimaryBtn>
+          </>
         }
       />
       <AdminStatusTabs
@@ -332,9 +373,9 @@ function BoView({ session }: { session: Session }) {
             <AdminTable>
               <AdminTHead>
                 <th className={ADMIN_TH_CLS}>Quân khu</th>
-                <th className={`${ADMIN_TH_CLS} text-center`}>Tuyển quân</th>
-                <th className={`${ADMIN_TH_CLS} text-center`}>Nhận quân</th>
-                <th className={ADMIN_TH_CLS}>Đã phân</th>
+                <th className={`${ADMIN_TH_CLS} !text-right`}>Tuyển quân</th>
+                <th className={`${ADMIN_TH_CLS} !text-right`}>Nhận quân</th>
+                <th className={`${ADMIN_TH_CLS} !text-right`}>Đã phân</th>
               </AdminTHead>
               <tbody>
                 {quotas.map((q, i) => {
@@ -343,19 +384,26 @@ function BoView({ session }: { session: Session }) {
                   return (
                     <tr key={q.id} className={adminRowClass(i)}>
                       <td className={ADMIN_TD_CLS}>{q.receivingUnitName}</td>
-                      <td className={`${ADMIN_TD_CLS} text-center font-semibold`}>
-                        {tuyen}
+                      <td
+                        className={`${ADMIN_TD_CLS} text-right font-semibold tabular-nums`}
+                      >
+                        {tuyen.toLocaleString("vi-VN")}
                       </td>
-                      <td className={`${ADMIN_TD_CLS} text-center`}>
-                        <span className="font-semibold">{q.amount}</span>
-                        {!synced && (
-                          <span className="ml-2 text-[12px] text-amber-700">
+                      <td className={`${ADMIN_TD_CLS} text-right tabular-nums`}>
+                        <span className="font-semibold">
+                          {q.amount.toLocaleString("vi-VN")}
+                        </span>
+                        {!synced ? (
+                          <span className="ml-1.5 text-[11px] font-medium text-amber-700">
                             lệch
                           </span>
-                        )}
+                        ) : null}
                       </td>
-                      <td className={ADMIN_TD_CLS}>
-                        {q.filled}/{q.amount}
+                      <td
+                        className={`${ADMIN_TD_CLS} text-right tabular-nums`}
+                      >
+                        {q.filled.toLocaleString("vi-VN")}/
+                        {q.amount.toLocaleString("vi-VN")}
                       </td>
                     </tr>
                   );
@@ -430,7 +478,11 @@ function BoView({ session }: { session: Session }) {
       <M3ConfirmDialog
         open={confirmAction === "approve"}
         title="Duyệt danh sách?"
-        description={`Duyệt ${counts.submitted_to_bo} hồ sơ quân khu đã gửi lên.`}
+        description={
+          selectedQuanKhuName
+            ? `Duyệt ${counts.submitted_to_bo} hồ sơ ${selectedQuanKhuName} đã gửi lên.`
+            : `Duyệt ${counts.submitted_to_bo} hồ sơ quân khu đã gửi lên (tất cả quân khu trong đợt).`
+        }
         confirmLabel="Duyệt"
         tone="success"
         busy={busy}
@@ -440,7 +492,11 @@ function BoView({ session }: { session: Session }) {
       <M3ConfirmDialog
         open={confirmAction === "publish"}
         title="Công bố danh sách?"
-        description={`Công bố ${counts.bo_approved} hồ sơ đã duyệt — công dân tra cứu tại /tra-cuu.`}
+        description={
+          selectedQuanKhuName
+            ? `Công bố ${counts.bo_approved} hồ sơ ${selectedQuanKhuName} đã duyệt — công dân tra cứu tại /tra-cuu.`
+            : `Công bố ${counts.bo_approved} hồ sơ đã duyệt (tất cả quân khu trong đợt) — công dân tra cứu tại /tra-cuu.`
+        }
         confirmLabel="Công bố"
         tone="primary"
         busy={busy}
@@ -639,40 +695,44 @@ function QuanKhuView({ session }: { session: Session }) {
       <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
       {tab === "assign" && (
         <>
-          <select
-            className={`${ADMIN_SELECT_CLS} max-w-[200px]`}
+          <SearchableSelect
+            variant="compact"
+            className="max-w-[220px] min-w-[180px]"
             value={provinceCode}
-            onChange={(e) => {
-              setProvinceCode(e.target.value);
+            onChange={(code) => {
+              setProvinceCode(code);
               setWardCode("");
               setStatusFilter("");
             }}
-            aria-label="Lọc tỉnh thành"
-          >
-            <option value="">Tất cả tỉnh / TP</option>
-            {provinceOptions.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            ariaLabel="Lọc tỉnh thành"
+            placeholder="Tất cả tỉnh / TP"
+            options={[
+              { value: "", label: "Tất cả tỉnh / TP" },
+              ...provinceOptions.map((p) => ({
+                value: p.code,
+                label: p.name,
+              })),
+            ]}
+          />
           {provinceCode && (
-            <select
-              className={`${ADMIN_SELECT_CLS} max-w-[200px]`}
+            <SearchableSelect
+              variant="compact"
+              className="max-w-[220px] min-w-[160px]"
               value={wardCode}
-              onChange={(e) => {
-                setWardCode(e.target.value);
+              onChange={(code) => {
+                setWardCode(code);
                 setStatusFilter("");
               }}
-              aria-label="Lọc xã phường"
-            >
-              <option value="">Tất cả xã / phường</option>
-              {wards.map((w) => (
-                <option key={w.code} value={w.code}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Lọc xã phường"
+              placeholder="Tất cả xã / phường"
+              options={[
+                { value: "", label: "Tất cả xã / phường" },
+                ...wards.map((w) => ({
+                  value: w.code,
+                  label: w.name,
+                })),
+              ]}
+            />
           )}
         </>
       )}
@@ -1060,13 +1120,11 @@ function ReceivingOpsView({ session }: { session: Session }) {
         <AdminListShell page={1} totalPages={1}>
           <AdminTable>
             <AdminTHead>
-              <tr>
-                <th className={ADMIN_TH_CLS}>Họ tên / CCCD</th>
-                <th className={ADMIN_TH_CLS}>Địa phương</th>
-                <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
-                <th className={ADMIN_TH_CLS}>Trạng thái</th>
-                <th className={ADMIN_TH_CLS} />
-              </tr>
+              <th className={ADMIN_TH_CLS}>Họ tên / CCCD</th>
+              <th className={ADMIN_TH_CLS}>Địa phương</th>
+              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+              <th className={ADMIN_TH_CLS}>Trạng thái</th>
+              <th className={ADMIN_TH_CLS} />
             </AdminTHead>
             <tbody>
               {rows.map((r, i) => {

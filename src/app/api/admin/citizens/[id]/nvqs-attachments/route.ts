@@ -5,14 +5,11 @@ import {
   countCitizenNvqsAttachments,
   deleteCitizenNvqsAttachment,
   listCitizenNvqsAttachments,
+  parseMinhChungLoai,
+  purposesEquivalentTo,
   saveCitizenNvqsFiles,
-  type NvqsAttachmentPurpose,
+  type MinhChungLoai,
 } from "@/lib/citizen-nvqs-attachments-db";
-
-function parsePurpose(raw: string | null): NvqsAttachmentPurpose | null {
-  if (raw === "khong_goi" || raw === "tam_hoan") return raw;
-  return null;
-}
 
 export async function GET(
   request: NextRequest,
@@ -23,14 +20,16 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await context.params;
-  const purpose = parsePurpose(
-    new URL(request.url).searchParams.get("purpose"),
-  );
+  const purposeRaw = new URL(request.url).searchParams.get("purpose");
+  const loai = parseMinhChungLoai(purposeRaw);
   const citizen = await findCitizenByIdFromDb(id);
   if (!citizen) {
     return NextResponse.json({ error: "Không tìm thấy hồ sơ" }, { status: 404 });
   }
-  const data = await listCitizenNvqsAttachments(id, purpose || undefined);
+  const data = await listCitizenNvqsAttachments(
+    id,
+    loai ? purposesEquivalentTo(loai) : undefined,
+  );
   return NextResponse.json({ data });
 }
 
@@ -49,10 +48,13 @@ export async function POST(
   }
 
   const form = await request.formData();
-  const purpose = parsePurpose(String(form.get("purpose") || ""));
+  const purpose = parseMinhChungLoai(String(form.get("purpose") || ""));
   if (!purpose) {
     return NextResponse.json(
-      { error: "purpose phải là khong_goi hoặc tam_hoan" },
+      {
+        error:
+          "Vui lòng chọn loại minh chứng: giấy tạm hoãn, giấy miễn gọi hoặc giấy khám sức khỏe",
+      },
       { status: 400 },
     );
   }
@@ -65,14 +67,27 @@ export async function POST(
   }
 
   try {
-    const saved = await saveCitizenNvqsFiles(
-      id,
-      purpose,
-      files,
-      session.username || session.unitCode,
-    );
+    const result = await saveCitizenNvqsFiles(id, purpose as MinhChungLoai, files, {
+      uploadedBy: session.username || session.unitCode,
+      uploaderLevel: session.hierarchyLevel,
+      uploaderUnitCode: session.unitCode,
+      citizenUnitCode: citizen.unitCode,
+    });
     const total = await countCitizenNvqsAttachments(id, purpose);
-    return NextResponse.json({ data: saved, total }, { status: 201 });
+    return NextResponse.json(
+      {
+        data: result.attachments,
+        total,
+        locality: {
+          tinh: result.locality.tinhName,
+          xa: result.locality.xaName,
+          tinhCode: result.locality.tinhCode,
+          xaCode: result.locality.xaCode,
+          folder: `minh-chung/${result.locality.tinh}/${result.locality.xa}`,
+        },
+      },
+      { status: 201 },
+    );
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Không tải lên được" },

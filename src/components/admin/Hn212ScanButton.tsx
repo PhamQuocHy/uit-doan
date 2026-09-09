@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CreditCard, Loader2, Settings2, X, Zap } from "lucide-react";
 import { useHn212Reader } from "@/hooks/useHn212Reader";
 import type { Hn212CitizenScan } from "@/lib/hn212";
@@ -55,6 +56,11 @@ export default function Hn212ScanButton({
   const [draftUrl, setDraftUrl] = useState(wsUrl);
   const [localError, setLocalError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     setDraftUrl(wsUrl);
@@ -138,9 +144,11 @@ export default function Hn212ScanButton({
         {label}
       </button>
 
-      {open && (
+      {portalReady &&
+        open &&
+        createPortal(
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !busy) setOpen(false);
           }}
@@ -296,7 +304,8 @@ export default function Hn212ScanButton({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

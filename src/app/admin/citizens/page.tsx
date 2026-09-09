@@ -8,7 +8,7 @@ import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import CitizenFormModal from "@/components/admin/CitizenFormModal";
 import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
 import { ConfirmDialog } from "@/components/ui/Modal";
-import { getCallDisplayLabel } from "@/lib/enlistment-approval";
+import { getCallDisplayLabel, RETURN_TAM_HOAN_MARKER } from "@/lib/enlistment-approval";
 import {
   calcAgeYears,
   citizenRowAgeTone,
@@ -20,6 +20,8 @@ import {
   publishCitizensChanged,
   subscribeCitizensChanged,
 } from "@/lib/citizens-realtime";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import { resolveCitizenAvatarSrc } from "@/lib/citizen-avatar";
 
 const CALL_FILTER_OPTIONS = [
   { value: "", label: "Tất cả dự kiến" },
@@ -27,7 +29,7 @@ const CALL_FILTER_OPTIONS = [
   { value: "du_bi", label: "Dự bị" },
   { value: "de_xuat_khong_goi", label: "Đề xuất không gọi" },
   { value: "khong_goi", label: "Không gọi" },
-  { value: "unset", label: "Chưa xác định" },
+  { value: "unset", label: "Hồ sơ mới" },
 ] as const;
 
 const EDUCATION_FILTER_OPTIONS = [
@@ -55,12 +57,16 @@ const SELECT_CLS =
 
 const STATUS_TABS = [
   { value: "", label: "Tất cả" },
+  { value: "unset", label: "Hồ sơ mới" },
   { value: "du_kien_goi", label: "Dự kiến gọi" },
   { value: "du_bi", label: "Dự bị" },
   { value: "de_xuat_khong_goi", label: "Đề xuất không gọi" },
-  { value: "khong_goi", label: "Không gọi" },
-  { value: "unset", label: "Chưa xác định" },
+  { value: "__hoan__", label: "Tạm hoãn" },
+  { value: "khong_goi", label: "Không gọi (khóa)" },
+  { value: "khong_duyet_khong_goi", label: "Không duyệt không gọi" },
+  { value: "khong_duyet_tam_hoan", label: "Không duyệt tạm hoãn" },
   { value: "__tai_ngu__", label: "Tại ngũ" },
+  { value: "__tinh_tra_ve__", label: "Tỉnh trả về" },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -110,7 +116,7 @@ const STATUS_SUMMARY_BOXES = [
   {
     key: "khong_goi" as const,
     filter: "khong_goi",
-    label: "Không gọi",
+    label: "Không gọi (khóa)",
     color: "var(--m3-error, #ba1a1a)",
     bg: "var(--m3-error-container, #ffdad6)",
   },
@@ -147,6 +153,7 @@ export default function CitizensPage() {
   const [provinces, setProvinces] = useState<HierarchyUnit[]>([]);
   const [wards, setWards] = useState<HierarchyUnit[]>([]);
   const [scopeMeta, setScopeMeta] = useState<ScopeMeta>(null);
+  const [dataSource, setDataSource] = useState<"mysql" | "memory" | null>(null);
   const [requiresUnitSelection, setRequiresUnitSelection] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [campaignId, setCampaignId] = useState("");
@@ -241,13 +248,17 @@ export default function CitizensPage() {
       });
   }, [searchParams, loadWards]);
 
-  const fetchCitizens = async (opts?: {
+  /** Tăng mỗi lần fetch — bỏ qua response cũ (tránh race / poll stale đổ “Tất cả”). */
+  const fetchSeqRef = useRef(0);
+
+  const fetchCitizens = useCallback(async (opts?: {
     silent?: boolean;
     search?: string;
     page?: number;
     /** Tra cứu CCCD (NFC): bỏ lọc đợt / dự kiến gọi, tìm theo phạm vi cấp */
     lookupCccd?: boolean;
-  }) => {
+  }): Promise<Citizen[] | null> => {
+    const seq = ++fetchSeqRef.current;
     if (!opts?.silent) setLoading(true);
     try {
       const qSearch = opts?.search !== undefined ? opts.search : search;
@@ -261,6 +272,7 @@ export default function CitizensPage() {
         (lookup || searchTrim.length > 0);
 
       if (sessionLevel === "bo" && !effectiveUnitCode && !nationwideBo) {
+        if (seq !== fetchSeqRef.current) return null;
         setCitizens([]);
         setTotalPages(0);
         setTotalCount(0);
@@ -271,8 +283,9 @@ export default function CitizensPage() {
           khong_goi: 0,
         });
         setScopeMeta(null);
+        setDataSource(null);
         setRequiresUnitSelection(true);
-        return;
+        return [];
       }
 
       const isTaiNgu = !lookup && !isArchive && callIntentFilter === "__tai_ngu__";
@@ -303,7 +316,9 @@ export default function CitizensPage() {
       const res = await fetch(`/api/admin/citizens?${query.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      setCitizens(Array.isArray(data.data) ? data.data : []);
+      if (seq !== fetchSeqRef.current) return null;
+      const list: Citizen[] = Array.isArray(data.data) ? data.data : [];
+      setCitizens(list);
       setTotalPages(data.totalPages);
       setTotalCount(data.total ?? 0);
       if (data.summary) {
@@ -316,12 +331,33 @@ export default function CitizensPage() {
       }
       setScopeMeta(data.meta?.scopeUnit ?? null);
       setRequiresUnitSelection(Boolean(data.meta?.requiresUnitSelection));
+      setDataSource(
+        data.meta?.source === "memory"
+          ? "memory"
+          : data.meta?.source === "mysql"
+            ? "mysql"
+            : null,
+      );
+      return list;
     } catch (error) {
       console.error(error);
+      return null;
     } finally {
-      if (!opts?.silent) setLoading(false);
+      if (seq === fetchSeqRef.current && !opts?.silent) setLoading(false);
     }
-  };
+  }, [
+    search,
+    page,
+    pageSize,
+    callIntentFilter,
+    campaignId,
+    educationLevelFilter,
+    healthGradeFilter,
+    effectiveUnitCode,
+    sessionLevel,
+    ageScope,
+    isArchive,
+  ]);
 
   const fetchPendingArchive = useCallback(async (opts?: { silent?: boolean }) => {
     if (!isArchive || sessionLevel === null) return;
@@ -452,11 +488,33 @@ export default function CitizensPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (sessionLevel === null) return;
-    fetchCitizens();
-  }, [page, pageSize, search, callIntentFilter, campaignId, educationLevelFilter, healthGradeFilter, effectiveUnitCode, sessionLevel, ageScope, isArchive]);
+    const intent = searchParams.get("callIntent");
+    if (intent === null) return;
+    const allowed = new Set([
+      "",
+      "unset",
+      "du_kien_goi",
+      "du_bi",
+      "de_xuat_khong_goi",
+      "khong_goi",
+      "khong_duyet_khong_goi",
+      "khong_duyet_tam_hoan",
+      "__tai_ngu__",
+      "__hoan__",
+      "__tinh_tra_ve__",
+      "province_returned",
+    ]);
+    if (!allowed.has(intent)) return;
+    setCallIntentFilter(intent);
+    setPage(1);
+  }, [searchParams]);
 
-  // Realtime: tab khác thêm hồ sơ → làm mới danh sách; poll khi tab đang mở
+  useEffect(() => {
+    if (sessionLevel === null) return;
+    void fetchCitizens();
+  }, [fetchCitizens, sessionLevel]);
+
+  // Realtime / poll: luôn dùng fetchCitizens mới nhất (kèm tab lọc hiện tại)
   useEffect(() => {
     if (sessionLevel === null) return;
     const refresh = () => {
@@ -473,8 +531,7 @@ export default function CitizensPage() {
       window.removeEventListener("focus", onFocus);
       window.clearInterval(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ gắn listener theo phiên / phạm vi
-  }, [sessionLevel, effectiveUnitCode, ageScope, isArchive]);
+  }, [sessionLevel, fetchCitizens]);
 
   useEffect(() => {
     if (sessionLevel === null) return;
@@ -543,7 +600,7 @@ export default function CitizensPage() {
     setFormOpen(true);
   };
 
-  const openEdit = (citizen: Citizen) => {
+  const openEdit = async (citizen: Citizen) => {
     if (
       citizen.approvalStatus === "approved" &&
       (citizen.militaryStatusLocked || citizen.militaryStatus === "nhapngu")
@@ -552,8 +609,16 @@ export default function CitizensPage() {
       return;
     }
     setFormMode("edit");
-    setEditCitizen(citizen);
     setFormPrefill(null);
+    try {
+      const res = await fetch(
+        `/api/admin/citizens/${encodeURIComponent(citizen.id)}`,
+      );
+      const full = res.ok ? await res.json() : null;
+      setEditCitizen(full && full.id ? (full as Citizen) : citizen);
+    } catch {
+      setEditCitizen(citizen);
+    }
     setFormOpen(true);
   };
 
@@ -575,30 +640,16 @@ export default function CitizensPage() {
     const cccd = data.cccd.trim();
     setSearch(cccd);
     setPage(1);
-    setLoading(true);
     try {
-      const query = new URLSearchParams({
-        page: "1",
-        limit: "50",
-        ageScope: "all",
+      const list = await fetchCitizens({
         search: cccd,
-        // Bộ: luôn tra CCCD toàn quốc; Tỉnh/Xã: theo phạm vi đơn vị
-        ...(sessionLevel === "bo"
-          ? { nationwide: "1" }
-          : effectiveUnitCode
-            ? { unitCode: effectiveUnitCode }
-            : {}),
+        page: 1,
+        lookupCccd: true,
       });
-      const res = await fetch(`/api/admin/citizens?${query.toString()}`);
-      if (!res.ok) throw new Error("lookup failed");
-      const payload = await res.json();
-      const list: Citizen[] = Array.isArray(payload.data) ? payload.data : [];
-      setCitizens(list);
-      setTotalPages(payload.totalPages ?? 1);
-      setTotalCount(payload.total ?? list.length);
-      setScopeMeta(payload.meta?.scopeUnit ?? null);
-      setRequiresUnitSelection(false);
-
+      if (!list) {
+        alert("Không tra cứu được CCCD. Thử lại hoặc tìm thủ công.");
+        return;
+      }
       const exact = list.filter((c) => c.cccd === cccd);
       if (exact.length === 1) {
         setViewCitizen(exact[0]!);
@@ -609,8 +660,6 @@ export default function CitizensPage() {
       }
     } catch {
       alert("Không tra cứu được CCCD. Thử lại hoặc tìm thủ công.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -650,7 +699,7 @@ export default function CitizensPage() {
     return { bg: "color-mix(in srgb, var(--m3-error, #ba1a1a) 10%, transparent)", color: "var(--m3-error, #ba1a1a)" };
   };
 
-  const TABLE_COLS = 8;
+  const TABLE_COLS = 9;
 
   const pageItems = buildPageItems(page, totalPages);
   const selectedCampaign = campaigns.find((c) => c.id === campaignId);
@@ -660,6 +709,12 @@ export default function CitizensPage() {
 
   return (
     <div className="space-y-4 pb-6">
+      {dataSource === "memory" && (
+        <div className="rounded-[14px] border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-950">
+          Không kết nối được MySQL — đang xem dữ liệu demo tạm. Hồ sơ thật vẫn
+          trong database. Hãy khởi động lại MySQL (XAMPP) rồi tải lại trang.
+        </div>
+      )}
       {/* Header kiểu hiện đại: tiêu đề + pill lọc + CTA */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -669,34 +724,38 @@ export default function CitizensPage() {
           {(sessionLevel === "bo" || sessionLevel === "tinh") && (
             <>
               {sessionLevel === "bo" && (
-                <select
-                  className={`${SELECT_CLS} max-w-[180px]`}
+                <SearchableSelect
+                  variant="compact"
+                  className="max-w-[200px] min-w-[160px]"
                   value={filterTinh}
-                  onChange={(e) => handleTinhChange(e.target.value)}
-                  aria-label="Chọn tỉnh thành phố"
-                >
-                  <option value="">Tỉnh / TP</option>
-                  {provinces.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleTinhChange}
+                  ariaLabel="Chọn tỉnh thành phố"
+                  placeholder="Tỉnh / TP"
+                  options={[
+                    { value: "", label: "Tỉnh / TP" },
+                    ...provinces.map((p) => ({
+                      value: p.code,
+                      label: p.name,
+                    })),
+                  ]}
+                />
               )}
               {filterTinh && (
-                <select
-                  className={`${SELECT_CLS} max-w-[160px]`}
+                <SearchableSelect
+                  variant="compact"
+                  className="max-w-[180px] min-w-[140px]"
                   value={filterXa}
-                  onChange={(e) => handleXaChange(e.target.value)}
-                  aria-label="Chọn xã phường"
-                >
-                  <option value="">Tất cả xã</option>
-                  {wards.map((w) => (
-                    <option key={w.code} value={w.code}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleXaChange}
+                  ariaLabel="Chọn xã phường"
+                  placeholder="Tất cả xã"
+                  options={[
+                    { value: "", label: "Tất cả xã" },
+                    ...wards.map((w) => ({
+                      value: w.code,
+                      label: w.name,
+                    })),
+                  ]}
+                />
               )}
             </>
           )}
@@ -1022,6 +1081,7 @@ export default function CitizensPage() {
           <table className="w-full min-w-[880px] text-left">
             <thead className="sticky top-0 z-20">
               <tr className="border-b border-black/[0.06] text-[12px] font-semibold text-m3-on-surface-variant">
+                <th className="bg-[#f1f5f9] px-3 py-3 font-semibold w-14">Ảnh</th>
                 <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Họ và tên</th>
                 <th className="bg-[#f1f5f9] px-4 py-3 font-semibold">Mã / CCCD</th>
                 <th className="hidden bg-[#f1f5f9] px-4 py-3 font-semibold sm:table-cell">Ngày sinh</th>
@@ -1062,12 +1122,29 @@ export default function CitizensPage() {
                       : ageTone === "warn"
                         ? "shadow-[inset_3px_0_0_0_#f59e0b]"
                         : "";
-                  const noteText = citizen.militaryStatusReason?.trim() || "";
+                  const rawReason = citizen.militaryStatusReason?.trim() || "";
+                  const noteText =
+                    citizen.provinceComment?.trim() ||
+                    citizen.approvalComment?.trim() ||
+                    (rawReason && rawReason !== RETURN_TAM_HOAN_MARKER
+                      ? rawReason
+                      : "");
                   return (
                     <tr
                       key={citizen.id}
                       className={`group border-b border-black/[0.04] transition-colors hover:bg-sky-50/70 ${stripe} ${ageBar}`}
                     >
+                      <td className="px-3 py-2.5">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={resolveCitizenAvatarSrc(
+                            citizen.avatar,
+                            citizen.fullName,
+                          )}
+                          alt=""
+                          className="h-11 w-9 rounded-lg object-cover shadow-sm ring-1 ring-black/[0.06]"
+                        />
+                      </td>
                       <td className="px-4 py-3.5">
                         <button
                           type="button"
@@ -1329,20 +1406,29 @@ export default function CitizensPage() {
             setViewCitizen((cur) =>
               cur?.id === saved.id ? { ...cur, ...saved } : cur,
             );
+            publishCitizensChanged({
+              type: "citizen-updated",
+              id: saved?.id,
+            });
+            void fetchCitizens({ silent: true });
           } else if (saved) {
+            // Chuyển tab Hồ sơ mới — useEffect theo callIntentFilter sẽ tải lại danh sách
+            const alreadyOnNewTab = callIntentFilter === "unset";
+            setCallIntentFilter("unset");
+            setPage(1);
             setCitizens((prev) => [
               saved,
               ...prev.filter((c) => c.id !== saved.id),
             ]);
             setTotalCount((n) => n + 1);
+            publishCitizensChanged({
+              type: "citizen-created",
+              id: saved?.id,
+            });
+            if (alreadyOnNewTab) {
+              void fetchCitizens({ silent: true });
+            }
           }
-          publishCitizensChanged(
-            result?.mode === "edit"
-              ? { type: "citizen-updated", id: saved?.id }
-              : { type: "citizen-created", id: saved?.id },
-          );
-          // Đồng bộ nền theo bộ lọc hiện tại (không đổi ô tìm kiếm)
-          void fetchCitizens({ silent: true });
           window.setTimeout(() => setSaveNotice(null), 6000);
         }}
       />

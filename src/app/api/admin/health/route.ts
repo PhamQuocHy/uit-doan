@@ -9,6 +9,7 @@ import { findHealthByCitizenId, insertHealthExam } from "@/lib/citizen-profile-d
 import { pingDb } from "@/lib/db";
 import {
   canEnterHealthRecords,
+  canEnterExamRoundAtLevel,
   detailedRecordForYear,
   getAvailableExamRounds,
   isScreeningPass,
@@ -16,6 +17,7 @@ import {
   type HealthExamRound,
 } from "@/lib/health-exam";
 import { isValidNvqsExamYear } from "@/lib/nvqs-lifecycle";
+import { listCitizenCampaignHistory } from "@/lib/citizen-campaigns-db";
 
 async function findCitizen(citizenId: string) {
   if (await pingDb()) {
@@ -142,10 +144,28 @@ export async function POST(request: NextRequest) {
     }
 
     const examYear = Number(year);
-    if (!isValidNvqsExamYear(citizen.dateOfBirth, examYear)) {
+    const hist = await listCitizenCampaignHistory(citizenId);
+    const campaignYears = hist
+      .map((h) => h.campaignYear)
+      .filter((y): y is number => y != null && Number.isFinite(y));
+    if (citizen.campaignId) {
+      const { findCampaignByIdFromDb } = await import("@/lib/campaigns-db");
+      const camp = await findCampaignByIdFromDb(citizen.campaignId);
+      if (camp?.year) campaignYears.push(camp.year);
+    }
+    const throughYear = Math.max(
+      examYear,
+      ...(campaignYears.length ? campaignYears : [examYear]),
+    );
+    if (
+      !isValidNvqsExamYear(citizen.dateOfBirth, examYear, new Date(), {
+        throughYear,
+        campaignYears,
+      })
+    ) {
       return NextResponse.json(
         {
-          error: `Năm ${examYear} không nằm trong cửa sổ khám NVQS (18–27 tuổi theo năm sinh).`,
+          error: `Năm ${examYear} không nằm trong cửa sổ khám NVQS (18–27 tuổi theo năm sinh / đợt tuyển).`,
         },
         { status: 400 },
       );
@@ -194,6 +214,16 @@ export async function POST(request: NextRequest) {
         { error: "Không thể nhập vòng khám này theo quy trình hiện tại." },
         { status: 400 },
       );
+    }
+
+    if (
+      !canEnterExamRoundAtLevel(round, session.hierarchyLevel)
+    ) {
+      const msg =
+        round === "screening"
+          ? "Chỉ nhân viên cấp xã được nhập Vòng 1 (sơ tuyển)."
+          : "Chỉ nhân viên cấp tỉnh được nhập Vòng 2 (khám chi tiết).";
+      return NextResponse.json({ error: msg }, { status: 403 });
     }
 
     const visionParts = String(vision || "—").split("/");

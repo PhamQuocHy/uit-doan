@@ -5,9 +5,8 @@ import { Eye, RefreshCw, Search } from "lucide-react";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import { buildPageItems } from "@/components/admin/list-ui";
-import {
-  subscribeCitizensChanged,
-} from "@/lib/citizens-realtime";
+import { subscribeCitizensChanged } from "@/lib/citizens-realtime";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const SELECT_CLS =
   "h-9 min-w-0 rounded-full border border-black/[0.08] bg-white px-3.5 pr-8 text-[13px] font-medium text-m3-on-surface outline-none transition-colors hover:border-m3-primary/30 focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/10";
@@ -17,6 +16,12 @@ const STATUS_OPTIONS = [
   { value: "dangkham", label: "Đang khám" },
   { value: "", label: "Tất cả trạng thái" },
 ] as const;
+
+type CampaignOption = {
+  id: string;
+  name: string;
+  year: number;
+};
 
 /**
  * Danh sách chờ khám sức khỏe — realtime để cán bộ y tế nhập tiếp sau khi thêm hồ sơ.
@@ -36,6 +41,8 @@ export default function HealthQueuePage() {
   const [filterXa, setFilterXa] = useState("");
   const [provinces, setProvinces] = useState<HierarchyUnit[]>([]);
   const [wards, setWards] = useState<HierarchyUnit[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [campaignId, setCampaignId] = useState("");
   const [requiresUnit, setRequiresUnit] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
 
@@ -73,6 +80,7 @@ export default function HealthQueuePage() {
           ageScope: "active",
           ...(search.trim() && { search: search.trim() }),
           ...(militaryStatus && { militaryStatus }),
+          ...(campaignId && { campaignId }),
           ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
         });
         const res = await fetch(`/api/admin/citizens?${query.toString()}`, {
@@ -94,7 +102,7 @@ export default function HealthQueuePage() {
         if (!opts?.silent) setLoading(false);
       }
     },
-    [sessionLevel, page, search, militaryStatus, effectiveUnitCode],
+    [sessionLevel, page, search, militaryStatus, campaignId, effectiveUnitCode],
   );
 
   useEffect(() => {
@@ -118,6 +126,18 @@ export default function HealthQueuePage() {
         setSessionLevel(null);
         setSessionUnitCode(null);
       });
+
+    fetch("/api/admin/recruitment?limit=100")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const list = (data?.data || data?.items || []) as CampaignOption[];
+        setCampaigns(
+          [...list].sort(
+            (a, b) => b.year - a.year || a.name.localeCompare(b.name, "vi"),
+          ),
+        );
+      })
+      .catch(() => setCampaigns([]));
   }, [loadWards]);
 
   useEffect(() => {
@@ -143,6 +163,8 @@ export default function HealthQueuePage() {
   }, [sessionLevel, fetchList]);
 
   const pageItems = buildPageItems(page, totalPages);
+  const showLocalityFilters =
+    sessionLevel === "bo" || sessionLevel === "tinh";
 
   return (
     <div className="space-y-4 pb-6">
@@ -151,48 +173,83 @@ export default function HealthQueuePage() {
           <h1 className="text-[24px] font-bold tracking-tight text-m3-on-surface">
             Khám sức khỏe
           </h1>
-          {(sessionLevel === "bo" || sessionLevel === "tinh") && (
+
+          {campaigns.length > 0 && (
+            <select
+              className={`${SELECT_CLS} max-w-[min(100%,360px)] min-w-[200px]`}
+              value={campaignId}
+              onChange={(e) => {
+                setCampaignId(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Đợt khám"
+            >
+              <option value="">Tất cả đợt khám</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.year} · {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {showLocalityFilters && (
             <>
               {sessionLevel === "bo" && (
-                <select
-                  className={`${SELECT_CLS} max-w-[180px]`}
+                <SearchableSelect
+                  variant="compact"
+                  className="max-w-[200px] min-w-[160px]"
                   value={filterTinh}
-                  onChange={(e) => {
-                    setFilterTinh(e.target.value);
+                  onChange={(code) => {
+                    setFilterTinh(code);
                     setFilterXa("");
                     setPage(1);
-                    void loadWards(e.target.value);
+                    void loadWards(code);
                   }}
-                  aria-label="Chọn tỉnh"
-                >
-                  <option value="">Tỉnh / TP</option>
-                  {provinces.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Chọn tỉnh"
+                  placeholder="Tỉnh / TP"
+                  options={[
+                    { value: "", label: "Tỉnh / TP" },
+                    ...provinces.map((p) => ({
+                      value: p.code,
+                      label: p.name,
+                    })),
+                  ]}
+                />
               )}
-              {filterTinh && (
-                <select
-                  className={`${SELECT_CLS} max-w-[200px]`}
+              {(sessionLevel === "tinh" || filterTinh) && (
+                <SearchableSelect
+                  variant="compact"
+                  className="max-w-[240px] min-w-[180px]"
                   value={filterXa}
-                  onChange={(e) => {
-                    setFilterXa(e.target.value);
+                  onChange={(code) => {
+                    setFilterXa(code);
                     setPage(1);
                   }}
-                  aria-label="Chọn xã"
-                >
-                  <option value="">Tất cả xã / phường</option>
-                  {wards.map((w) => (
-                    <option key={w.code} value={w.code}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                  ariaLabel="Chọn địa phương"
+                  placeholder={
+                    sessionLevel === "tinh"
+                      ? "Tất cả địa phương thuộc tỉnh"
+                      : "Tất cả xã / phường"
+                  }
+                  options={[
+                    {
+                      value: "",
+                      label:
+                        sessionLevel === "tinh"
+                          ? "Tất cả địa phương thuộc tỉnh"
+                          : "Tất cả xã / phường",
+                    },
+                    ...wards.map((w) => ({
+                      value: w.code,
+                      label: w.name,
+                    })),
+                  ]}
+                />
               )}
             </>
           )}
+
           {!requiresUnit && (
             <span className="rounded-full bg-emerald-600/10 px-3 py-1 text-[12px] font-semibold text-emerald-800">
               {totalCount.toLocaleString("vi-VN")} hồ sơ
@@ -215,7 +272,11 @@ export default function HealthQueuePage() {
       </div>
 
       <p className="text-[14px] text-m3-on-surface-variant">
-        Danh sách công dân chờ nhập khám — tự cập nhật khi có hồ sơ mới.
+        {sessionLevel === "xa"
+          ? "Cấp xã nhập Vòng 1 (sơ tuyển). Danh sách tự cập nhật khi có hồ sơ mới."
+          : sessionLevel === "tinh"
+            ? "Cấp tỉnh nhập Vòng 2 (khám chi tiết) sau khi xã hoàn thành sơ tuyển đạt."
+            : "Danh sách công dân chờ nhập khám — tự cập nhật khi có hồ sơ mới."}
       </p>
 
       {requiresUnit && (

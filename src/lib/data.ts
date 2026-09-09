@@ -148,6 +148,18 @@ export interface Citizen {
   militaryStatusReason?: string;
   /** DB: approval_comment — nhận xét QK khi trả đề xuất */
   approvalComment?: string | null;
+  /** DB: pipeline_status — xã→tỉnh→QK */
+  pipelineStatus?:
+    | "none"
+    | "local_ready"
+    | "province_pending"
+    | "province_ok"
+    | "province_returned"
+    | "qk_pending";
+  /** DB: province_comment — lý do tỉnh trả về */
+  provinceComment?: string | null;
+  /** DB: province_reviewed_at */
+  provinceReviewedAt?: string | null;
   /** Khóa chỉnh sửa trạng thái NVQS trực tiếp sau khi đã lưu — DB: military_status_locked */
   militaryStatusLocked?: boolean;
   /** DB: archived_at — đã duyệt chuyển hồ sơ lưu trữ */

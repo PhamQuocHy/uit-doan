@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/admin/Sidebar";
 import Topbar from "@/components/admin/Topbar";
@@ -10,6 +10,8 @@ import { M3ThemeProvider } from "@/components/m3";
 const pageTitles: Record<string, string> = {
   "/admin": "Tổng quan",
   "/admin/citizens": "Hồ sơ công dân",
+  "/admin/health": "Khám sức khỏe",
+  "/admin/citizen-archive": "Hồ sơ lưu trữ",
   "/admin/ai-voice": "Nhận diện khuôn mặt và giọng nói",
   "/admin/ai-face": "Nhận diện khuôn mặt và giọng nói",
   "/admin/recruitment": "Đợt khám tuyển",
@@ -27,6 +29,8 @@ const pageTitles: Record<string, string> = {
   "/admin/logs": "Nhật ký hệ thống",
   "/admin/settings": "Cài đặt hệ thống",
 };
+
+const Y_TE_ALLOWED_PREFIXES = ["/admin/health"];
 
 export default function AdminLayoutClient({
   children,
@@ -46,6 +50,14 @@ export default function AdminLayoutClient({
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (userFunctionalRole !== "y_te") return;
+    const ok = Y_TE_ALLOWED_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    );
+    if (!ok) router.replace("/admin/health");
+  }, [userFunctionalRole, pathname, router]);
 
   const title = pageTitles[pathname] || "Admin";
 
