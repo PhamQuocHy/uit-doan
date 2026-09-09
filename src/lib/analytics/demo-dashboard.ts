@@ -24,7 +24,15 @@ export function buildDemoAnalyticsDashboard(unitCode = "bo"): AnalyticsDashboard
   const exempted = statusCounts.miengoi || 0;
   const inService = statusCounts.nhapngu || 0;
   const examining = statusCounts.dangkham || 0;
-  const passed = statusCounts.trungtuyen || 0;
+  const passed = (statusCounts.trungtuyen || 0) + inService;
+  const unassignedReceiving = citizens.filter(
+    (c) =>
+      c.militaryStatus === "nhapngu" &&
+      (!c.receivingUnitCode ||
+        c.receivingStatus === "chua_phan_quan" ||
+        !c.receivingStatus),
+  ).length;
+  const assignedReceiving = Math.max(0, inService - unassignedReceiving);
 
   const defermentMap = citizens
     .filter((c) => c.militaryStatusReason && c.militaryStatus === "tamhoan")
@@ -51,6 +59,8 @@ export function buildDemoAnalyticsDashboard(unitCode = "bo"): AnalyticsDashboard
       inService,
       examining,
       passed,
+      unassignedReceiving,
+      assignedReceiving,
     },
     funnel,
     recruitmentStatsByYear: [

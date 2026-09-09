@@ -63,4 +63,10 @@ export type { M3BreadcrumbItem } from "./Breadcrumb";
 export { M3StateLayer, M3Surface } from "./Surface";
 export { M3Card } from "./Card";
 export type { M3CardProps, M3CardVariant } from "./Card";
+export { M3Snackbar, M3ConfirmDialog } from "./Snackbar";
+export type {
+  M3SnackbarProps,
+  M3SnackbarTone,
+  M3ConfirmDialogProps,
+} from "./Snackbar";
 export { useRipple, RippleStyles, withRippleHostStyle } from "./useRipple";

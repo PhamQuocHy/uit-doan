@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
-import { Search, Plus, Eye, Pencil, Trash2, SlidersHorizontal, CalendarDays, CheckSquare, MapPinned, X, Bell, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Eye, Pencil, Trash2, SlidersHorizontal, CheckSquare, GraduationCap, HeartPulse, X, Bell, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import CitizenFormModal from "@/components/admin/CitizenFormModal";
 import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
@@ -24,8 +24,30 @@ import {
 const CALL_FILTER_OPTIONS = [
   { value: "", label: "Tất cả dự kiến" },
   { value: "du_kien_goi", label: "Dự kiến gọi" },
+  { value: "du_bi", label: "Dự bị" },
+  { value: "de_xuat_khong_goi", label: "Đề xuất không gọi" },
   { value: "khong_goi", label: "Không gọi" },
   { value: "unset", label: "Chưa xác định" },
+] as const;
+
+const EDUCATION_FILTER_OPTIONS = [
+  { value: "", label: "Tất cả trình độ" },
+  { value: "THPT", label: "THPT / phổ thông" },
+  { value: "Trung cấp", label: "Trung cấp" },
+  { value: "Cao đẳng", label: "Cao đẳng" },
+  { value: "Đại học", label: "Đại học" },
+  { value: "Sau đại học", label: "Sau đại học" },
+] as const;
+
+const HEALTH_FILTER_OPTIONS = [
+  { value: "", label: "Tất cả phân loại" },
+  { value: "1", label: "Loại 1" },
+  { value: "2", label: "Loại 2" },
+  { value: "3", label: "Loại 3" },
+  { value: "4", label: "Loại 4" },
+  { value: "5", label: "Loại 5" },
+  { value: "6", label: "Loại 6" },
+  { value: "none", label: "Chưa phân loại" },
 ] as const;
 
 const SELECT_CLS =
@@ -34,8 +56,11 @@ const SELECT_CLS =
 const STATUS_TABS = [
   { value: "", label: "Tất cả" },
   { value: "du_kien_goi", label: "Dự kiến gọi" },
+  { value: "du_bi", label: "Dự bị" },
+  { value: "de_xuat_khong_goi", label: "Đề xuất không gọi" },
   { value: "khong_goi", label: "Không gọi" },
   { value: "unset", label: "Chưa xác định" },
+  { value: "__tai_ngu__", label: "Tại ngũ" },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -53,6 +78,44 @@ type CampaignOption = {
   startDate: string;
 };
 
+type StatusSummary = {
+  du_kien_goi: number;
+  du_bi: number;
+  hoan: number;
+  khong_goi: number;
+};
+
+const STATUS_SUMMARY_BOXES = [
+  {
+    key: "du_kien_goi" as const,
+    filter: "du_kien_goi",
+    label: "Dự kiến gọi",
+    color: "var(--color-m3-warning, #b26a00)",
+    bg: "var(--color-m3-warning-container, #fff3cd)",
+  },
+  {
+    key: "du_bi" as const,
+    filter: "du_bi",
+    label: "Dự bị",
+    color: "var(--m3-tertiary, #5a5f6e)",
+    bg: "color-mix(in srgb, var(--m3-tertiary, #5a5f6e) 12%, transparent)",
+  },
+  {
+    key: "hoan" as const,
+    filter: "__hoan__",
+    label: "Hoãn",
+    color: "var(--m3-primary, #1a73e8)",
+    bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)",
+  },
+  {
+    key: "khong_goi" as const,
+    filter: "khong_goi",
+    label: "Không gọi",
+    color: "var(--m3-error, #ba1a1a)",
+    bg: "var(--m3-error-container, #ffdad6)",
+  },
+] as const;
+
 export default function CitizensPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -65,6 +128,12 @@ export default function CitizensPage() {
   const [pageSize, setPageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [statusSummary, setStatusSummary] = useState<StatusSummary>({
+    du_kien_goi: 0,
+    du_bi: 0,
+    hoan: 0,
+    khong_goi: 0,
+  });
   const [callIntentFilter, setCallIntentFilter] = useState("");
   const [viewCitizen, setViewCitizen] = useState<Citizen | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -82,9 +151,14 @@ export default function CitizensPage() {
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [campaignId, setCampaignId] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [draftCampaignId, setDraftCampaignId] = useState("");
   const [draftCallIntent, setDraftCallIntent] = useState("");
-  const [filterTab, setFilterTab] = useState<"campaign" | "status" | "location">("campaign");
+  const [draftEducationLevel, setDraftEducationLevel] = useState("");
+  const [draftHealthGrade, setDraftHealthGrade] = useState("");
+  const [educationLevelFilter, setEducationLevelFilter] = useState("");
+  const [healthGradeFilter, setHealthGradeFilter] = useState("");
+  const [filterTab, setFilterTab] = useState<"status" | "education" | "health">(
+    "status",
+  );
   const [pendingCitizens, setPendingCitizens] = useState<Citizen[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingOpen, setPendingOpen] = useState(false);
@@ -97,6 +171,8 @@ export default function CitizensPage() {
   const [formPrefill, setFormPrefill] = useState<Hn212CitizenScan | null>(null);
   const [confirmCreateFromNfc, setConfirmCreateFromNfc] =
     useState<Hn212CitizenScan | null>(null);
+  /** Bỏ qua refresh realtime ngay sau khi tự lưu (tránh nhấp nháy / mất danh sách). */
+  const ignoreRealtimeUntilRef = useRef(0);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const effectiveUnitCode =
@@ -188,19 +264,39 @@ export default function CitizensPage() {
         setCitizens([]);
         setTotalPages(0);
         setTotalCount(0);
+        setStatusSummary({
+          du_kien_goi: 0,
+          du_bi: 0,
+          hoan: 0,
+          khong_goi: 0,
+        });
         setScopeMeta(null);
         setRequiresUnitSelection(true);
         return;
       }
 
+      const isTaiNgu = !lookup && !isArchive && callIntentFilter === "__tai_ngu__";
+      const isHoan = !lookup && !isArchive && callIntentFilter === "__hoan__";
       const query = new URLSearchParams({
         page: String(qPage),
         limit: String(lookup ? Math.max(pageSize, 50) : pageSize),
-        ageScope: lookup ? "all" : ageScope,
+        // Tại ngũ: danh sách không giới hạn tuổi; box số liệu vẫn theo tuổi NVQS (summaryAgeScope)
+        ageScope: lookup || isTaiNgu ? "all" : ageScope,
+        summaryAgeScope: ageScope === "archive" ? "archive" : "active",
         ...(searchTrim && { search: searchTrim }),
         // Tra cứu CCCD: không lọc đợt/dự kiến — tránh “không thấy” dù đã có hồ sơ
-        ...(!lookup && !isArchive && callIntentFilter && { callIntent: callIntentFilter }),
+        ...(!lookup &&
+          !isArchive &&
+          callIntentFilter &&
+          callIntentFilter !== "__tai_ngu__" &&
+          callIntentFilter !== "__hoan__" && {
+            callIntent: callIntentFilter,
+          }),
+        ...(isTaiNgu && { militaryStatus: "nhapngu" }),
+        ...(isHoan && { militaryStatus: "tamhoan" }),
         ...(!lookup && !isArchive && campaignId && { campaignId }),
+        ...(!lookup && !isArchive && educationLevelFilter && { educationLevel: educationLevelFilter }),
+        ...(!lookup && !isArchive && healthGradeFilter && { healthGrade: healthGradeFilter }),
         ...(effectiveUnitCode && { unitCode: effectiveUnitCode }),
         ...(nationwideBo && { nationwide: "1" }),
       });
@@ -210,6 +306,14 @@ export default function CitizensPage() {
       setCitizens(Array.isArray(data.data) ? data.data : []);
       setTotalPages(data.totalPages);
       setTotalCount(data.total ?? 0);
+      if (data.summary) {
+        setStatusSummary({
+          du_kien_goi: Number(data.summary.du_kien_goi || 0),
+          du_bi: Number(data.summary.du_bi || 0),
+          hoan: Number(data.summary.hoan || 0),
+          khong_goi: Number(data.summary.khong_goi || 0),
+        });
+      }
       setScopeMeta(data.meta?.scopeUnit ?? null);
       setRequiresUnitSelection(Boolean(data.meta?.requiresUnitSelection));
     } catch (error) {
@@ -341,19 +445,23 @@ export default function CitizensPage() {
 
   useEffect(() => {
     const q = searchParams.get("search");
-    if (q) setSearch(q);
+    if (q !== null) {
+      setSearch(q);
+      setPage(1);
+    }
   }, [searchParams]);
 
   useEffect(() => {
     if (sessionLevel === null) return;
     fetchCitizens();
-  }, [page, pageSize, search, callIntentFilter, campaignId, effectiveUnitCode, sessionLevel, ageScope, isArchive]);
+  }, [page, pageSize, search, callIntentFilter, campaignId, educationLevelFilter, healthGradeFilter, effectiveUnitCode, sessionLevel, ageScope, isArchive]);
 
   // Realtime: tab khác thêm hồ sơ → làm mới danh sách; poll khi tab đang mở
   useEffect(() => {
     if (sessionLevel === null) return;
     const refresh = () => {
       if (document.visibilityState === "hidden") return;
+      if (Date.now() < ignoreRealtimeUntilRef.current) return;
       void fetchCitizens({ silent: true });
     };
     const unsub = subscribeCitizensChanged(() => refresh());
@@ -378,6 +486,8 @@ export default function CitizensPage() {
     if (isArchive) {
       setCampaignId("");
       setCallIntentFilter("");
+      setEducationLevelFilter("");
+      setHealthGradeFilter("");
       return;
     }
     fetch("/api/admin/recruitment?limit=100")
@@ -406,18 +516,25 @@ export default function CitizensPage() {
   };
 
   const openFilters = () => {
-    setDraftCampaignId(campaignId);
     setDraftCallIntent(callIntentFilter);
-    setFilterTab("campaign");
+    setDraftEducationLevel(educationLevelFilter);
+    setDraftHealthGrade(healthGradeFilter);
+    setFilterTab("status");
     setFilterOpen(true);
   };
 
   const applyFilters = () => {
-    setCampaignId(draftCampaignId);
     setCallIntentFilter(draftCallIntent);
+    setEducationLevelFilter(draftEducationLevel);
+    setHealthGradeFilter(draftHealthGrade);
     setPage(1);
     setFilterOpen(false);
   };
+
+  const activeAdvancedFilterCount =
+    Number(Boolean(callIntentFilter)) +
+    Number(Boolean(educationLevelFilter)) +
+    Number(Boolean(healthGradeFilter));
 
   const openCreate = (prefill?: Hn212CitizenScan | null) => {
     setFormMode("create");
@@ -619,9 +736,9 @@ export default function CitizensPage() {
               >
                 <SlidersHorizontal size={15} />
                 Bộ lọc
-                {(callIntentFilter || campaignId) && (
+                {(activeAdvancedFilterCount > 0 || campaignId) && (
                   <span className="rounded-full bg-m3-primary px-1.5 text-[10px] text-white">
-                    {Number(Boolean(callIntentFilter)) + Number(Boolean(campaignId))}
+                    {activeAdvancedFilterCount + Number(Boolean(campaignId))}
                   </span>
                 )}
               </button>
@@ -733,6 +850,46 @@ export default function CitizensPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {!isArchive && !requiresUnitSelection && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {STATUS_SUMMARY_BOXES.map((box) => {
+            const active = callIntentFilter === box.filter;
+            const count = statusSummary[box.key];
+            return (
+              <button
+                key={box.key}
+                type="button"
+                onClick={() => {
+                  setCallIntentFilter(active ? "" : box.filter);
+                  setPage(1);
+                }}
+                className={`rounded-[16px] border bg-white p-4 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all ${
+                  active
+                    ? "border-m3-primary/40 ring-2 ring-m3-primary/15"
+                    : "border-black/[0.06] hover:border-black/[0.12]"
+                }`}
+              >
+                <p className="text-[13px] font-medium text-m3-on-surface-variant">
+                  {box.label}
+                </p>
+                <p
+                  className="mt-1.5 text-2xl font-bold tabular-nums"
+                  style={{ color: box.color }}
+                >
+                  {count.toLocaleString("vi-VN")}
+                </p>
+                <span
+                  className="mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                  style={{ color: box.color, background: box.bg }}
+                >
+                  hồ sơ
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -876,7 +1033,7 @@ export default function CitizensPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && citizens.length === 0 ? (
                 <tr>
                   <td colSpan={TABLE_COLS} className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant">
                     Đang tải dữ liệu...
@@ -1010,7 +1167,7 @@ export default function CitizensPage() {
                                 {!isApprovedLocked(citizen) && (
                                   <button
                                     type="button"
-                                    title="Sửa"
+                                    title="Sửa nhanh"
                                     onClick={() => openEdit(citizen)}
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-m3-on-surface-variant hover:bg-sky-50 hover:text-sky-600"
                                   >
@@ -1063,16 +1220,64 @@ export default function CitizensPage() {
             <div className="flex items-center gap-2"><SlidersHorizontal size={20} className="text-m3-primary" /><h2 className="text-lg font-bold text-m3-on-surface">Bộ lọc nâng cao</h2></div>
             <button type="button" onClick={() => setFilterOpen(false)} className="rounded-lg p-2 text-m3-on-surface-variant hover:bg-m3-surface-container"><X size={19} /></button>
           </div>
-          <div className="grid max-h-[calc(100vh-190px)] overflow-y-auto md:grid-cols-[220px_1fr] md:overflow-hidden">
+          <div className="grid max-h-[calc(100vh-190px)] overflow-y-auto md:grid-cols-[280px_1fr] md:overflow-hidden">
             <div className="border-b border-m3-outline-variant bg-m3-surface-container-low p-4 md:border-b-0 md:border-r">
-              <button type="button" onClick={() => setFilterTab("campaign")} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "campaign" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><CalendarDays size={19} /> Đợt khám tuyển</button>
-              <button type="button" onClick={() => setFilterTab("status")} className={`mt-2 flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "status" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><CheckSquare size={19} /> Trạng thái gọi</button>
-              <button type="button" onClick={() => setFilterTab("location")} className={`mt-2 flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "location" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><MapPinned size={19} /> Địa phương</button>
+              <button type="button" onClick={() => setFilterTab("status")} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "status" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><CheckSquare size={19} /> Trạng thái gọi</button>
+              <button type="button" onClick={() => setFilterTab("education")} className={`mt-2 flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "education" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><GraduationCap size={19} /> Trình độ học vấn</button>
+              <button type="button" onClick={() => setFilterTab("health")} className={`mt-2 flex min-h-[48px] w-full items-center gap-3 rounded-xl px-4 text-left text-[15px] font-semibold ${filterTab === "health" ? "bg-m3-primary-container text-m3-on-primary-container" : "text-m3-on-surface-variant hover:bg-m3-surface-container"}`}><HeartPulse size={19} /> Sức khỏe</button>
             </div>
             <div className="min-h-[230px] p-6">
-              {filterTab === "campaign" && <><label className="mb-2 block text-[15px] font-semibold text-m3-on-surface">Chọn đợt khám tuyển</label><select value={draftCampaignId} onChange={(event) => setDraftCampaignId(event.target.value)} className="h-12 w-full rounded-xl border border-m3-outline-variant bg-m3-surface-lowest px-4 text-[15px] outline-none focus:border-m3-primary"><option value="">Tất cả các đợt</option>{campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name} ({campaign.year})</option>)}</select></>}
-              {filterTab === "status" && <div><label className="mb-3 block text-[15px] font-semibold text-m3-on-surface">Trạng thái dự kiến gọi</label><div className="grid gap-3 sm:grid-cols-2">{CALL_FILTER_OPTIONS.map((option) => <button type="button" key={option.value || "all"} onClick={() => setDraftCallIntent(option.value)} className={`min-h-[48px] rounded-xl border px-4 text-left text-[15px] transition-colors ${draftCallIntent === option.value ? "border-m3-primary bg-m3-primary-container font-semibold text-m3-on-primary-container" : "border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-container"}`}>{option.label}</button>)}</div></div>}
-              {filterTab === "location" && <div><p className="mb-3 text-[15px] font-semibold text-m3-on-surface">Địa phương đang xem</p><p className="rounded-xl bg-m3-surface-container-low px-4 py-3 text-[15px] text-m3-on-surface-variant">{scopeMeta?.name || "Chưa chọn địa phương"}</p><p className="mt-3 text-sm text-m3-on-surface-variant">Đổi tỉnh hoặc xã/phường tại thanh lọc phía trên.</p></div>}
+              {filterTab === "status" && (
+                <div>
+                  <label className="mb-3 block text-[15px] font-semibold text-m3-on-surface">Trạng thái dự kiến gọi</label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {CALL_FILTER_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        key={option.value || "all"}
+                        onClick={() => setDraftCallIntent(option.value)}
+                        className={`min-h-[48px] rounded-xl border px-4 text-left text-[15px] transition-colors ${draftCallIntent === option.value ? "border-m3-primary bg-m3-primary-container font-semibold text-m3-on-primary-container" : "border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-container"}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {filterTab === "education" && (
+                <div>
+                  <label className="mb-3 block text-[15px] font-semibold text-m3-on-surface">Trình độ học vấn</label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {EDUCATION_FILTER_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        key={option.value || "all-edu"}
+                        onClick={() => setDraftEducationLevel(option.value)}
+                        className={`min-h-[48px] rounded-xl border px-4 text-left text-[15px] transition-colors ${draftEducationLevel === option.value ? "border-m3-primary bg-m3-primary-container font-semibold text-m3-on-primary-container" : "border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-container"}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {filterTab === "health" && (
+                <div>
+                  <label className="mb-3 block text-[15px] font-semibold text-m3-on-surface">Phân loại sức khỏe</label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {HEALTH_FILTER_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        key={option.value || "all-health"}
+                        onClick={() => setDraftHealthGrade(option.value)}
+                        className={`min-h-[48px] rounded-xl border px-4 text-left text-[15px] transition-colors ${draftHealthGrade === option.value ? "border-m3-primary bg-m3-primary-container font-semibold text-m3-on-primary-container" : "border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-container"}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-m3-outline-variant px-5 py-4"><button type="button" onClick={() => setFilterOpen(false)} className="rounded-xl px-5 py-2.5 text-[15px] font-semibold text-m3-on-surface-variant hover:bg-m3-surface-container">Hủy bỏ</button><button type="button" onClick={applyFilters} className="rounded-xl bg-m3-primary px-6 py-2.5 text-[15px] font-semibold text-white hover:opacity-90">Áp dụng</button></div>
@@ -1109,24 +1314,35 @@ export default function CitizensPage() {
         }}
         onSaved={async (result) => {
           const name = result?.citizen?.fullName?.trim();
-          const cccd = result?.citizen?.cccd?.trim();
+          const saved = result?.citizen;
           setSaveNotice(
             result?.mode === "edit"
               ? "Đã cập nhật hồ sơ công dân."
               : `Đã thêm hồ sơ${name ? ` “${name}”` : ""} thành công.`,
           );
+          // Tránh BroadcastChannel + fetch lọc CCCD làm danh sách nhấp nháy / mất tạm
+          ignoreRealtimeUntilRef.current = Date.now() + 3000;
+          if (result?.mode === "edit" && saved) {
+            setCitizens((prev) =>
+              prev.map((c) => (c.id === saved.id ? { ...c, ...saved } : c)),
+            );
+            setViewCitizen((cur) =>
+              cur?.id === saved.id ? { ...cur, ...saved } : cur,
+            );
+          } else if (saved) {
+            setCitizens((prev) => [
+              saved,
+              ...prev.filter((c) => c.id !== saved.id),
+            ]);
+            setTotalCount((n) => n + 1);
+          }
           publishCitizensChanged(
             result?.mode === "edit"
-              ? { type: "citizen-updated", id: result?.citizen?.id }
-              : { type: "citizen-created", id: result?.citizen?.id },
+              ? { type: "citizen-updated", id: saved?.id }
+              : { type: "citizen-created", id: saved?.id },
           );
-          if (cccd) {
-            setSearch(cccd);
-            setPage(1);
-            await fetchCitizens({ search: cccd, page: 1 });
-          } else {
-            await fetchCitizens();
-          }
+          // Đồng bộ nền theo bộ lọc hiện tại (không đổi ô tìm kiếm)
+          void fetchCitizens({ silent: true });
           window.setTimeout(() => setSaveNotice(null), 6000);
         }}
       />

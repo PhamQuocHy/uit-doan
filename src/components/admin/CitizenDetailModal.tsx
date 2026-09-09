@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, KeyRound, Plus } from "lucide-react";
+import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, Plus } from "lucide-react";
 import type { Citizen, EducationRecord, HealthRecord, ResidenceRecord, ResidenceType } from "@/lib/data";
 import {
   getHealthConclusionMeaning,
@@ -29,7 +29,7 @@ import {
 import DateVnInput from "@/components/admin/DateVnInput";
 import { formatVnDate } from "@/lib/date-vn";
 
-type TabId = "identity" | "education" | "health" | "residence" | "nvqs";
+type TabId = "identity" | "education" | "health" | "residence" | "nvqs" | "comments";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "identity", label: "Định danh" },
@@ -37,6 +37,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "health", label: "Sức khỏe" },
   { id: "residence", label: "Cư trú" },
   { id: "nvqs", label: "NVQS" },
+  { id: "comments", label: "Nhận xét" },
 ];
 
 const EDUCATION_STATUS: Record<
@@ -88,8 +89,9 @@ type NvqsCallChoice = CallIntent | "tamhoan" | "miengoi";
 const NVQS_CALL_OPTIONS: { value: NvqsCallChoice; label: string }[] = [
   { value: "unset", label: "Chưa xác định" },
   { value: "du_kien_goi", label: "Dự kiến gọi (chuyển xét duyệt)" },
-  { value: "khong_goi", label: "Không gọi" },
-  { value: "tamhoan", label: "Tạm hoãn" },
+  { value: "du_bi", label: "Dự bị" },
+  { value: "khong_goi", label: "Đề xuất không gọi" },
+  { value: "tamhoan", label: "Tạm hoãn (chờ Quân khu duyệt)" },
   { value: "miengoi", label: "Miễn gọi" },
 ];
 
@@ -97,12 +99,21 @@ function citizenToNvqsChoice(c: Citizen): NvqsCallChoice {
   if (c.militaryStatus === "tamhoan") return "tamhoan";
   if (c.militaryStatus === "miengoi") return "miengoi";
   if (c.callIntent === "du_kien_goi") return "du_kien_goi";
-  if (c.callIntent === "khong_goi") return "khong_goi";
+  if (c.callIntent === "du_bi") return "du_bi";
+  if (c.callIntent === "khong_goi" || c.callIntent === "de_xuat_khong_goi") {
+    return "khong_goi";
+  }
   return "unset";
 }
 
 function nvqsChoiceNeedsReason(choice: NvqsCallChoice) {
-  return choice === "tamhoan";
+  return choice === "tamhoan" || choice === "khong_goi";
+}
+
+function nvqsChoiceNeedsFiles(choice: NvqsCallChoice): "khong_goi" | "tam_hoan" | null {
+  if (choice === "khong_goi") return "khong_goi";
+  if (choice === "tamhoan") return "tam_hoan";
+  return null;
 }
 
 const NVQS_INPUT_CLS =
@@ -223,6 +234,13 @@ interface CitizenDetailModalProps {
   onEdit?: (citizen: Citizen) => void;
   onCitizenUpdated?: (citizen: Citizen) => void;
   initialTab?: TabId;
+  /**
+   * Chế độ xét duyệt (Quân khu): xem đủ hồ sơ như công dân,
+   * footer chỉ còn Duyệt gọi / Không gọi thay vì Sửa hồ sơ.
+   */
+  approvalReview?: boolean;
+  approvalCampaignId?: string;
+  onApprovalDecision?: (action: "approve" | "reject") => void | Promise<void>;
 }
 
 export default function CitizenDetailModal({
@@ -231,6 +249,9 @@ export default function CitizenDetailModal({
   onEdit: _onEdit,
   onCitizenUpdated,
   initialTab = "identity",
+  approvalReview = false,
+  approvalCampaignId = "",
+  onApprovalDecision,
 }: CitizenDetailModalProps) {
   const [citizen, setCitizen] = useState<Citizen | null>(citizenProp);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -247,13 +268,7 @@ export default function CitizenDetailModal({
   const [residenceLoading, setResidenceLoading] = useState(false);
   const [nvqsCallChoice, setNvqsCallChoice] = useState<NvqsCallChoice>("unset");
   const [nvqsReason, setNvqsReason] = useState("");
-  const [nvqsSaving, setNvqsSaving] = useState(false);
   const [nvqsError, setNvqsError] = useState<string | null>(null);
-  const [nvqsUnlocked, setNvqsUnlocked] = useState(false);
-  const [nvqsPin, setNvqsPin] = useState("");
-  const [nvqsPinError, setNvqsPinError] = useState<string | null>(null);
-  const [nvqsPinVerifying, setNvqsPinVerifying] = useState(false);
-  const [nvqsVerifiedPin, setNvqsVerifiedPin] = useState("");
   const [campaigns, setCampaigns] = useState<{ id: string; name: string; year: number }[]>([]);
   const [campaignId, setCampaignId] = useState("");
   const [sessionLevel, setSessionLevel] = useState<string | null>(null);
@@ -278,24 +293,43 @@ export default function CitizenDetailModal({
   const [resForm, setResForm] = useState<ResAddForm>(emptyResAddForm);
   const [resSaving, setResSaving] = useState(false);
   const [resError, setResError] = useState<string | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  const [nvqsAttachments, setNvqsAttachments] = useState<
+    { id: string; fileName: string; url: string; purpose: string }[]
+  >([]);
+  const [nvqsUploading, setNvqsUploading] = useState(false);
 
-  const isBoLevel = sessionLevel === "bo";
   const needsPinToEdit = sessionLevel !== null && hierarchyNeedsEditPin(sessionLevel);
   const nvqsIsLocked = citizen?.militaryStatusLocked === true;
   const approvedEnlisted =
     citizen?.approvalStatus === "approved" &&
     (citizen.militaryStatusLocked || citizen.militaryStatus === "nhapngu");
-  const nvqsCanEdit = (!nvqsIsLocked || nvqsUnlocked) && !approvedEnlisted;
+  /** Chỉ sửa NVQS khi đang chế độ Sửa hồ sơ (nút footer). */
+  const nvqsCanEdit = editing && !approvedEnlisted && !approvalReview;
+  const canDecideApproval =
+    approvalReview &&
+    citizen?.approvalStatus === "pending" &&
+    typeof onApprovalDecision === "function";
+
+  const runApprovalDecision = async (action: "approve" | "reject") => {
+    if (!onApprovalDecision || approvalBusy) return;
+    setApprovalBusy(true);
+    setNvqsError(null);
+    try {
+      await onApprovalDecision(action);
+    } catch (e) {
+      setNvqsError(e instanceof Error ? e.message : "Không thực hiện được");
+    } finally {
+      setApprovalBusy(false);
+    }
+  };
 
   const handleClose = useCallback(() => {
     setOpen(false);
     setEditing(false);
     setSaveError(null);
     setProfilePin("");
-    setNvqsUnlocked(false);
-    setNvqsPin("");
-    setNvqsVerifiedPin("");
-    setNvqsPinError(null);
+    setNvqsError(null);
     window.setTimeout(onClose, 280);
   }, [onClose]);
 
@@ -522,21 +556,91 @@ export default function CitizenDetailModal({
       setNvqsCallChoice("unset");
       setNvqsReason("");
       setNvqsError(null);
-      setNvqsUnlocked(false);
-      setNvqsPin("");
-      setNvqsVerifiedPin("");
-      setNvqsPinError(null);
+      setNvqsAttachments([]);
       return;
     }
     setNvqsCallChoice(citizenToNvqsChoice(citizen));
     setCampaignId(citizen.campaignId || "");
     setNvqsReason(citizen.militaryStatusReason || "");
     setNvqsError(null);
-    setNvqsUnlocked(false);
-    setNvqsPin("");
-    setNvqsVerifiedPin("");
-    setNvqsPinError(null);
   }, [citizen?.id, citizen?.militaryStatus, citizen?.militaryStatusReason, citizen?.militaryStatusLocked, citizen?.callIntent, citizen?.approvalStatus]);
+
+  useEffect(() => {
+    if (!citizen?.id) {
+      setNvqsAttachments([]);
+      return;
+    }
+    const ac = new AbortController();
+    fetch(`/api/admin/citizens/${encodeURIComponent(citizen.id)}/nvqs-attachments`, {
+      signal: ac.signal,
+    })
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        setNvqsAttachments(
+          (data.data || []).map(
+            (a: { id: string; fileName: string; url: string; purpose: string }) => ({
+              id: a.id,
+              fileName: a.fileName,
+              url: a.url,
+              purpose: a.purpose,
+            }),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) setNvqsAttachments([]);
+      });
+    return () => ac.abort();
+  }, [citizen?.id, listsTick]);
+
+  const uploadNvqsFiles = async (files: FileList) => {
+    if (!citizen) return;
+    const purpose = nvqsChoiceNeedsFiles(nvqsCallChoice);
+    if (!purpose) return;
+    setNvqsUploading(true);
+    setNvqsError(null);
+    try {
+      const form = new FormData();
+      form.set("purpose", purpose);
+      Array.from(files).forEach((f) => form.append("files", f));
+      const res = await fetch(
+        `/api/admin/citizens/${encodeURIComponent(citizen.id)}/nvqs-attachments`,
+        { method: "POST", body: form },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNvqsError(
+          typeof data.error === "string" ? data.error : "Không tải lên được",
+        );
+        return;
+      }
+      setListsTick((t) => t + 1);
+    } catch {
+      setNvqsError("Lỗi kết nối khi tải minh chứng");
+    } finally {
+      setNvqsUploading(false);
+    }
+  };
+
+  const removeNvqsFile = async (attachmentId: string) => {
+    if (!citizen) return;
+    try {
+      const res = await fetch(
+        `/api/admin/citizens/${encodeURIComponent(citizen.id)}/nvqs-attachments?attachmentId=${encodeURIComponent(attachmentId)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setNvqsError(
+          typeof data.error === "string" ? data.error : "Không xóa được tệp",
+        );
+        return;
+      }
+      setListsTick((t) => t + 1);
+    } catch {
+      setNvqsError("Lỗi kết nối khi xóa tệp");
+    }
+  };
 
   useEffect(() => {
     fetch("/api/admin/recruitment?limit=100")
@@ -544,85 +648,6 @@ export default function CitizenDetailModal({
       .then((data) => setCampaigns(data.data || []))
       .catch(() => setCampaigns([]));
   }, []);
-
-  const handleVerifyNvqsPin = async () => {
-    if (!nvqsPin.trim()) {
-      setNvqsPinError("Vui lòng nhập mã PIN địa phương.");
-      return;
-    }
-
-    setNvqsPinVerifying(true);
-    setNvqsPinError(null);
-    try {
-      const res = await fetch("/api/admin/nvqs/verify-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: nvqsPin.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mã PIN không đúng");
-      setNvqsVerifiedPin(nvqsPin.trim());
-      setNvqsUnlocked(true);
-      setNvqsPin("");
-    } catch (err) {
-      setNvqsPinError(err instanceof Error ? err.message : "Mã PIN không đúng");
-    } finally {
-      setNvqsPinVerifying(false);
-    }
-  };
-
-  const handleSaveNvqs = async () => {
-    if (!citizen) return;
-
-    if (nvqsChoiceNeedsReason(nvqsCallChoice) && !nvqsReason.trim()) {
-      setNvqsError("Vui lòng nhập ghi chú / lý do khi chọn Tạm hoãn.");
-      return;
-    }
-    if (nvqsCallChoice === "du_kien_goi" && !campaignId) {
-      setNvqsError("Vui lòng chọn đợt khám tuyển.");
-      return;
-    }
-
-    setNvqsSaving(true);
-    setNvqsError(null);
-    try {
-      const isSpecial = nvqsCallChoice === "tamhoan" || nvqsCallChoice === "miengoi";
-      const note = nvqsReason.trim();
-      const res = await fetch(`/api/admin/citizens/${citizen.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(isSpecial
-            ? {
-                militaryStatus: nvqsCallChoice,
-                callIntent: "unset",
-                militaryStatusReason: note || null,
-              }
-            : {
-                callIntent: nvqsCallChoice,
-                campaignId: nvqsCallChoice === "du_kien_goi" ? campaignId : null,
-                militaryStatusReason: note || null,
-              }),
-          militaryStatusLocked: true,
-          ...(nvqsVerifiedPin ? { editPin: nvqsVerifiedPin } : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "save failed");
-      const updated: Citizen = data;
-      onCitizenUpdated?.(updated);
-      setNvqsUnlocked(false);
-      setNvqsVerifiedPin("");
-    } catch (err) {
-      setNvqsError(
-        err instanceof Error
-          ? err.message
-          : "Không thể cập nhật trạng thái NVQS. Vui lòng thử lại.",
-      );
-    } finally {
-      setNvqsSaving(false);
-    }
-  };
 
   useEffect(() => {
     if (!citizen) return;
@@ -769,13 +794,89 @@ export default function CitizenDetailModal({
 
   const saveProfile = useCallback(async () => {
     if (!citizen) return;
+
+    const nvqsChanged =
+      nvqsCallChoice !== citizenToNvqsChoice(citizen) ||
+      nvqsReason.trim() !== (citizen.militaryStatusReason || "").trim() ||
+      ((nvqsCallChoice === "du_kien_goi" ||
+        nvqsCallChoice === "du_bi" ||
+        nvqsCallChoice === "khong_goi" ||
+        nvqsCallChoice === "tamhoan") &&
+        campaignId !== (citizen.campaignId || ""));
+
+    if (nvqsChanged) {
+      if (nvqsChoiceNeedsReason(nvqsCallChoice) && !nvqsReason.trim()) {
+        setNvqsError(
+          nvqsCallChoice === "tamhoan"
+            ? "Vui lòng nhập ghi chú / lý do tạm hoãn."
+            : "Vui lòng nhập ghi chú / lý do đề xuất không gọi.",
+        );
+        setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
+        return;
+      }
+      const filePurpose = nvqsChoiceNeedsFiles(nvqsCallChoice);
+      if (filePurpose && nvqsAttachments.filter((a) => a.purpose === filePurpose).length < 1) {
+        setNvqsError(
+          filePurpose === "tam_hoan"
+            ? "Cần tải lên giấy tạm hoãn (minh chứng) trước khi lưu."
+            : "Cần tải lên tệp minh chứng (giấy khám SK…) trước khi lưu đề xuất không gọi.",
+        );
+        setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
+        return;
+      }
+      if (
+        (nvqsCallChoice === "du_kien_goi" ||
+          nvqsCallChoice === "du_bi" ||
+          nvqsCallChoice === "khong_goi" ||
+          nvqsCallChoice === "tamhoan") &&
+        !campaignId
+      ) {
+        setNvqsError("Vui lòng chọn đợt khám tuyển.");
+        setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
+        return;
+      }
+    }
+
     setSaving(true);
     setSaveError(null);
+    setNvqsError(null);
     try {
       const body: Record<string, unknown> = { ...draft };
       if (needsPinToEdit) {
         body.requireEditPin = true;
         body.editPin = profilePin;
+      }
+      if (nvqsChanged) {
+        const isSpecial = nvqsCallChoice === "tamhoan" || nvqsCallChoice === "miengoi";
+        const note = nvqsReason.trim();
+        const needsCampaign =
+          nvqsCallChoice === "du_kien_goi" ||
+          nvqsCallChoice === "du_bi" ||
+          nvqsCallChoice === "khong_goi" ||
+          nvqsCallChoice === "tamhoan";
+        if (needsCampaign && !campaignId) {
+          setNvqsError("Vui lòng chọn đợt khám tuyển.");
+          setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
+          setSaving(false);
+          return;
+        }
+        if (isSpecial) {
+          body.militaryStatus = nvqsCallChoice;
+          body.callIntent = "unset";
+          body.militaryStatusReason = note || null;
+          // Giữ đợt để QK lọc theo campaign
+          if (nvqsCallChoice === "tamhoan") {
+            body.campaignId = campaignId;
+          }
+        } else {
+          body.callIntent = nvqsCallChoice;
+          body.campaignId = needsCampaign ? campaignId : null;
+          body.militaryStatusReason = note || null;
+        }
+        body.militaryStatusLocked = true;
+        if (nvqsIsLocked) {
+          body.unlockViaProfile = true;
+        }
       }
       const res = await fetch(`/api/admin/citizens/${encodeURIComponent(citizen.id)}`, {
         method: "PUT",
@@ -805,7 +906,18 @@ export default function CitizenDetailModal({
     } finally {
       setSaving(false);
     }
-  }, [citizen, draft, needsPinToEdit, profilePin, onCitizenUpdated]);
+  }, [
+    citizen,
+    draft,
+    needsPinToEdit,
+    profilePin,
+    onCitizenUpdated,
+    nvqsCallChoice,
+    nvqsReason,
+    campaignId,
+    nvqsIsLocked,
+    nvqsAttachments,
+  ]);
 
   const saveEducationHistory = useCallback(async () => {
     if (!citizen) return;
@@ -1141,9 +1253,11 @@ export default function CitizenDetailModal({
 
         {/* Tabs */}
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/[0.06] px-4">
-          {TABS.filter((t) =>
-            sessionFunctionalRole !== "y_te" || t.id === "health"
-          ).map((t) => (
+          {TABS.filter((t) => {
+            if (sessionFunctionalRole === "y_te") return t.id === "health";
+            if (t.id === "comments") return Boolean(citizen?.approvalComment);
+            return true;
+          }).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -2265,7 +2379,7 @@ export default function CitizenDetailModal({
 
           {tab === "nvqs" && (
             <div className="rounded-[16px] bg-m3-surface-high p-4">
-              {nvqsIsLocked && !nvqsUnlocked && (
+              {nvqsIsLocked && !editing && (
                 <div className="mb-4 flex items-start gap-3 rounded-[12px] border border-m3-warning/25 bg-m3-warning/8 px-3.5 py-3">
                   <Lock size={18} className="mt-0.5 shrink-0 text-m3-error" />
                   <div className="min-w-0">
@@ -2273,60 +2387,12 @@ export default function CitizenDetailModal({
                       Trạng thái NVQS đã được lưu và khóa
                     </p>
                     <p className="mt-1 text-[13px] leading-snug text-m3-on-surface-variant">
-                      Không thể sửa trực tiếp. Dùng nút{" "}
-                      <strong>Sửa hồ sơ</strong> bên dưới hoặc mở khóa tại đây
-                      {needsPinToEdit ? " bằng mã PIN địa phương" : ""}.
+                      Không thể sửa trực tiếp. Bấm{" "}
+                      <strong>Sửa hồ sơ</strong> bên dưới để chỉnh sửa, rồi{" "}
+                      <strong>Lưu hồ sơ</strong>
+                      {needsPinToEdit ? " (cần mã PIN địa phương)" : ""}.
                     </p>
                   </div>
-                </div>
-              )}
-
-              {nvqsIsLocked && !nvqsUnlocked && (
-                <div className="mb-4 rounded-[12px] border border-black/[0.06] bg-m3-surface-lowest p-4">
-                  {isBoLevel ? (
-                    <button
-                      type="button"
-                      onClick={() => setNvqsUnlocked(true)}
-                      className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white hover:bg-m3-primary"
-                    >
-                      Chỉnh sửa trạng thái
-                    </button>
-                  ) : needsPinToEdit ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 text-[14px] font-semibold text-m3-on-surface">
-                        <KeyRound size={18} className="text-m3-primary" />
-                        Nhập mã PIN địa phương để sửa
-                      </div>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                        <input
-                          type="password"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          className={`${NVQS_INPUT_CLS} sm:max-w-[220px]`}
-                          placeholder="Mã PIN (6 số)"
-                          value={nvqsPin}
-                          onChange={(e) => {
-                            setNvqsPin(e.target.value);
-                            setNvqsPinError(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleVerifyNvqsPin();
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleVerifyNvqsPin}
-                          disabled={nvqsPinVerifying}
-                          className="inline-flex min-h-[44px] items-center justify-center rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white hover:bg-m3-primary disabled:opacity-40"
-                        >
-                          {nvqsPinVerifying ? "Đang xác minh..." : "Xác nhận PIN"}
-                        </button>
-                      </div>
-                      {nvqsPinError && (
-                        <p className="text-[13px] text-m3-error">{nvqsPinError}</p>
-                      )}
-                    </div>
-                  ) : null}
                 </div>
               )}
 
@@ -2362,7 +2428,11 @@ export default function CitizenDetailModal({
                   )}
                 </div>
 
-                {nvqsCanEdit && nvqsCallChoice === "du_kien_goi" && (
+                {nvqsCanEdit &&
+                  (nvqsCallChoice === "du_kien_goi" ||
+                    nvqsCallChoice === "du_bi" ||
+                    nvqsCallChoice === "khong_goi" ||
+                    nvqsCallChoice === "tamhoan") && (
                   <div className="min-w-0">
                     <label htmlFor="nvqs-campaign" className="text-[14px] font-medium text-m3-on-surface-variant">
                       Đợt khám tuyển <span className="text-m3-error">*</span>
@@ -2405,7 +2475,9 @@ export default function CitizenDetailModal({
                       className={`${NVQS_INPUT_CLS} mt-1.5 min-h-[110px] resize-y py-3`}
                       placeholder={
                         nvqsCallChoice === "tamhoan"
-                          ? "Nhập lý do tạm hoãn (VD: đang theo học đại học...)"
+                          ? "Nhập lý do tạm hoãn và mô tả giấy tờ đính kèm..."
+                          : nvqsCallChoice === "khong_goi"
+                            ? "Nhập lý do đề xuất không gọi (kèm minh chứng giấy khám SK…)"
                           : nvqsCallChoice === "miengoi"
                             ? "VD: Thuộc diện miễn theo quy định..."
                             : "Ghi chú thêm về dự kiến tuyển gọi (không bắt buộc)"
@@ -2420,44 +2492,79 @@ export default function CitizenDetailModal({
                 ) : (
                   renderStackField("Ghi chú", citizen.militaryStatusReason)
                 )}
+
+                {(nvqsCanEdit
+                  ? nvqsChoiceNeedsFiles(nvqsCallChoice)
+                  : citizen.callIntent === "de_xuat_khong_goi" ||
+                      citizen.callIntent === "khong_goi" ||
+                      citizen.militaryStatus === "tamhoan") && (
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-medium text-m3-on-surface-variant">
+                      Minh chứng đính kèm
+                      {nvqsCanEdit && nvqsChoiceNeedsFiles(nvqsCallChoice) ? (
+                        <span className="text-m3-error"> *</span>
+                      ) : null}
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {nvqsAttachments
+                        .filter((a) => {
+                          const need = nvqsChoiceNeedsFiles(nvqsCallChoice);
+                          if (nvqsCanEdit && need) return a.purpose === need;
+                          if (citizen.militaryStatus === "tamhoan") {
+                            return a.purpose === "tam_hoan";
+                          }
+                          return a.purpose === "khong_goi";
+                        })
+                        .map((a) => (
+                          <li
+                            key={a.id}
+                            className="flex items-center justify-between gap-2 rounded-[10px] border border-black/[0.06] bg-white px-3 py-2 text-[13px]"
+                          >
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate font-medium text-m3-primary hover:underline"
+                            >
+                              {a.fileName}
+                            </a>
+                            {nvqsCanEdit && (
+                              <button
+                                type="button"
+                                className="shrink-0 text-[12px] font-semibold text-m3-error"
+                                onClick={() => void removeNvqsFile(a.id)}
+                              >
+                                Xóa
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                    </ul>
+                    {nvqsCanEdit && nvqsChoiceNeedsFiles(nvqsCallChoice) && (
+                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3 py-2 text-[13px] font-semibold text-m3-on-surface hover:bg-m3-surface-high">
+                        <input
+                          type="file"
+                          className="hidden"
+                          multiple
+                          accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                          disabled={nvqsUploading}
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            if (files?.length) void uploadNvqsFiles(files);
+                            e.target.value = "";
+                          }}
+                        />
+                        {nvqsUploading ? "Đang tải..." : "Tải tệp minh chứng"}
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               {nvqsError && (
                 <p className="mt-3 rounded-[12px] bg-m3-error/8 px-3 py-2.5 text-[13px] text-m3-error">
                   {nvqsError}
                 </p>
-              )}
-
-              {nvqsCanEdit && (
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSaveNvqs}
-                    disabled={
-                      nvqsSaving ||
-                      (nvqsCallChoice === citizenToNvqsChoice(citizen) &&
-                        nvqsReason.trim() === (citizen.militaryStatusReason || "").trim())
-                    }
-                    className="inline-flex min-h-[44px] items-center rounded-[12px] bg-m3-primary px-5 text-[15px] font-bold text-white transition-opacity hover:bg-m3-primary disabled:opacity-40"
-                  >
-                    {nvqsSaving ? "Đang lưu..." : "Lưu trạng thái"}
-                  </button>
-                  {nvqsUnlocked && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNvqsUnlocked(false);
-                        setNvqsVerifiedPin("");
-                        setNvqsCallChoice(citizenToNvqsChoice(citizen));
-                        setNvqsReason(citizen.militaryStatusReason || "");
-                        setNvqsError(null);
-                      }}
-                      className="inline-flex min-h-[44px] items-center rounded-[12px] border border-black/[0.08] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.03]"
-                    >
-                      Hủy
-                    </button>
-                  )}
-                </div>
               )}
 
               <p className="mt-4 text-[13px] text-m3-on-surface-variant">
@@ -2469,6 +2576,14 @@ export default function CitizenDetailModal({
                   citizen.callIntent === "du_kien_goi" && (
                     <> — đang chờ xét duyệt tại mục Xét duyệt danh sách</>
                   )}
+                {citizen.approvalStatus === "pending" &&
+                  citizen.callIntent === "de_xuat_khong_goi" && (
+                    <> — đề xuất không gọi đang chờ Quân khu đồng tình</>
+                  )}
+                {citizen.approvalStatus === "pending" &&
+                  citizen.militaryStatus === "tamhoan" && (
+                    <> — tạm hoãn đang chờ Quân khu duyệt</>
+                  )}
                 {nvqsIsLocked && (
                   <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-m3-warning/12 px-2 py-0.5 text-[12px] font-semibold text-m3-error">
                     <Lock size={12} />
@@ -2477,11 +2592,47 @@ export default function CitizenDetailModal({
                 )}
               </p>
 
-              <p className="mt-4 rounded-[12px] bg-m3-primary/8 px-3 py-2.5 text-[13px] text-m3-primary">
-                Sau khi lưu, trạng thái sẽ bị khóa. Cấp Bộ có thể sửa trực tiếp; cấp
-                Tỉnh / Huyện / Xã cần mã PIN địa phương hoặc dùng{" "}
-                <strong>Sửa hồ sơ</strong>.
+              {approvalReview ? (
+                <p className="mt-4 rounded-[12px] bg-m3-primary/8 px-3 py-2.5 text-[13px] leading-relaxed text-m3-primary">
+                  Quân khu xem đầy đủ hồ sơ (định danh, học vấn, sức khỏe, cư trú,
+                  NVQS) rồi quyết định{" "}
+                  <strong>Duyệt gọi nhập ngũ</strong> hoặc{" "}
+                  <strong>Không gọi</strong>
+                  {approvalCampaignId
+                    ? " theo đợt đã chọn trên danh sách xét duyệt."
+                    : "."}
+                </p>
+              ) : (
+                <p className="mt-4 rounded-[12px] bg-m3-primary/8 px-3 py-2.5 text-[13px] text-m3-primary">
+                  Sau khi lưu, trạng thái sẽ bị khóa. Dùng nút{" "}
+                  <strong>Sửa hồ sơ</strong> / <strong>Lưu hồ sơ</strong> bên dưới
+                  để cập nhật
+                  {needsPinToEdit ? " (cấp Tỉnh / Huyện / Xã cần mã PIN)" : ""}.
+                </p>
+              )}
+            </div>
+          )}
+
+          {tab === "comments" && (
+            <div className="rounded-[16px] border border-m3-error/20 bg-m3-error/[0.04] p-4">
+              <h3 className="text-[15px] font-bold text-m3-on-surface">
+                Nhận xét Quân khu
+              </h3>
+              <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+                Lý do không chấp nhận đề xuất không gọi hoặc hủy tạm hoãn. Hồ sơ đã
+                chuyển về Chưa xác định và bị khóa — cập nhật minh chứng rồi gửi duyệt
+                lại.
               </p>
+              <div className="mt-4 rounded-[12px] border border-black/[0.06] bg-white px-4 py-3">
+                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-m3-on-surface">
+                  {citizen.approvalComment || "—"}
+                </p>
+              </div>
+              {nvqsIsLocked && (
+                <p className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-m3-error">
+                  <Lock size={14} /> Hồ sơ đang bị khóa sau khi Quân khu trả về
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -2519,6 +2670,12 @@ export default function CitizenDetailModal({
                     setEduError(null);
                     setResError(null);
                     setHealthFormRound(null);
+                    if (citizen) {
+                      setNvqsCallChoice(citizenToNvqsChoice(citizen));
+                      setCampaignId(citizen.campaignId || "");
+                      setNvqsReason(citizen.militaryStatusReason || "");
+                    }
+                    setNvqsError(null);
                   }}
                   disabled={saving}
                   className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface disabled:opacity-50"
@@ -2534,6 +2691,58 @@ export default function CitizenDetailModal({
                 >
                   {saving ? "Đang lưu..." : "Lưu hồ sơ"}
                 </button>
+              </div>
+            </>
+          ) : approvalReview ? (
+            <>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
+              >
+                <Printer size={18} />
+                In hồ sơ
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={approvalBusy}
+                  className="min-h-[44px] rounded-[12px] bg-m3-surface-lowest px-5 text-[15px] font-bold text-m3-on-surface disabled:opacity-50"
+                  style={{ border: "1px solid rgba(0,0,0,0.1)" }}
+                >
+                  Đóng
+                </button>
+                {canDecideApproval ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={approvalBusy}
+                      onClick={() => void runApprovalDecision("reject")}
+                      className="min-h-[44px] rounded-[12px] px-5 text-[15px] font-bold text-white disabled:opacity-50"
+                      style={{ background: "var(--m3-error, #ba1a1a)" }}
+                    >
+                      {approvalBusy ? "Đang xử lý..." : "Không gọi"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={approvalBusy}
+                      onClick={() => void runApprovalDecision("approve")}
+                      className="min-h-[44px] rounded-[12px] px-5 text-[15px] font-bold text-white disabled:opacity-50"
+                      style={{ background: "var(--color-m3-success, #386a4a)" }}
+                    >
+                      {approvalBusy ? "Đang xử lý..." : "Duyệt gọi nhập ngũ"}
+                    </button>
+                  </>
+                ) : (
+                  <span className="inline-flex min-h-[44px] items-center rounded-[12px] bg-m3-surface-high px-4 text-[13px] font-semibold text-m3-on-surface-variant">
+                    {citizen?.approvalStatus === "approved"
+                      ? "Đã duyệt gọi"
+                      : citizen?.approvalStatus === "rejected"
+                        ? "Đã đánh dấu không gọi"
+                        : "Không thể xét duyệt"}
+                  </span>
+                )}
               </div>
             </>
           ) : (
@@ -2555,7 +2764,9 @@ export default function CitizenDetailModal({
                 >
                   Đóng
                 </button>
-                {sessionFunctionalRole !== "y_te" && !approvedEnlisted && (
+                {sessionFunctionalRole !== "y_te" &&
+                  sessionFunctionalRole !== "nhan_quan" &&
+                  !approvedEnlisted && (
                   <button
                     type="button"
                     onClick={startEdit}

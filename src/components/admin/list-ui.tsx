@@ -350,10 +350,12 @@ export function AdminPrimaryBtn({
   onClick,
   children,
   tone = "green",
+  disabled = false,
 }: {
   onClick: () => void;
   children: ReactNode;
   tone?: "green" | "blue";
+  disabled?: boolean;
 }) {
   const cls =
     tone === "green"
@@ -362,8 +364,9 @@ export function AdminPrimaryBtn({
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold text-white shadow-sm ${cls}`}
+      className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13px] font-bold text-white shadow-sm disabled:opacity-50 ${cls}`}
     >
       {children}
     </button>

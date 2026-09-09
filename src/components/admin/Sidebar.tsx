@@ -111,25 +111,65 @@ interface SidebarProps {
   userRole: string;
   userHierarchyLevel: string;
   userFunctionalRole: string;
+  userUnitCode?: string;
 }
 
 function filterNavGroups(
   hierarchyLevel: string,
   functionalRole: FunctionalRole,
+  unitCode = "",
 ): NavGroup[] {
+  const isQk =
+    hierarchyLevel === "donvi" && /^(dv-qk\d+|dv-btl-hn)$/.test(unitCode);
+
   if (functionalRole === "nhan_quan") {
+    if (!isQk) {
+      return [
+        {
+          name: "Đơn vị nhận quân",
+          items: [
+            {
+              href: "/admin/receiving",
+              label: "Quân số & xác nhận nhận",
+              icon: <FcTodoList size={ICON} />,
+            },
+          ],
+        },
+      ];
+    }
+
     return navGroups
       .filter((g) =>
-        ["Đơn vị nhận quân", "Văn bản", "Báo cáo"].includes(g.name),
+        ["Tuyển quân", "Đơn vị nhận quân", "Văn bản", "Báo cáo"].includes(g.name),
       )
-      .map((g) =>
-        g.name === "Văn bản"
-          ? {
-              ...g,
-              items: g.items.filter((i) => i.label === "Công văn đến / đi"),
-            }
-          : g,
-      );
+      .map((g) => {
+        if (g.name === "Văn bản") {
+          return {
+            ...g,
+            items: g.items.filter((i) => i.label === "Công văn đến / đi"),
+          };
+        }
+        if (g.name === "Tuyển quân") {
+          return {
+            ...g,
+            items: g.items.filter(
+              (i) =>
+                i.href === "/admin/approval" || i.href === "/admin/quota",
+            ),
+          };
+        }
+        if (g.name === "Đơn vị nhận quân") {
+          return {
+            ...g,
+            items: g.items.map((item) =>
+              item.href === "/admin/receiving"
+                ? { ...item, label: "Chỉ tiêu ĐV nhận · Phân quân · Chốt" }
+                : item,
+            ),
+          };
+        }
+        return g;
+      });
   }
 
   if (functionalRole === "y_te") {
@@ -156,18 +196,16 @@ function filterNavGroups(
       });
   }
 
-  // tuyen_quan — theo cấp đơn vị hành chính
+  // tuyen_quan — theo cấp đơn vị hành chính / quân khu
   return navGroups
     .filter((group) => {
       if (hierarchyLevel === "donvi") {
         return (
+          group.name === "Tuyển quân" ||
           group.name === "Đơn vị nhận quân" ||
           group.name === "Văn bản" ||
           group.name === "Báo cáo"
         );
-      }
-      if (["tinh", "xa"].includes(hierarchyLevel)) {
-        return group.name !== "Đơn vị nhận quân";
       }
       return true;
     })
@@ -180,6 +218,65 @@ function filterNavGroups(
           ),
         };
       }
+      if (hierarchyLevel === "donvi" && group.name === "Tuyển quân") {
+        return {
+          ...group,
+          items: group.items.filter((i) =>
+            isQk
+              ? i.href === "/admin/approval" || i.href === "/admin/quota"
+              : i.href === "/admin/approval",
+          ),
+        };
+      }
+      if (
+        (hierarchyLevel === "tinh" || hierarchyLevel === "xa") &&
+        group.name === "Đơn vị nhận quân"
+      ) {
+        return {
+          ...group,
+          name: "Nhận quân",
+          items: group.items.map((item) =>
+            item.href === "/admin/receiving"
+              ? { ...item, label: "Vị trí nhận quân công dân" }
+              : item,
+          ),
+        };
+      }
+      if (hierarchyLevel === "bo" && group.name === "Đơn vị nhận quân") {
+        return {
+          ...group,
+          name: "Nhận quân",
+          items: group.items.map((item) =>
+            item.href === "/admin/receiving"
+              ? { ...item, label: "Chỉ tiêu QK · Duyệt & công bố" }
+              : item,
+          ),
+        };
+      }
+      if (hierarchyLevel === "donvi" && group.name === "Đơn vị nhận quân") {
+        return {
+          ...group,
+          items: group.items.map((item) =>
+            item.href === "/admin/receiving"
+              ? {
+                  ...item,
+                  label: isQk
+                    ? "Chỉ tiêu ĐV nhận · Phân quân · Chốt"
+                    : "Quân số & xác nhận nhận",
+                }
+              : item,
+          ),
+        };
+      }
+      if (
+        (hierarchyLevel === "xa" || hierarchyLevel === "tinh") &&
+        group.name === "Tuyển quân"
+      ) {
+        return {
+          ...group,
+          items: group.items.filter((i) => i.href !== "/admin/approval"),
+        };
+      }
       return group;
     });
 }
@@ -188,6 +285,7 @@ export default function Sidebar({
   collapsed,
   userHierarchyLevel,
   userFunctionalRole,
+  userUnitCode = "",
 }: SidebarProps) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
@@ -204,6 +302,7 @@ export default function Sidebar({
   const visibleGroups = filterNavGroups(
     userHierarchyLevel,
     (userFunctionalRole || "tuyen_quan") as FunctionalRole,
+    userUnitCode,
   );
 
   return (

@@ -2,19 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/data";
 import {
+  deleteCampaignInDb,
   findCampaignByIdFromDb,
   findCampaignsFromDb,
   updateCampaignInDb,
 } from "@/lib/campaigns-db";
+
+function requireBoAdmin(session: {
+  role: string;
+  hierarchyLevel: string;
+} | null) {
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.hierarchyLevel !== "bo") {
+    return NextResponse.json(
+      { error: "Chỉ cấp Bộ được tạo / sửa / xóa đợt khám tuyển" },
+      { status: 403 },
+    );
+  }
+  return null;
+}
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireBoAdmin(session);
+  if (denied) return denied;
+
   const { id } = await context.params;
   const body = await request.json();
 
@@ -69,4 +86,40 @@ export async function PATCH(
     return NextResponse.json({ error: "Không tìm thấy đợt khám" }, { status: 404 });
   }
   return NextResponse.json({ data: campaign, meta: { source: "memory" } });
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  const denied = requireBoAdmin(session);
+  if (denied) return denied;
+
+  const { id } = await context.params;
+
+  const probe = await findCampaignsFromDb({ page: 1, limit: 1 });
+  if (probe) {
+    const existing = await findCampaignByIdFromDb(id);
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Không tìm thấy đợt khám" },
+        { status: 404 },
+      );
+    }
+    const ok = await deleteCampaignInDb(id);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Không thể xóa đợt khám" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true, meta: { source: "mysql" } });
+  }
+
+  const ok = db.campaigns.delete(id);
+  if (!ok) {
+    return NextResponse.json({ error: "Không tìm thấy đợt khám" }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true, meta: { source: "memory" } });
 }

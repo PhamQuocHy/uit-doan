@@ -25,6 +25,7 @@ import {
   ADMIN_TD_CLS,
   adminRowClass,
 } from "@/components/admin/list-ui";
+import { M3ConfirmDialog, M3Snackbar, type M3SnackbarTone } from "@/components/m3";
 
 interface Quota {
   id: string;
@@ -60,6 +61,7 @@ interface RecruitmentCampaignOption {
 
 const levelLabel: Record<string, string> = {
   bo: "Bộ QP",
+  donvi: "Quân khu",
   tinh: "Tỉnh",
   huyen: "Huyện",
   xa: "Xã",
@@ -127,6 +129,11 @@ export default function QuotaPage() {
   } | null>(null);
   const [submitWarning, setSubmitWarning] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Quota | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; tone: M3SnackbarTone } | null>(
+    null,
+  );
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -229,11 +236,30 @@ export default function QuotaPage() {
     setShowModal(true);
   };
 
-  const deleteQuota = async (quota: Quota) => {
-    if (!window.confirm(`Xóa chỉ tiêu giao cho ${quota.toUnitName}?`)) return;
-    const res = await fetch(`/api/admin/quotas/${quota.id}`, { method: "DELETE" });
-    if (res.ok) await fetchData();
-    else setSubmitError((await res.json()).error || "Không thể xóa chỉ tiêu");
+  const deleteQuota = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/quotas/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setToast({
+          message: `Đã xóa chỉ tiêu giao cho ${deleteTarget.toUnitName}`,
+          tone: "success",
+        });
+        setDeleteTarget(null);
+        await fetchData();
+      } else {
+        setToast({
+          message: data.error || "Không thể xóa chỉ tiêu",
+          tone: "error",
+        });
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const receivedQuotas = session
@@ -319,13 +345,8 @@ export default function QuotaPage() {
       />
 
       {sessionSubtitle && (
-        <p className="text-[14px] text-m3-on-surface-variant">
-          <span className="font-medium">{sessionSubtitle}</span>
-          {!isBo && (
-            <span className="mt-1 block text-xs">
-              Đã nhập ngũ / Đã hoàn thành = số hồ sơ trạng thái Nhập ngũ trong đơn vị nhận chỉ tiêu
-            </span>
-          )}
+        <p className="text-[14px] font-medium text-m3-on-surface-variant">
+          {sessionSubtitle}
         </p>
       )}
 
@@ -345,7 +366,7 @@ export default function QuotaPage() {
         {!isBo && (
           <div className="rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-m3-on-surface-variant">Đã nhập ngũ</p>
+              <p className="text-sm text-m3-on-surface-variant">Đã duyệt gọi</p>
               <CheckCircle2 size={18} className="text-m3-on-success-container" />
             </div>
             <p className="text-3xl font-bold mt-2 text-m3-on-success-container">{totalFilled}</p>
@@ -407,7 +428,7 @@ export default function QuotaPage() {
             <th className={ADMIN_TH_CLS}>Từ đơn vị</th>
             <th className={ADMIN_TH_CLS}>Đến đơn vị</th>
             <th className={`${ADMIN_TH_CLS} text-center`}>Chỉ tiêu</th>
-            <th className={`${ADMIN_TH_CLS} text-center`}>Đã hoàn thành</th>
+            <th className={`${ADMIN_TH_CLS} text-center`}>Đã duyệt gọi</th>
             <th className={ADMIN_TH_CLS}>Tiến độ</th>
             <th className={ADMIN_TH_CLS}>Ghi chú</th>
             <th className={ADMIN_TH_CLS}>Trạng thái</th>
@@ -493,7 +514,7 @@ export default function QuotaPage() {
                           <AdminIconBtn
                             title="Xóa chỉ tiêu"
                             tone="red"
-                            onClick={() => void deleteQuota(q)}
+                            onClick={() => setDeleteTarget(q)}
                           >
                             <X size={15} />
                           </AdminIconBtn>
@@ -647,6 +668,31 @@ export default function QuotaPage() {
           </div>
         </div>
       )}
+
+      <M3ConfirmDialog
+        open={!!deleteTarget}
+        title="Xóa chỉ tiêu?"
+        description={
+          deleteTarget
+            ? `Xóa chỉ tiêu ${deleteTarget.amount.toLocaleString("vi-VN")} giao cho ${deleteTarget.toUnitName}? Thao tác này không hoàn tác.`
+            : undefined
+        }
+        confirmLabel="Xóa chỉ tiêu"
+        cancelLabel="Hủy"
+        tone="danger"
+        busy={deleting}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={() => void deleteQuota()}
+      />
+
+      <M3Snackbar
+        open={!!toast}
+        message={toast?.message || ""}
+        tone={toast?.tone || "info"}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 }

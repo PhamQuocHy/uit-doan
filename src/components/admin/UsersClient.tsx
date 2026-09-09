@@ -18,6 +18,11 @@ import {
 } from "@/components/admin/list-ui";
 import type { HierarchyLevel, HierarchyUnit } from "@/lib/data";
 import { FUNCTIONAL_ROLE_LABELS } from "@/lib/functional-roles";
+import {
+  isQuanKhuOrBtl,
+  MILITARY_REGIONS,
+  MILITARY_SUB_UNITS,
+} from "@/lib/military-regions";
 
 type SystemRole = {
   id: number;
@@ -59,6 +64,8 @@ type UserFormData = {
   /** Đơn vị gán cho tài khoản (tỉnh khi Bộ; xã khi Tỉnh; cố định khi Xã) */
   unitCode: string;
   roleId: string;
+  /** Chỉ dùng khi session cấp Bộ: loại đơn vị gán */
+  unitKind: "tinh" | "quan_khu" | "don_vi_nhan";
 };
 
 const defaultForm: UserFormData = {
@@ -71,12 +78,14 @@ const defaultForm: UserFormData = {
   editPin: "",
   unitCode: "",
   roleId: "",
+  unitKind: "tinh",
 };
 
 const ROLE_FILTER_OPTIONS = [
   { value: "", label: "Tất cả vai trò" },
   { value: "admin", label: "Quản trị viên" },
   { value: "y_te", label: "Cán bộ y tế" },
+  { value: "quan_khu", label: "Quân khu / BTL" },
   { value: "nhan_quan", label: "Đơn vị nhận quân" },
   { value: "user", label: "Cán bộ nghiệp vụ / khác" },
 ];
@@ -192,6 +201,14 @@ function groupUsersByLocality(
       } else if (level === "bo") {
         key = "bo";
         title = "Cấp Bộ";
+      } else if (level === "donvi" && isQuanKhuOrBtl(u.unitCode || "")) {
+        key = `qk:${u.unitCode}`;
+        title = u.unitName || "Quân khu / BTL";
+      } else if (level === "donvi") {
+        key = `dv:${u.parentUnitCode || u.unitCode || "khac"}`;
+        title = u.parentUnitName
+          ? `Nhận quân — ${u.parentUnitName}`
+          : u.unitName || "Đơn vị nhận quân";
       } else {
         key = `other:${u.unitCode}`;
         title = u.unitName || "Khác";
@@ -237,10 +254,35 @@ export default function UsersClient() {
 
   const unitFieldLabel =
     sessionLevel === "bo"
-      ? "Tỉnh / Thành phố"
+      ? form.unitKind === "quan_khu"
+        ? "Quân khu / BTL"
+        : form.unitKind === "don_vi_nhan"
+          ? "Đơn vị nhận quân"
+          : "Tỉnh / Thành phố"
       : sessionLevel === "tinh"
         ? "Xã / Phường"
         : "Đơn vị";
+
+  const boUnitOptions = useMemo((): HierarchyUnit[] => {
+    if (sessionLevel !== "bo") return unitOptions;
+    if (form.unitKind === "quan_khu") {
+      return MILITARY_REGIONS.map((r) => ({
+        code: r.code,
+        name: r.name,
+        level: "donvi" as HierarchyLevel,
+        parentCode: r.parentCode,
+      }));
+    }
+    if (form.unitKind === "don_vi_nhan") {
+      return MILITARY_SUB_UNITS.map((r) => ({
+        code: r.code,
+        name: r.name,
+        level: "donvi" as HierarchyLevel,
+        parentCode: r.parentCode,
+      }));
+    }
+    return unitOptions;
+  }, [sessionLevel, form.unitKind, unitOptions]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -352,12 +394,18 @@ export default function UsersClient() {
     setForm({
       ...defaultForm,
       unitCode: sessionLevel === "xa" ? sessionUnitCode || "" : "",
+      unitKind: "tinh",
     });
     setFormError("");
     setIsFormOpen(true);
   };
 
   const openEdit = (user: UserRow) => {
+    const code = user.unitCode || "";
+    let unitKind: UserFormData["unitKind"] = "tinh";
+    if (isQuanKhuOrBtl(code)) unitKind = "quan_khu";
+    else if (user.hierarchyLevel === "donvi") unitKind = "don_vi_nhan";
+
     setEditingUser(user);
     setForm({
       username: user.username,
@@ -372,6 +420,7 @@ export default function UsersClient() {
           ? sessionUnitCode || user.unitCode || ""
           : user.unitCode || "",
       roleId: user.roleId != null ? String(user.roleId) : "",
+      unitKind,
     });
     setFormError("");
     setIsFormOpen(true);
@@ -406,7 +455,11 @@ export default function UsersClient() {
     if (!unitCode) {
       setFormError(
         sessionLevel === "bo"
-          ? "Vui lòng chọn tỉnh / thành phố"
+          ? form.unitKind === "quan_khu"
+            ? "Vui lòng chọn quân khu / BTL"
+            : form.unitKind === "don_vi_nhan"
+              ? "Vui lòng chọn đơn vị nhận quân"
+              : "Vui lòng chọn tỉnh / thành phố"
           : sessionLevel === "tinh"
             ? "Vui lòng chọn xã / phường"
             : "Thiếu đơn vị quản lý",
@@ -433,8 +486,10 @@ export default function UsersClient() {
             status: form.status,
             unitCode,
             roleId: Number(form.roleId),
+            ...(form.unitKind !== "tinh" && { functionalRole: "nhan_quan" }),
             ...(form.password.trim() && { password: form.password.trim() }),
-            ...(form.editPin.trim() && { editPin: form.editPin.trim() }),
+            ...(form.editPin.trim() &&
+              form.unitKind === "tinh" && { editPin: form.editPin.trim() }),
           }
         : {
             username: form.username.trim(),
@@ -445,7 +500,9 @@ export default function UsersClient() {
             status: form.status,
             unitCode,
             roleId: Number(form.roleId),
-            ...(form.editPin.trim() && { editPin: form.editPin.trim() }),
+            ...(form.unitKind !== "tinh" && { functionalRole: "nhan_quan" }),
+            ...(form.editPin.trim() &&
+              form.unitKind === "tinh" && { editPin: form.editPin.trim() }),
           };
 
       const res = await fetch(url, {
@@ -481,7 +538,9 @@ export default function UsersClient() {
     }
   };
 
-  const showPinField = sessionLevel === "bo" || sessionLevel === "tinh";
+  const showPinField =
+    (sessionLevel === "bo" && form.unitKind === "tinh") ||
+    sessionLevel === "tinh";
 
   return (
     <div className="space-y-4 pb-6">
@@ -754,27 +813,63 @@ export default function UsersClient() {
                 </p>
               </div>
             ) : (
-              <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-m3-on-surface">
-                  {unitFieldLabel} <span className="text-m3-error">*</span>
-                </label>
-                <select
-                  className={SELECT_CLS}
-                  value={form.unitCode}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, unitCode: e.target.value }))
-                  }
-                >
-                  <option value="">
-                    — Chọn {unitFieldLabel.toLowerCase()} —
-                  </option>
-                  {unitOptions.map((u) => (
-                    <option key={u.code} value={u.code}>
-                      {u.name}
+              <>
+                {sessionLevel === "bo" && (
+                  <div>
+                    <label className="mb-1.5 block text-[13px] font-medium text-m3-on-surface">
+                      Loại đơn vị <span className="text-m3-error">*</span>
+                    </label>
+                    <select
+                      className={SELECT_CLS}
+                      value={form.unitKind}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          unitKind: e.target.value as UserFormData["unitKind"],
+                          unitCode: "",
+                          editPin: "",
+                        }))
+                      }
+                    >
+                      <option value="tinh">Tỉnh / Thành phố</option>
+                      <option value="quan_khu">Quân khu / BTL</option>
+                      <option value="don_vi_nhan">
+                        Đơn vị nhận quân (sư đoàn / trung đoàn)
+                      </option>
+                    </select>
+                    {form.unitKind === "quan_khu" && (
+                      <p className="mt-2 text-[12px] leading-snug text-m3-on-surface-variant">
+                        Không chọn tỉnh/thành — địa bàn tỉnh thuộc quân khu
+                        được lấy từ bản đồ phân cấp sẵn.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-medium text-m3-on-surface">
+                    {unitFieldLabel} <span className="text-m3-error">*</span>
+                  </label>
+                  <select
+                    className={SELECT_CLS}
+                    value={form.unitCode}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, unitCode: e.target.value }))
+                    }
+                  >
+                    <option value="">
+                      — Chọn {unitFieldLabel.toLowerCase()} —
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {(sessionLevel === "bo" ? boUnitOptions : unitOptions).map(
+                      (u) => (
+                        <option key={u.code} value={u.code}>
+                          {u.name}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+              </>
             )}
 
             {showPinField && (

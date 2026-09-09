@@ -12,6 +12,7 @@ import {
   MapPin,
   Package,
   Stethoscope,
+  Shield,
 } from "lucide-react";
 import Image from "next/image";
 import logoQd from "@/assets/images/logo_qd.png";
@@ -25,9 +26,15 @@ import {
   resolveLoginContext,
   type LoginPortal,
 } from "@/lib/login-portals";
+import {
+  getReceivingUnitsUnderParent,
+  isQuanKhuOrBtl,
+  RECEIVING_LOGIN_PARENTS,
+} from "@/lib/military-regions";
 
 const PORTAL_ICONS: Record<LoginPortal, typeof Building2> = {
   cap_bo: Building2,
+  quan_khu: Shield,
   dia_phuong: MapPin,
   don_vi_nhan_quan: Package,
   can_bo_y_te: Stethoscope,
@@ -41,6 +48,8 @@ type RememberedLogin = {
   localLevel: "tinh" | "xa";
   tinhCode: string;
   xaCode: string;
+  /** Quân khu / BTL / quân đoàn cha (portal đơn vị nhận) */
+  receivingParentCode?: string;
   donviCode: string;
   step: 2 | 3;
   savedAt: number;
@@ -78,6 +87,7 @@ export default function LoginForm() {
   const [localLevel, setLocalLevel] = useState<"tinh" | "xa">("tinh");
   const [tinhCode, setTinhCode] = useState("");
   const [xaCode, setXaCode] = useState("");
+  const [receivingParentCode, setReceivingParentCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
   const [restoredHint, setRestoredHint] = useState("");
 
@@ -88,6 +98,13 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const receivingChildOptions = receivingParentCode
+    ? getReceivingUnitsUnderParent(receivingParentCode).map((u) => ({
+        value: u.code,
+        label: u.name,
+      }))
+    : [];
 
   useEffect(() => {
     fetch("/api/auth/units")
@@ -102,6 +119,7 @@ export default function LoginForm() {
     setLocalLevel(remembered.localLevel || "tinh");
     setTinhCode(remembered.tinhCode || "");
     setXaCode(remembered.xaCode || "");
+    setReceivingParentCode(remembered.receivingParentCode || "");
     setDonviCode(remembered.donviCode || "");
     setStep(remembered.step);
     const portalLabel =
@@ -124,6 +142,7 @@ export default function LoginForm() {
         localLevel: "tinh",
         tinhCode: "",
         xaCode: "",
+        receivingParentCode: "",
         donviCode: "",
         step: 3,
       });
@@ -132,6 +151,7 @@ export default function LoginForm() {
     }
     setTinhCode("");
     setXaCode("");
+    setReceivingParentCode("");
     setDonviCode("");
     setLocalLevel("tinh");
     saveRememberedLogin({
@@ -139,6 +159,7 @@ export default function LoginForm() {
       localLevel: "tinh",
       tinhCode: "",
       xaCode: "",
+      receivingParentCode: "",
       donviCode: "",
       step: 2,
     });
@@ -151,9 +172,19 @@ export default function LoginForm() {
     setRestoredHint("");
     if (!loginPortal) return;
 
-    if (loginPortal === "don_vi_nhan_quan" && !donviCode) {
-      setError("Vui lòng chọn Đơn vị nhận quân");
+    if (loginPortal === "quan_khu" && !donviCode) {
+      setError("Vui lòng chọn Quân khu / BTL");
       return;
+    }
+    if (loginPortal === "don_vi_nhan_quan") {
+      if (!receivingParentCode) {
+        setError("Vui lòng chọn Quân khu / BTL trực thuộc");
+        return;
+      }
+      if (!donviCode) {
+        setError("Vui lòng chọn Đơn vị nhận quân");
+        return;
+      }
     }
     if (loginPortal === "can_bo_y_te" || loginPortal === "dia_phuong") {
       if (!tinhCode) {
@@ -170,6 +201,7 @@ export default function LoginForm() {
       localLevel,
       tinhCode,
       xaCode,
+      receivingParentCode,
       donviCode,
       step: 3,
     });
@@ -351,7 +383,7 @@ export default function LoginForm() {
                 onSubmit={handlePortalStep}
                 className="animate-in fade-in duration-300"
               >
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
                   {LOGIN_PORTAL_OPTIONS.map((opt) => {
                     const selected = loginPortal === opt.value;
                     const Icon = PORTAL_ICONS[opt.value];
@@ -462,16 +494,48 @@ export default function LoginForm() {
                     />
                   )}
 
-                {loginPortal === "don_vi_nhan_quan" && (
+                {loginPortal === "quan_khu" && (
                   <SearchableSelect
-                    label="Đơn vị nhận quân"
-                    placeholder="-- Chọn Đơn vị nhận quân --"
+                    label="Quân khu / BTL"
+                    placeholder="-- Chọn Quân khu / BTL --"
                     value={donviCode}
                     onChange={(val) => setDonviCode(val)}
                     options={units
-                      .filter((u) => u.level === "donvi")
+                      .filter(
+                        (u) => u.level === "donvi" && isQuanKhuOrBtl(u.code),
+                      )
                       .map((u) => ({ value: u.code, label: u.name }))}
                   />
+                )}
+
+                {loginPortal === "don_vi_nhan_quan" && (
+                  <>
+                    <SearchableSelect
+                      label="Quân khu / BTL trực thuộc"
+                      placeholder="-- Chọn Quân khu hoặc BTL --"
+                      value={receivingParentCode}
+                      onChange={(val) => {
+                        setReceivingParentCode(val);
+                        setDonviCode("");
+                      }}
+                      options={RECEIVING_LOGIN_PARENTS.map((u) => ({
+                        value: u.code,
+                        label:
+                          u.kind === "quandoan"
+                            ? `${u.name} (trực thuộc Bộ)`
+                            : u.name,
+                      }))}
+                    />
+                    {receivingParentCode && (
+                      <SearchableSelect
+                        label="Đơn vị nhận quân"
+                        placeholder="-- Chọn sư đoàn / trung đoàn / quân đoàn --"
+                        value={donviCode}
+                        onChange={(val) => setDonviCode(val)}
+                        options={receivingChildOptions}
+                      />
+                    )}
+                  </>
                 )}
 
                 <button

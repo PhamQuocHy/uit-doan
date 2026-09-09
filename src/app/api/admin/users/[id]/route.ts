@@ -11,6 +11,11 @@ import { persistUnitEditPin } from "@/lib/unit-pin";
 import { getUnitByCode } from "@/lib/hierarchy";
 import { ensureMedicalOfficerRole, findRoleById } from "@/lib/roles-db";
 import type { FunctionalRole } from "@/lib/functional-roles";
+import { ALL_MILITARY_UNITS } from "@/lib/military-regions";
+
+function isMilitaryDonvi(unitCode: string): boolean {
+  return ALL_MILITARY_UNITS.some((u) => u.code === unitCode);
+}
 
 function canManageMembers(session: {
   role: string;
@@ -104,9 +109,14 @@ export async function PUT(
       return NextResponse.json({ error: "Đơn vị không hợp lệ" }, { status: 400 });
     }
     if (session.hierarchyLevel === "bo") {
-      if (unit.level !== "tinh") {
+      const okTinh = unit.level === "tinh";
+      const okMilitary = unit.level === "donvi" && isMilitaryDonvi(unitCode);
+      if (!okTinh && !okMilitary) {
         return NextResponse.json(
-          { error: "Cấp Bộ chỉ được gán tài khoản cấp tỉnh / thành phố" },
+          {
+            error:
+              "Cấp Bộ chỉ được gán tài khoản cấp tỉnh/TP, quân khu/BTL hoặc đơn vị nhận quân",
+          },
           { status: 400 },
         );
       }
@@ -148,6 +158,10 @@ export async function PUT(
     if (!functionalRole) {
       functionalRole = inferFunctionalRoleFromRoleCode(roleRow.code, roleRow.name);
     }
+  }
+
+  if (unitCode && isMilitaryDonvi(unitCode)) {
+    functionalRole = "nhan_quan";
   }
 
   const dbOk = await updateUserInDb(

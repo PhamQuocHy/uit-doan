@@ -10,6 +10,7 @@ import {
   sqlAgeYear,
   type CitizenAgeScope,
 } from "@/lib/nvqs-age";
+import { callDisplayFilterSql } from "@/lib/enlistment-approval";
 
 type CitizenRow = RowDataPacket & {
   id: string;
@@ -27,10 +28,13 @@ type CitizenRow = RowDataPacket & {
   unit_code: string | null;
   military_status: Citizen["militaryStatus"];
   military_status_reason: string | null;
+  approval_comment?: string | null;
   military_status_locked: number | null;
   call_intent: Citizen["callIntent"] | null;
   approval_status: Citizen["approvalStatus"] | null;
   campaign_id: string | null;
+  receiving_status: Citizen["receivingStatus"] | null;
+  receiving_unit_code: string | null;
   health_grade: number | null;
   education_level: string | null;
   job: string | null;
@@ -87,10 +91,13 @@ function mapCitizen(row: CitizenRow): Citizen {
     avatar: row.avatar_url || undefined,
     militaryStatus: row.military_status,
     militaryStatusReason: row.military_status_reason || undefined,
+    approvalComment: row.approval_comment || null,
     militaryStatusLocked: Boolean(row.military_status_locked),
     callIntent: (row.call_intent || "unset") as Citizen["callIntent"],
     approvalStatus: (row.approval_status || "none") as Citizen["approvalStatus"],
     campaignId: row.campaign_id || undefined,
+    receivingStatus: (row.receiving_status || null) as Citizen["receivingStatus"],
+    receivingUnitCode: row.receiving_unit_code || null,
     archivedAt: row.archived_at ? toIso(row.archived_at) : null,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
@@ -129,6 +136,161 @@ export async function ensureCitizenAvatarColumn(): Promise<void> {
     }
   } catch (e) {
     console.warn("ensureCitizenAvatarColumn:", e);
+  }
+}
+
+export async function ensureCitizenCallIntentDuBi(): Promise<void> {
+  if (!(await pingDb())) return;
+  try {
+    const cols = await queryRows<(RowDataPacket & { COLUMN_TYPE?: string })[]>(
+      `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizens'
+         AND COLUMN_NAME = 'call_intent'
+       LIMIT 1`,
+    );
+    const colType = String(cols[0]?.COLUMN_TYPE || "");
+    if (colType && !colType.includes("de_xuat_khong_goi")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         MODIFY COLUMN call_intent
+         ENUM('unset','du_kien_goi','khong_goi','du_bi','de_xuat_khong_goi') NOT NULL DEFAULT 'unset'
+         COMMENT 'Dự kiến tuyển gọi / đề xuất không gọi / dự bị'`,
+      );
+    } else if (colType && !colType.includes("du_bi")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         MODIFY COLUMN call_intent
+         ENUM('unset','du_kien_goi','khong_goi','du_bi','de_xuat_khong_goi') NOT NULL DEFAULT 'unset'
+         COMMENT 'Dự kiến tuyển gọi / đề xuất không gọi / dự bị'`,
+      );
+    }
+  } catch (e) {
+    console.warn("ensureCitizenCallIntentDuBi:", e);
+  }
+}
+
+export async function ensureCitizenApprovalCommentColumn(): Promise<void> {
+  if (!(await pingDb())) return;
+  try {
+    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizens'
+         AND COLUMN_NAME = 'approval_comment'`,
+    );
+    if (cols.length === 0) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN approval_comment TEXT NULL
+         COMMENT 'Nhận xét QK khi không chấp nhận đề xuất / tạm hoãn'
+         AFTER military_status_reason`,
+      );
+    }
+  } catch (e) {
+    console.warn("ensureCitizenApprovalCommentColumn:", e);
+  }
+}
+
+/**
+ * Chuyển dữ liệu cũ sang luồng chờ QK:
+ * - tạm hoãn (approval none) → pending
+ * - không gọi địa phương tự chốt (approval none) → đề xuất không gọi pending
+ * Không đụng bản QK đã rejected / approved.
+ */
+export async function ensureProposalPendingMigration(): Promise<void> {
+  if (!(await pingDb())) return;
+  try {
+    await ensureCitizenCallIntentDuBi();
+    await queryExecute(
+      `UPDATE citizens
+       SET approval_status = 'pending', updated_at = NOW()
+       WHERE military_status = 'tamhoan'
+         AND IFNULL(approval_status, 'none') = 'none'`,
+    );
+    await queryExecute(
+      `UPDATE citizens
+       SET call_intent = 'de_xuat_khong_goi',
+           approval_status = 'pending',
+           military_status = 'trungtuyen',
+           updated_at = NOW()
+       WHERE call_intent = 'khong_goi'
+         AND IFNULL(approval_status, 'none') = 'none'
+         AND military_status <> 'nhapngu'`,
+    );
+  } catch (e) {
+    console.warn("ensureProposalPendingMigration:", e);
+  }
+}
+
+let receivingColumnsReady: boolean | null = null;
+
+/** Đảm bảo cột phân đơn vị nhận quân (idempotent). */
+export async function ensureCitizenReceivingColumns(): Promise<boolean> {
+  if (receivingColumnsReady === true) return true;
+  if (!(await pingDb())) {
+    receivingColumnsReady = false;
+    return false;
+  }
+  try {
+    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizens'
+         AND COLUMN_NAME IN ('receiving_status', 'receiving_unit_code')`,
+    );
+    const have = new Set(cols.map((c) => c.COLUMN_NAME));
+    if (!have.has("receiving_status")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN receiving_status
+           ENUM('chua_phan_quan','da_phan_quan','submitted_to_bo','bo_approved','published')
+           NULL DEFAULT NULL
+           COMMENT 'Trạng thái phân đơn vị nhận quân'
+         AFTER campaign_id`,
+      );
+    }
+    if (!have.has("receiving_unit_code")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN receiving_unit_code VARCHAR(64) NULL DEFAULT NULL
+           COMMENT 'Mã đơn vị nhận quân (quân khu)'
+         AFTER receiving_status`,
+      );
+    }
+    // Đồng bộ hồ sơ đã nhập ngũ cũ
+    await queryExecute(
+      `UPDATE citizens
+       SET receiving_status = 'chua_phan_quan'
+       WHERE military_status = 'nhapngu'
+         AND (receiving_status IS NULL OR receiving_status = '')
+         AND (receiving_unit_code IS NULL OR receiving_unit_code = '')`,
+    );
+    await queryExecute(
+      `UPDATE citizens
+       SET receiving_status = 'da_phan_quan'
+       WHERE military_status = 'nhapngu'
+         AND receiving_unit_code IS NOT NULL
+         AND receiving_unit_code <> ''
+         AND (receiving_status IS NULL OR receiving_status = 'chua_phan_quan')`,
+    );
+    // Seed quân khu nếu thiếu
+    await queryExecute(
+      `INSERT IGNORE INTO hierarchy_units (code, name, level, parent_code, is_active) VALUES
+        ('dv-qk1', 'Quân khu 1', 'donvi', 'bo', 1),
+        ('dv-qk2', 'Quân khu 2', 'donvi', 'bo', 1),
+        ('dv-qk3', 'Quân khu 3', 'donvi', 'bo', 1),
+        ('dv-qk4', 'Quân khu 4', 'donvi', 'bo', 1),
+        ('dv-qk5', 'Quân khu 5', 'donvi', 'bo', 1),
+        ('dv-qk7', 'Quân khu 7', 'donvi', 'bo', 1),
+        ('dv-qk9', 'Quân khu 9', 'donvi', 'bo', 1)`,
+    );
+    receivingColumnsReady = true;
+    return true;
+  } catch (e) {
+    console.error("ensureCitizenReceivingColumns:", e);
+    receivingColumnsReady = false;
+    return false;
   }
 }
 
@@ -252,6 +414,8 @@ export async function findCitizensFromDb(query: {
   militaryStatus?: string;
   callIntent?: string;
   campaignId?: string;
+  educationLevel?: string;
+  healthGrade?: string;
   unitCodes?: string[];
   page?: number;
   limit?: number;
@@ -268,6 +432,10 @@ export async function findCitizensFromDb(query: {
   if (!ok) return null;
   await ensureCitizenArchivedAtColumn();
   await ensureCitizenAvatarColumn();
+  await ensureCitizenCallIntentDuBi();
+  await ensureCitizenApprovalCommentColumn();
+  await ensureProposalPendingMigration();
+  await ensureCitizenReceivingColumns();
 
   const page = query.page || 1;
   const limit = query.limit || 10;
@@ -310,14 +478,49 @@ export async function findCitizensFromDb(query: {
     params.push(query.militaryStatus);
   }
 
-  if (query.callIntent) {
-    where.push("c.call_intent = ?");
-    params.push(query.callIntent);
+  const callSql = query.callIntent
+    ? callDisplayFilterSql(query.callIntent)
+    : null;
+  if (callSql) {
+    where.push(callSql);
   }
+
   if (query.campaignId) {
-    // Chọn đợt: gồm hồ sơ thuộc đợt + hồ sơ chưa gán đợt (tránh “mất” công dân)
-    where.push("(c.campaign_id = ? OR c.campaign_id IS NULL)");
+    // Chỉ hồ sơ thuộc đúng đợt đã chọn (không gộp hồ sơ chưa gán đợt)
+    where.push("c.campaign_id = ?");
     params.push(query.campaignId);
+  }
+
+  const eduJoin = `
+       LEFT JOIN (
+         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
+         FROM citizen_education e1
+         INNER JOIN (
+           SELECT citizen_id, MAX(id) AS max_id
+           FROM citizen_education
+           GROUP BY citizen_id
+         ) latest ON latest.max_id = e1.id
+       ) edu ON edu.citizen_id = c.id`;
+
+  if (query.educationLevel) {
+    const levels = educationLevelMatchValues(query.educationLevel);
+    if (levels.length === 1) {
+      where.push("edu.level = ?");
+      params.push(levels[0]);
+    } else if (levels.length > 1) {
+      where.push(`edu.level IN (${placeholders(levels.length)})`);
+      params.push(...levels);
+    }
+  }
+
+  if (query.healthGrade === "none") {
+    where.push("c.health_grade IS NULL");
+  } else if (query.healthGrade) {
+    const grade = Number(query.healthGrade);
+    if (Number.isFinite(grade)) {
+      where.push("c.health_grade = ?");
+      params.push(grade);
+    }
   }
 
   if (query.search) {
@@ -329,10 +532,11 @@ export async function findCitizensFromDb(query: {
   }
 
   const whereSql = where.join(" AND ");
+  const needsEduJoin = Boolean(query.educationLevel);
 
   try {
     const [countRow] = await queryRows<(RowDataPacket & { cnt: number })[]>(
-      `SELECT COUNT(*) AS cnt FROM citizens c WHERE ${whereSql}`,
+      `SELECT COUNT(*) AS cnt FROM citizens c${needsEduJoin ? eduJoin : ""} WHERE ${whereSql}`,
       params,
     );
 
@@ -342,9 +546,10 @@ export async function findCitizensFromDb(query: {
          c.id, c.full_name, c.cccd, c.date_of_birth, c.gender,
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
-         c.military_status, c.military_status_reason, c.military_status_locked,
+         c.military_status, c.military_status_reason, c.approval_comment, c.military_status_locked,
          c.call_intent, c.approval_status,
-         c.health_grade, c.campaign_id, c.created_at, c.updated_at, c.archived_at,
+         c.health_grade, c.campaign_id, c.receiving_status, c.receiving_unit_code,
+         c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
          edu.major AS job,
          edu.school_name AS school_name,
@@ -356,15 +561,7 @@ export async function findCitizensFromDb(query: {
          fam.father_name,
          fam.mother_name
        FROM citizens c
-       LEFT JOIN (
-         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
-         FROM citizen_education e1
-         INNER JOIN (
-           SELECT citizen_id, MAX(id) AS max_id
-           FROM citizen_education
-           GROUP BY citizen_id
-         ) latest ON latest.max_id = e1.id
-       ) edu ON edu.citizen_id = c.id
+       ${eduJoin}
        LEFT JOIN citizen_identities ci ON ci.citizen_id = c.id
        LEFT JOIN (
          SELECT
@@ -394,13 +591,160 @@ export async function findCitizensFromDb(query: {
   }
 }
 
+export type CitizenStatusSummary = {
+  du_kien_goi: number;
+  du_bi: number;
+  hoan: number;
+  khong_goi: number;
+};
+
+/** Đếm 4 nhóm trạng thái theo phạm vi (không theo tab callIntent / militaryStatus). */
+export async function countCitizenStatusSummaryFromDb(query: {
+  search?: string;
+  campaignId?: string;
+  educationLevel?: string;
+  healthGrade?: string;
+  unitCodes?: string[];
+  ageScope?: CitizenAgeScope;
+}): Promise<CitizenStatusSummary | null> {
+  const ok = await pingDb();
+  if (!ok) return null;
+  await ensureCitizenArchivedAtColumn();
+  await ensureCitizenCallIntentDuBi();
+  await ensureProposalPendingMigration();
+
+  const where: string[] = ["1=1"];
+  const params: unknown[] = [];
+
+  applyAgeScope(where, query.ageScope || "active");
+
+  if (query.unitCodes && query.unitCodes.length > 0) {
+    const root0 = query.unitCodes[0];
+    if (root0 === "bo") {
+      // nationwide
+    } else {
+      const onlyTinh =
+        query.unitCodes.length > 1 &&
+        query.unitCodes.every(
+          (c) => c === root0 || c.startsWith(`${root0}-`),
+        );
+
+      if (onlyTinh && root0 && !root0.includes("-")) {
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root0, root0);
+      } else if (query.unitCodes.length <= 500) {
+        where.push(`c.unit_code IN (${placeholders(query.unitCodes.length)})`);
+        params.push(...query.unitCodes);
+      } else {
+        const root = root0?.split("-")[0] || root0;
+        where.push("(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))");
+        params.push(root, root);
+      }
+    }
+  }
+
+  if (query.campaignId) {
+    where.push("c.campaign_id = ?");
+    params.push(query.campaignId);
+  }
+
+  const eduJoin = `
+       LEFT JOIN (
+         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
+         FROM citizen_education e1
+         INNER JOIN (
+           SELECT citizen_id, MAX(id) AS max_id
+           FROM citizen_education
+           GROUP BY citizen_id
+         ) latest ON latest.max_id = e1.id
+       ) edu ON edu.citizen_id = c.id`;
+
+  if (query.educationLevel) {
+    const levels = educationLevelMatchValues(query.educationLevel);
+    if (levels.length === 1) {
+      where.push("edu.level = ?");
+      params.push(levels[0]);
+    } else if (levels.length > 1) {
+      where.push(`edu.level IN (${placeholders(levels.length)})`);
+      params.push(...levels);
+    }
+  }
+
+  if (query.healthGrade === "none") {
+    where.push("c.health_grade IS NULL");
+  } else if (query.healthGrade) {
+    const grade = Number(query.healthGrade);
+    if (Number.isFinite(grade)) {
+      where.push("c.health_grade = ?");
+      params.push(grade);
+    }
+  }
+
+  if (query.search) {
+    const s = `%${query.search}%`;
+    where.push(
+      "(c.full_name LIKE ? OR c.cccd LIKE ? OR c.phone LIKE ? OR c.permanent_address LIKE ? OR c.current_address LIKE ?)",
+    );
+    params.push(s, s, s, s, s);
+  }
+
+  const whereSql = where.join(" AND ");
+  const needsEduJoin = Boolean(query.educationLevel);
+  const duKienSql = callDisplayFilterSql("du_kien_goi");
+  const duBiSql = callDisplayFilterSql("du_bi");
+  const khongGoiSql = callDisplayFilterSql("khong_goi");
+  if (!duKienSql || !duBiSql || !khongGoiSql) return null;
+
+  try {
+    const [row] = await queryRows<
+      (RowDataPacket & {
+        du_kien_goi: number;
+        du_bi: number;
+        hoan: number;
+        khong_goi: number;
+      })[]
+    >(
+      `SELECT
+         SUM(CASE WHEN ${duKienSql} THEN 1 ELSE 0 END) AS du_kien_goi,
+         SUM(CASE WHEN ${duBiSql} THEN 1 ELSE 0 END) AS du_bi,
+         SUM(CASE WHEN c.military_status = 'tamhoan' THEN 1 ELSE 0 END) AS hoan,
+         SUM(CASE WHEN ${khongGoiSql} THEN 1 ELSE 0 END) AS khong_goi
+       FROM citizens c${needsEduJoin ? eduJoin : ""}
+       WHERE ${whereSql}`,
+      params,
+    );
+
+    return {
+      du_kien_goi: Number(row?.du_kien_goi || 0),
+      du_bi: Number(row?.du_bi || 0),
+      hoan: Number(row?.hoan || 0),
+      khong_goi: Number(row?.khong_goi || 0),
+    };
+  } catch (e) {
+    console.error("countCitizenStatusSummaryFromDb:", e);
+    return null;
+  }
+}
+
+/** Chuẩn hóa nhóm trình độ học vấn để lọc khớp dữ liệu cũ (12/12, Thạc sĩ…). */
+function educationLevelMatchValues(filter: string): string[] {
+  if (filter === "THPT" || filter === "pho_thong") {
+    return ["THPT", "12/12", "9/12", "THCS", "PTTH"];
+  }
+  if (filter === "Sau đại học" || filter === "sau_dai_hoc") {
+    return ["Sau đại học", "Thạc sĩ", "Tiến sĩ", "ThS", "TS"];
+  }
+  return [filter];
+}
+
 const CITIZEN_SELECT_SQL = `SELECT
          c.id, c.full_name, c.cccd, c.date_of_birth, c.gender,
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
-         c.military_status, c.military_status_reason, c.military_status_locked,
+         c.military_status, c.military_status_reason, c.approval_comment, c.military_status_locked,
          c.call_intent, c.approval_status,
-         c.health_grade, c.campaign_id, c.created_at, c.updated_at, c.archived_at,
+         c.health_grade, c.campaign_id, c.receiving_status, c.receiving_unit_code,
+         c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
          edu.major AS job,
          edu.school_name AS school_name,
@@ -437,6 +781,9 @@ export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null>
   if (!ok) return null;
   await ensureCitizenArchivedAtColumn();
   await ensureCitizenAvatarColumn();
+  await ensureCitizenCallIntentDuBi();
+  await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenReceivingColumns();
   try {
     const rows = await queryRows<CitizenRow[]>(
       `${CITIZEN_SELECT_SQL}
@@ -458,6 +805,7 @@ export async function findCitizenByCccdFromDb(
   if (!ok) return null;
   await ensureCitizenArchivedAtColumn();
   await ensureCitizenAvatarColumn();
+  await ensureCitizenReceivingColumns();
   const digits = String(cccd || "").replace(/\D/g, "");
   if (!digits) return null;
   try {
@@ -605,6 +953,9 @@ export async function updateCitizenInDb(
 ): Promise<Citizen | null> {
   const ok = await pingDb();
   if (!ok) return null;
+  await ensureCitizenCallIntentDuBi();
+  await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenReceivingColumns();
 
   const fields: string[] = [];
   const params: unknown[] = [];
@@ -623,9 +974,18 @@ export async function updateCitizenInDb(
     current_address: data.address,
     military_status: data.militaryStatus,
     military_status_reason: data.militaryStatusReason,
+    approval_comment:
+      data.approvalComment !== undefined ? data.approvalComment : undefined,
     call_intent: data.callIntent,
     approval_status: data.approvalStatus,
-    campaign_id: data.campaignId || null,
+    campaign_id:
+      data.campaignId !== undefined ? data.campaignId || null : undefined,
+    receiving_status:
+      data.receivingStatus !== undefined ? data.receivingStatus : undefined,
+    receiving_unit_code:
+      data.receivingUnitCode !== undefined
+        ? data.receivingUnitCode || null
+        : undefined,
     military_status_locked:
       data.militaryStatusLocked === undefined
         ? undefined

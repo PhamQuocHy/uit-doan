@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
+import { hierarchyNeedsEditPin } from "@/lib/data";
 import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
 import DateVnInput from "@/components/admin/DateVnInput";
 import type { Hn212CitizenScan } from "@/lib/hn212";
@@ -137,6 +138,10 @@ export default function CitizenFormModal({
   const [formTinh, setFormTinh] = useState("");
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [editPin, setEditPin] = useState("");
+
+  const needsPin =
+    sessionLevel !== null && hierarchyNeedsEditPin(sessionLevel);
 
   const loadWards = useCallback(async (parentCode: string) => {
     if (!parentCode) {
@@ -158,6 +163,7 @@ export default function CitizenFormModal({
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setEditPin("");
     setLoadingUnits(true);
 
     void (async () => {
@@ -301,6 +307,9 @@ export default function CitizenFormModal({
       if (!form.campaignId.trim()) {
         throw new Error("Vui lòng chọn đợt đăng ký");
       }
+      if (needsPin && !editPin.trim()) {
+        throw new Error("Vui lòng nhập mã PIN địa phương để lưu hồ sơ");
+      }
 
       const url =
         mode === "edit" && citizen
@@ -313,6 +322,9 @@ export default function CitizenFormModal({
           ...form,
           unitCode,
           campaignId: form.campaignId,
+          ...(needsPin
+            ? { requireEditPin: true, editPin: editPin.trim() }
+            : {}),
           ...(mode === "edit" && citizen?.militaryStatusLocked
             ? { unlockViaProfile: true }
             : {}),
@@ -338,7 +350,7 @@ export default function CitizenFormModal({
       <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[24px] bg-m3-surface-lowest shadow-2xl sm:rounded-[24px]">
         <div className="flex items-start justify-between gap-3 border-b border-black/[0.06] px-5 py-4 sm:px-6">
           <h2 className="text-[20px] font-bold text-m3-on-surface">
-            {mode === "edit" ? "Sửa thông tin công dân" : "Thêm công dân mới"}
+            {mode === "edit" ? "Sửa nhanh" : "Thêm công dân mới"}
           </h2>
           <div className="flex shrink-0 items-center gap-2">
             {mode === "create" && (
@@ -652,6 +664,22 @@ export default function CitizenFormModal({
                 />
               </Field>
             </div>
+
+            {needsPin && (
+              <Field label="Mã PIN địa phương *">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className={inputCls}
+                  value={editPin}
+                  onChange={(e) => setEditPin(e.target.value)}
+                  placeholder="Nhập PIN để xác thực lưu hồ sơ"
+                />
+                <span className="mt-1 block text-[12px] text-m3-on-surface-variant">
+                  Cấp tỉnh / xã bắt buộc nhập PIN khi lưu.
+                </span>
+              </Field>
+            )}
           </div>
 
           <div className="flex gap-3 border-t border-black/[0.06] bg-m3-surface-high/80 px-5 py-4 sm:px-6">

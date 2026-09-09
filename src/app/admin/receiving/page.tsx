@@ -2,31 +2,37 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  CheckCircle2,
-  AlertTriangle,
-  User2,
-  X,
+  Check,
+  Globe,
+  Loader2,
+  Save,
   Send,
-  Shield,
-  Clock,
+  Target,
 } from "lucide-react";
 import {
   AdminListHeader,
-  AdminListToolbar,
   AdminListShell,
   AdminTable,
   AdminTHead,
   ADMIN_TH_CLS,
   ADMIN_TD_CLS,
   adminRowClass,
-  AdminHoverActions,
-  AdminIconBtn,
   AdminPill,
   AdminStatusTabs,
   AdminPrimaryBtn,
+  ADMIN_SELECT_CLS,
 } from "@/components/admin/list-ui";
+import {
+  M3Card,
+  M3Snackbar,
+  M3ConfirmDialog,
+  type M3SnackbarTone,
+} from "@/components/m3";
+import type { HierarchyUnit } from "@/lib/data";
 
-const STAT_CARD_CLS =
+const SELECT_CLS =
+  "h-9 min-w-[200px] rounded-full border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium outline-none";
+const STAT =
   "rounded-[16px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
 
 interface Session {
@@ -34,1083 +40,1254 @@ interface Session {
   unitCode: string;
   name: string;
 }
-
-// ── Mock receiving units (for bo view) ─────────────────────────────────────
-const mockUnits = [
-  {
-    id: "u1",
-    name: "Sư đoàn 1 – Quân khu 1",
-    quota: 120,
-    received: 120,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-  },
-  {
-    id: "u2",
-    name: "Sư đoàn 2 – Quân khu 3",
-    quota: 80,
-    received: 72,
-    status: "pending" as const,
-    lastUpdate: "2026-03-02",
-  },
-  {
-    id: "u3",
-    name: "Lữ đoàn 25 – Quân khu 5",
-    quota: 60,
-    received: 60,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-  },
-  {
-    id: "u4",
-    name: "Sư đoàn 5 – Quân khu 7",
-    quota: 90,
-    received: 45,
-    status: "pending" as const,
-    lastUpdate: "2026-03-03",
-  },
-  {
-    id: "u5",
-    name: "Trung đoàn 10 – Quân khu 9",
-    quota: 50,
-    received: 50,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-  },
-];
-
-// ── Mock soldiers (for donvi view) ─────────────────────────────────────────
-interface Soldier {
+interface Campaign {
   id: string;
-  fullName: string;
-  cccd: string;
-  dob: string;
-  origin: string;
-  healthClass: string;
-  arrivalStatus: "pending" | "arrived" | "absent";
-  unitReport: "" | "ok" | "health_issue";
-  reportNote: string;
+  name: string;
+  year: number;
+  status: string;
 }
 
-const mockSoldiers: Soldier[] = [
-  {
-    id: "s1",
-    fullName: "Nguyễn Văn An",
-    cccd: "079300012345",
-    dob: "2002-03-14",
-    origin: "Xã Hàng Bông, Hoàn Kiếm, Hà Nội",
-    healthClass: "A1",
-    arrivalStatus: "arrived",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s2",
-    fullName: "Trần Minh Bảo",
-    cccd: "079300076543",
-    dob: "2003-07-22",
-    origin: "Xã Hàng Đào, Hoàn Kiếm, Hà Nội",
-    healthClass: "A",
-    arrivalStatus: "arrived",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s3",
-    fullName: "Phạm Quốc Duy",
-    cccd: "079300021098",
-    dob: "2003-01-25",
-    origin: "Xã Bình Hưng, Bình Chánh, TP.HCM",
-    healthClass: "A1",
-    arrivalStatus: "arrived",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s4",
-    fullName: "Đặng Minh Quân",
-    cccd: "079300043219",
-    dob: "2002-09-30",
-    origin: "Xã Hàng Đào, Hoàn Kiếm, Hà Nội",
-    healthClass: "A",
-    arrivalStatus: "arrived",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s5",
-    fullName: "Bùi Văn Hùng",
-    cccd: "079300067890",
-    dob: "2003-04-12",
-    origin: "Xã Khâm Thiên, Đống Đa, Hà Nội",
-    healthClass: "A1",
-    arrivalStatus: "pending",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s6",
-    fullName: "Vũ Thanh Phát",
-    cccd: "079300098765",
-    dob: "2004-05-03",
-    origin: "Xã Hàng Bông, Hoàn Kiếm, Hà Nội",
-    healthClass: "A",
-    arrivalStatus: "absent",
-    unitReport: "",
-    reportNote: "",
-  },
-  {
-    id: "s7",
-    fullName: "Hoàng Văn Em",
-    cccd: "079300058432",
-    dob: "2002-11-19",
-    origin: "Xã Long Hòa, Bình Chánh, TP.HCM",
-    healthClass: "B",
-    arrivalStatus: "arrived",
-    unitReport: "health_issue",
-    reportNote: "Huyết áp cao không đảm bảo sức khỏe chiến đấu",
-  },
-];
+function useCampaigns() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignId, setCampaignId] = useState("");
+  useEffect(() => {
+    fetch("/api/admin/recruitment?limit=50")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = (d?.data || []) as Campaign[];
+        setCampaigns(list);
+        const ongoing = list.find((c) => c.status === "ongoing");
+        setCampaignId(ongoing?.id || list[0]?.id || "");
+      })
+      .catch(() => undefined);
+  }, []);
+  return { campaigns, campaignId, setCampaignId };
+}
 
-const arrivalConfig = {
-  arrived: { label: "Đã trình diện", color: "var(--color-m3-success)", bg: "var(--color-m3-success-container)" },
-  pending: { label: "Chưa lên", color: "var(--color-m3-warning)", bg: "var(--color-m3-warning-container)" },
-  absent: { label: "Vắng mặt", color: "var(--m3-error, #ba1a1a)", bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" },
-};
-
-// \u2500\u2500 BO VIEW: read-only unit overview \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-const boMockUnits = [
-  {
-    id: "u1",
-    name: "S\u01b0 \u0111o\u00e0n 1 \u2013 Qu\u00e2n khu 1",
-    quota: 120,
-    received: 120,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-    note: "",
-  },
-  {
-    id: "u2",
-    name: "S\u01b0 \u0111o\u00e0n 2 \u2013 Qu\u00e2n khu 3",
-    quota: 80,
-    received: 72,
-    status: "pending" as const,
-    lastUpdate: "2026-03-02",
-    note: "",
-  },
-  {
-    id: "u3",
-    name: "L\u1eef \u0111o\u00e0n 25 \u2013 Qu\u00e2n khu 5",
-    quota: 60,
-    received: 60,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-    note: "",
-  },
-  {
-    id: "u4",
-    name: "S\u01b0 \u0111o\u00e0n 5 \u2013 Qu\u00e2n khu 7",
-    quota: 90,
-    received: 45,
-    status: "supplement_needed" as const,
-    lastUpdate: "2026-03-03",
-    note: "4 QN s\u1ee9c kh\u1ecfe kh\u00f4ng \u0111\u1ea3m b\u1ea3o, y\u00eau c\u1ea7u b\u1ed5 sung",
-  },
-  {
-    id: "u5",
-    name: "Trung \u0111o\u00e0n 10 \u2013 Qu\u00e2n khu 9",
-    quota: 50,
-    received: 50,
-    status: "confirmed" as const,
-    lastUpdate: "2026-03-01",
-    note: "",
-  },
-];
-
-const mockUnqualifiedSoldiers = [
-  {
-    id: "uq1",
-    fullName: "Ngô Thành Nhân",
-    cccd: "079300011112",
-    dateOfBirth: "2001-12-05",
-    origin: "Huyện Bình Chánh, TP.HCM",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Huyết áp cao không đảm bảo sức khỏe chiến đấu",
-    reportDate: "2026-03-03",
-  },
-  {
-    id: "uq2",
-    fullName: "Trần Thế Khoa",
-    cccd: "079300055533",
-    dateOfBirth: "2003-08-15",
-    origin: "Huyện Củ Chi, TP.HCM",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Suy nhược cơ thể",
-    reportDate: "2026-03-03",
-  },
-  {
-    id: "uq3",
-    fullName: "Lê Minh Trí",
-    cccd: "079300077744",
-    dateOfBirth: "2002-01-20",
-    origin: "Quận Hoàn Kiếm, Hà Nội",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Thị lực giảm sút do chấn thương",
-    reportDate: "2026-03-03",
-  },
-  {
-    id: "uq4",
-    fullName: "Phạm Hùng Cường",
-    cccd: "079300099955",
-    dateOfBirth: "2004-11-10",
-    origin: "Quận Cầu Giấy, Hà Nội",
-    unitReceived: "Sư đoàn 5 – Quân khu 7",
-    reason: "Bệnh lý tim mạch",
-    reportDate: "2026-03-03",
-  },
-];
-
-const BO_STATUS_TABS = [
-  { value: "", label: "Tất cả" },
-  { value: "confirmed", label: "Đã nhận đủ" },
-  { value: "pending", label: "Chờ xác nhận" },
-  { value: "supplement_needed", label: "Cần bổ sung" },
-] as const;
-
-function BoView() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [notePopover, setNotePopover] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const filtered = useMemo(
-    () =>
-      boMockUnits.filter((u) => {
-        const matchSearch =
-          !search || u.name.toLowerCase().includes(search.toLowerCase());
-        const matchStatus = !statusFilter || u.status === statusFilter;
-        return matchSearch && matchStatus;
-      }),
-    [search, statusFilter],
+function CampaignSelect({
+  campaigns,
+  value,
+  onChange,
+}: {
+  campaigns: Campaign[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select className={SELECT_CLS} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">— Chọn đợt tuyển quân —</option>
+      {campaigns.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.year} · {c.name}
+        </option>
+      ))}
+    </select>
   );
+}
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+function pill(status: string) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    chua_phan_quan: {
+      label: "Chưa phân",
+      bg: "var(--color-m3-warning-container)",
+      color: "var(--color-m3-warning)",
+    },
+    da_phan_quan: {
+      label: "Đã phân đơn vị",
+      bg: "color-mix(in srgb, #0d9488 14%, white)",
+      color: "#0f766e",
+    },
+    submitted_to_bo: {
+      label: "Chờ Bộ duyệt",
+      bg: "color-mix(in srgb, var(--m3-primary) 14%, white)",
+      color: "var(--m3-primary)",
+    },
+    bo_approved: {
+      label: "Bộ đã duyệt",
+      bg: "var(--color-m3-success-container)",
+      color: "var(--color-m3-success)",
+    },
+    published: {
+      label: "Đã công bố",
+      bg: "var(--color-m3-success-container)",
+      color: "var(--color-m3-success)",
+    },
+  };
+  return map[status] || map.chua_phan_quan;
+}
+
+/** Bộ: giao chỉ tiêu QK + duyệt + công bố */
+function BoView({ session }: { session: Session }) {
+  const { campaigns, campaignId, setCampaignId } = useCampaigns();
+  const [tab, setTab] = useState<"quota" | "final">("quota");
+  const [quotas, setQuotas] = useState<
+    {
+      id: string;
+      receivingUnitCode: string;
+      receivingUnitName: string;
+      amount: number;
+      filled: number;
+      recruitmentAmount?: number | null;
+    }[]
+  >([]);
+  const [regions, setRegions] = useState<{ code: string; name: string }[]>([]);
+  const [formUnit, setFormUnit] = useState("");
+  const [rows, setRows] = useState<
+    { id: string; fullName: string; cccd: string; unitName: string; receivingUnitName: string; receivingStatus: string }[]
+  >([]);
+  const [counts, setCounts] = useState({
+    submitted_to_bo: 0,
+    bo_approved: 0,
+    published: 0,
+  });
+  const [statusFilter, setStatusFilter] = useState("submitted_to_bo");
+  const [toast, setToast] = useState<{ message: string; tone: M3SnackbarTone } | null>(
+    null,
+  );
+  const [confirmAction, setConfirmAction] = useState<"approve" | "publish" | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+
+  const loadQuota = useCallback(async () => {
+    if (!campaignId) return;
+    const res = await fetch(
+      `/api/admin/receiving-quotas?campaignId=${encodeURIComponent(campaignId)}`,
+    );
+    if (!res.ok) return;
+    const d = await res.json();
+    setQuotas(d.data || []);
+    setRegions((d.regions || []).map((r: { code: string; name: string }) => r));
+  }, [campaignId]);
+
+  const loadList = useCallback(async () => {
+    if (!campaignId) return;
+    const params = new URLSearchParams({ campaignId, status: statusFilter });
+    const res = await fetch(`/api/admin/receiving?${params}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    setRows(d.data || []);
+    setCounts({
+      submitted_to_bo: d.counts?.submitted_to_bo || 0,
+      bo_approved: d.counts?.bo_approved || 0,
+      published: d.counts?.published || 0,
+    });
+  }, [campaignId, statusFilter]);
 
   useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, pageSize]);
+    void loadQuota();
+  }, [loadQuota]);
+  useEffect(() => {
+    if (tab === "final") void loadList();
+  }, [tab, loadList]);
 
-  const confirmedCount = boMockUnits.filter(
-    (u) => u.status === "confirmed",
-  ).length;
-  const supplementCount = boMockUnits.filter(
-    (u) => u.status === "supplement_needed",
-  ).length;
-  const pendingCount = boMockUnits.filter((u) => u.status === "pending").length;
-  const totalQuota = boMockUnits.reduce((s, u) => s + u.quota, 0);
-  const totalReceived = boMockUnits.reduce((s, u) => s + u.received, 0);
+  const syncAll = async () => {
+    if (!campaignId) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving-quotas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync_from_recruitment",
+          campaignId,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast({ message: d.error || "Không đồng bộ được", tone: "error" });
+      } else {
+        setToast({
+          message: d.message || "Đã đồng bộ chỉ tiêu nhận quân",
+          tone: "success",
+        });
+      }
+      await loadQuota();
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const statusConf = {
-    confirmed: {
-      label: "\u0110\u00e3 nh\u1eadn \u0111\u1ee7",
-      color: "var(--color-m3-success)",
-      bg: "var(--color-m3-success-container)",
-      Icon: CheckCircle2,
-    },
-    pending: {
-      label: "Ch\u1edd x\u00e1c nh\u1eadn",
-      color: "var(--color-m3-warning)",
-      bg: "var(--color-m3-warning-container)",
-      Icon: Clock,
-    },
-    supplement_needed: {
-      label: "C\u1ea7n b\u1ed5 sung",
-      color: "var(--m3-error, #ba1a1a)",
-      bg: "var(--m3-error-container, var(--m3-error-container, #ffdad6))",
-      Icon: AlertTriangle,
-    },
+  const saveQuota = async () => {
+    if (!formUnit) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving-quotas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "upsert",
+          campaignId,
+          receivingUnitCode: formUnit,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast({ message: d.error || "Không lưu được", tone: "error" });
+      } else {
+        setToast({
+          message: `Đã đồng bộ ${d.data?.amount ?? ""} chỉ tiêu nhận quân (= tuyển quân)`,
+          tone: "success",
+        });
+        setFormUnit("");
+      }
+      await loadQuota();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runFinal = async (action: "approve" | "publish") => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, campaignId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setConfirmAction(null);
+      if (!res.ok) {
+        setToast({ message: d.error || "Không thực hiện được", tone: "error" });
+      } else {
+        setToast({ message: d.message || "Thành công", tone: "success" });
+        setStatusFilter(action === "approve" ? "bo_approved" : "published");
+        await loadList();
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="space-y-4 pb-6">
       <AdminListHeader
-        title="Đơn vị nhận quân"
-        countLabel={`${boMockUnits.length} đơn vị`}
+        title="Chỉ tiêu QK · Duyệt & công bố"
+        countLabel={session.name}
+        filters={
+          <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+        }
+        actions={
+          tab === "final" ? (
+            <>
+              <AdminPrimaryBtn tone="green" onClick={() => setConfirmAction("approve")}>
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Duyệt ({counts.submitted_to_bo})
+              </AdminPrimaryBtn>
+              <AdminPrimaryBtn tone="blue" onClick={() => setConfirmAction("publish")}>
+                <Globe size={14} />
+                Công bố ({counts.bo_approved})
+              </AdminPrimaryBtn>
+            </>
+          ) : undefined
+        }
       />
-
-      <p className="text-[14px] text-m3-on-surface-variant">
-        Theo dõi tình trạng nhận quân của tất cả đơn vị
-      </p>
-
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          {
-            label: "Tổng đơn vị",
-            value: boMockUnits.length,
-            color: "var(--m3-on-surface, #1b1d20)",
-          },
-          {
-            label: "Đã nhận đủ quân",
-            value: confirmedCount,
-            color: "var(--color-m3-success)",
-          },
-          {
-            label: "Chờ xác nhận",
-            value: pendingCount,
-            color: "var(--color-m3-warning)",
-          },
-          {
-            label: "Cần bổ sung",
-            value: supplementCount,
-            color: "var(--m3-error, #ba1a1a)",
-          },
-        ].map((s) => (
-          <div key={s.label} className={STAT_CARD_CLS}>
-            <p className="text-[12px] text-m3-on-surface-variant">{s.label}</p>
-            <p
-              className="mt-1 text-[24px] font-bold"
-              style={{ color: s.color }}
+      <AdminStatusTabs
+        tabs={[
+          { value: "quota", label: "Giao chỉ tiêu quân khu" },
+          { value: "final", label: "Duyệt & công bố" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as "quota" | "final")}
+      />
+      {!campaignId ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-m3-on-surface-variant">
+          Chọn đợt tuyển quân
+        </div>
+      ) : tab === "quota" ? (
+        <>
+          <div className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
+            <label className="text-[12px] text-m3-on-surface-variant">
+              Quân khu / BTL
+              <select
+                className={`${SELECT_CLS} mt-1 block`}
+                value={formUnit}
+                onChange={(e) => setFormUnit(e.target.value)}
+              >
+                <option value="">— Chọn —</option>
+                {regions.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <AdminPrimaryBtn
+              tone="blue"
+              onClick={() => void saveQuota()}
+              disabled={busy || !formUnit}
             >
-              {s.value}
-            </p>
+              <Target size={14} /> Đồng bộ từ tuyển quân
+            </AdminPrimaryBtn>
+            <AdminPrimaryBtn
+              tone="green"
+              onClick={() => void syncAll()}
+              disabled={busy || !campaignId}
+            >
+              {busy ? <Loader2 size={14} className="animate-spin" /> : null}
+              Đồng bộ tất cả quân khu
+            </AdminPrimaryBtn>
           </div>
-        ))}
-      </div>
-
-      <div className={STAT_CARD_CLS}>
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[13px] font-medium text-m3-on-surface-variant">
-            Tổng tiến độ nhận quân
-          </p>
-          <span
-            className="text-[13px] font-bold"
-            style={{ color: "var(--m3-primary, #1a73e8)" }}
-          >
-            {totalReceived}/{totalQuota} (
-            {Math.round((totalReceived / totalQuota) * 100)}%)
-          </span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-m3-surface-container">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${Math.round((totalReceived / totalQuota) * 100)}%`,
-              background: "var(--m3-primary, #1a73e8)",
-            }}
-          />
-        </div>
-      </div>
-
-      <AdminListShell
-        page={page}
-        totalPages={totalPages}
-        tabs={
-          <AdminStatusTabs
-            tabs={[...BO_STATUS_TABS]}
-            value={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v);
-              setPage(1);
-            }}
-          />
-        }
-        toolbar={
-          <AdminListToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Tìm đơn vị..."
-            page={page}
-            pageSize={pageSize}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(1);
-            }}
-          />
-        }
-      >
-        <AdminTable minWidth="min-w-[900px]">
-          <AdminTHead>
-            <th className={ADMIN_TH_CLS}>Đơn vị nhận quân</th>
-            <th className={`${ADMIN_TH_CLS} text-center`}>Chỉ tiêu</th>
-            <th className={`${ADMIN_TH_CLS} text-center`}>Đã nhận</th>
-            <th className={ADMIN_TH_CLS}>Tiến độ</th>
-            <th className={ADMIN_TH_CLS}>Trạng thái</th>
-            <th className={ADMIN_TH_CLS}>Cập nhật</th>
-          </AdminTHead>
-          <tbody>
-            {paginated.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
-                >
-                  Không có kết quả
-                </td>
-              </tr>
-            ) : (
-              paginated.map((u, idx) => {
-                const pct = Math.round((u.received / u.quota) * 100);
-                const sc = statusConf[u.status];
+          <AdminListShell page={1} totalPages={1}>
+            <AdminTable>
+              <AdminTHead>
+                <th className={ADMIN_TH_CLS}>Quân khu</th>
+                <th className={`${ADMIN_TH_CLS} text-center`}>Tuyển quân</th>
+                <th className={`${ADMIN_TH_CLS} text-center`}>Nhận quân</th>
+                <th className={ADMIN_TH_CLS}>Đã phân</th>
+              </AdminTHead>
+              <tbody>
+                {quotas.map((q, i) => {
+                  const tuyen = q.recruitmentAmount ?? q.amount;
+                  const synced = tuyen === q.amount;
+                  return (
+                    <tr key={q.id} className={adminRowClass(i)}>
+                      <td className={ADMIN_TD_CLS}>{q.receivingUnitName}</td>
+                      <td className={`${ADMIN_TD_CLS} text-center font-semibold`}>
+                        {tuyen}
+                      </td>
+                      <td className={`${ADMIN_TD_CLS} text-center`}>
+                        <span className="font-semibold">{q.amount}</span>
+                        {!synced && (
+                          <span className="ml-2 text-[12px] text-amber-700">
+                            lệch
+                          </span>
+                        )}
+                      </td>
+                      <td className={ADMIN_TD_CLS}>
+                        {q.filled}/{q.amount}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {quotas.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-8 text-center text-sm text-m3-on-surface-variant"
+                    >
+                      Chưa có chỉ tiêu — giao tuyển quân tại menu Giao chỉ tiêu, rồi
+                      đồng bộ tại đây.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </AdminTable>
+          </AdminListShell>
+        </>
+      ) : (
+        <AdminListShell
+          page={1}
+          totalPages={1}
+          tabs={
+            <AdminStatusTabs
+              tabs={[
+                { value: "submitted_to_bo", label: `Chờ duyệt (${counts.submitted_to_bo})` },
+                { value: "bo_approved", label: `Đã duyệt (${counts.bo_approved})` },
+                { value: "published", label: `Đã công bố (${counts.published})` },
+              ]}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+          }
+        >
+          <AdminTable>
+            <AdminTHead>
+              <th className={ADMIN_TH_CLS}>Họ tên</th>
+              <th className={ADMIN_TH_CLS}>Đơn vị quản lý</th>
+              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+              <th className={ADMIN_TH_CLS}>TT</th>
+            </AdminTHead>
+            <tbody>
+              {rows.map((r, i) => {
+                const p = pill(r.receivingStatus);
                 return (
-                  <tr
-                    key={u.id}
-                    className={adminRowClass(
-                      idx,
-                      u.status === "supplement_needed"
-                        ? "bg-red-50/60 hover:bg-red-50/80"
-                        : "",
-                    )}
-                  >
+                  <tr key={r.id} className={adminRowClass(i)}>
                     <td className={ADMIN_TD_CLS}>
-                      <div className="flex items-center gap-2">
-                        <div className="relative shrink-0">
-                          {u.status === "supplement_needed" ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNotePopover(
-                                  notePopover === u.id ? null : u.id,
-                                )
-                              }
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-m3-error-container ring-2 ring-m3-error transition-colors hover:bg-m3-error-container"
-                              title="Xem lý do cần bổ sung"
-                            >
-                              <Shield size={13} className="text-m3-error" />
-                              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-m3-error-container text-[10px] font-bold leading-none text-white">
-                                !
-                              </span>
-                            </button>
-                          ) : (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-m3-surface-high">
-                              <Shield
-                                size={13}
-                                style={{ color: "var(--m3-primary, #1a73e8)" }}
-                              />
-                            </div>
-                          )}
-                          {notePopover === u.id && (
-                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-                              <div className="animate-in fade-in zoom-in w-full max-w-4xl overflow-hidden rounded-3xl bg-m3-surface-lowest shadow-2xl duration-200">
-                                <div className="p-6">
-                                  <div className="mb-6 flex items-center gap-3">
-                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-m3-error-container">
-                                      <AlertTriangle
-                                        size={24}
-                                        className="text-m3-error"
-                                      />
-                                    </div>
-                                    <div>
-                                      <h3 className="text-lg font-bold text-m3-on-surface">
-                                        Chi tiết lý do bổ sung
-                                      </h3>
-                                      <p className="text-sm text-m3-on-surface-variant">
-                                        {u.name}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => setNotePopover(null)}
-                                      className="ml-auto rounded-xl p-2 text-m3-on-surface-variant transition-colors hover:bg-m3-surface-container"
-                                    >
-                                      <X size={20} />
-                                    </button>
-                                  </div>
-
-                                  <div className="mb-6 rounded-2xl border border-m3-error bg-m3-error-container/50 p-4">
-                                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-m3-on-surface-variant">
-                                      {u.note}
-                                    </p>
-                                  </div>
-
-                                  <div className="mb-6 overflow-hidden rounded-xl border border-m3-outline-variant">
-                                    <table className="w-full text-left text-sm">
-                                      <thead className="border-b border-m3-outline-variant bg-m3-surface-high font-medium text-m3-on-surface-variant">
-                                        <tr>
-                                          <th className="px-4 py-3">
-                                            Quân nhân
-                                          </th>
-                                          <th className="px-4 py-3">
-                                            Quê quán
-                                          </th>
-                                          <th className="px-4 py-3">
-                                            Lý do từ chối
-                                          </th>
-                                          <th className="px-4 py-3 text-center">
-                                            Ngày báo cáo
-                                          </th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-m3-outline-variant">
-                                        {mockUnqualifiedSoldiers
-                                          .filter(
-                                            (s) => s.unitReceived === u.name,
-                                          )
-                                          .map((soldier) => (
-                                            <tr
-                                              key={soldier.id}
-                                              className="hover:bg-m3-surface-high"
-                                            >
-                                              <td className="px-4 py-3">
-                                                <div className="font-medium text-m3-on-surface">
-                                                  {soldier.fullName}
-                                                </div>
-                                                <div className="mt-0.5 font-mono text-xs text-m3-on-surface-variant">
-                                                  {soldier.cccd}
-                                                </div>
-                                              </td>
-                                              <td className="px-4 py-3 text-m3-on-surface-variant">
-                                                {soldier.origin}
-                                              </td>
-                                              <td className="px-4 py-3 font-medium italic text-m3-on-error-container">
-                                                {soldier.reason}
-                                              </td>
-                                              <td className="px-4 py-3 text-center text-m3-on-surface-variant">
-                                                {new Date(
-                                                  soldier.reportDate,
-                                                ).toLocaleDateString("vi-VN")}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        {mockUnqualifiedSoldiers.filter(
-                                          (s) => s.unitReceived === u.name,
-                                        ).length === 0 && (
-                                          <tr>
-                                            <td
-                                              colSpan={4}
-                                              className="px-4 py-6 text-center text-m3-on-surface-variant"
-                                            >
-                                              Không có dữ liệu chi tiết báo cáo
-                                            </td>
-                                          </tr>
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => setNotePopover(null)}
-                                    className="w-full rounded-2xl bg-m3-surface-highest py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-black active:scale-95"
-                                  >
-                                    Đã hiểu
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <span className="font-medium text-m3-on-surface">
-                          {u.name}
-                        </span>
+                      <div className="font-bold">{r.fullName}</div>
+                      <div className="font-mono text-[12px] text-m3-on-surface-variant">
+                        {r.cccd}
                       </div>
                     </td>
-                    <td
-                      className={`${ADMIN_TD_CLS} text-center font-semibold text-m3-on-surface-variant`}
-                    >
-                      {u.quota}
-                    </td>
-                    <td
-                      className={`${ADMIN_TD_CLS} text-center font-semibold text-m3-on-surface`}
-                    >
-                      {u.received}
-                    </td>
-                    <td className={`${ADMIN_TD_CLS} min-w-[130px]`}>
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-m3-surface-container">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${Math.min(pct, 100)}%`,
-                              background:
-                                pct >= 100
-                                  ? "var(--color-m3-success)"
-                                  : "var(--m3-primary, #1a73e8)",
-                            }}
-                          />
-                        </div>
-                        <span className="w-7 text-xs text-m3-on-surface-variant">
-                          {pct}%
-                        </span>
-                      </div>
-                    </td>
+                    <td className={ADMIN_TD_CLS}>{r.unitName}</td>
+                    <td className={ADMIN_TD_CLS}>{r.receivingUnitName}</td>
                     <td className={ADMIN_TD_CLS}>
-                      <AdminPill
-                        label={sc.label}
-                        bg={sc.bg}
-                        color={sc.color}
-                      />
-                    </td>
-                    <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>
-                      {new Date(u.lastUpdate).toLocaleDateString("vi-VN")}
+                      <AdminPill label={p.label} bg={p.bg} color={p.color} />
                     </td>
                   </tr>
                 );
-              })
-            )}
-          </tbody>
-        </AdminTable>
-      </AdminListShell>
+              })}
+            </tbody>
+          </AdminTable>
+        </AdminListShell>
+      )}
+      <M3Snackbar
+        open={!!toast}
+        message={toast?.message || ""}
+        tone={toast?.tone || "info"}
+        onClose={() => setToast(null)}
+      />
+      <M3ConfirmDialog
+        open={confirmAction === "approve"}
+        title="Duyệt danh sách?"
+        description={`Duyệt ${counts.submitted_to_bo} hồ sơ quân khu đã gửi lên.`}
+        confirmLabel="Duyệt"
+        tone="success"
+        busy={busy}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void runFinal("approve")}
+      />
+      <M3ConfirmDialog
+        open={confirmAction === "publish"}
+        title="Công bố danh sách?"
+        description={`Công bố ${counts.bo_approved} hồ sơ đã duyệt — công dân tra cứu tại /tra-cuu.`}
+        confirmLabel="Công bố"
+        tone="primary"
+        busy={busy}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void runFinal("publish")}
+      />
     </div>
   );
 }
 
-const ARRIVAL_TABS = [
-  { value: "", label: "Tất cả" },
-  { value: "arrived", label: "Đã trình diện" },
-  { value: "pending", label: "Chưa lên" },
-  { value: "absent", label: "Vắng mặt" },
-] as const;
-
-// ── DONVI VIEW: soldier detail ──────────────────────────────────────────────
-function DonViView() {
-  const [soldiers, setSoldiers] = useState<Soldier[]>(mockSoldiers);
-  const [search, setSearch] = useState("");
-  const [arrivalFilter, setArrivalFilter] = useState("");
-  const [reportModal, setReportModal] = useState<Soldier | null>(null);
-  const [reportType, setReportType] = useState<"ok" | "health_issue">(
-    "health_issue",
+/** Quân khu: giao chỉ tiêu ĐV nhận + phân quân + chốt */
+function QuanKhuView({ session }: { session: Session }) {
+  const { campaigns, campaignId, setCampaignId } = useCampaigns();
+  const [tab, setTab] = useState<"alloc" | "assign">("alloc");
+  const [parentQuota, setParentQuota] = useState<{ amount: number; filled: number } | null>(
+    null,
   );
-  const [reportNote, setReportNote] = useState("");
-  const [confirmAll, setConfirmAll] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const filtered = useMemo(
-    () =>
-      soldiers.filter((s) => {
-        const matchSearch =
-          !search ||
-          s.fullName.toLowerCase().includes(search.toLowerCase()) ||
-          s.cccd.includes(search);
-        const matchArrival = !arrivalFilter || s.arrivalStatus === arrivalFilter;
-        return matchSearch && matchArrival;
-      }),
-    [soldiers, search, arrivalFilter],
+  const [provinceOptions, setProvinceOptions] = useState<
+    { code: string; name: string }[]
+  >([]);
+  const [receivingUnitOptions, setReceivingUnitOptions] = useState<
+    { code: string; name: string; kind?: string }[]
+  >([]);
+  const [subQuotas, setSubQuotas] = useState<
+    { toUnit: string; toUnitName: string; amount: number; filled?: number }[]
+  >([]);
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [rows, setRows] = useState<
+    {
+      id: string;
+      fullName: string;
+      cccd: string;
+      unitName: string;
+      receivingStatus: string;
+      receivingUnitCode: string | null;
+    }[]
+  >([]);
+  const [assignable, setAssignable] = useState<{ code: string; name: string }[]>(
+    [],
   );
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [counts, setCounts] = useState({
+    chua_phan_quan: 0,
+    da_phan_quan: 0,
+    submitted_to_bo: 0,
+    all: 0,
+  });
+  const [statusFilter, setStatusFilter] = useState("");
+  const [toast, setToast] = useState<{ message: string; tone: M3SnackbarTone } | null>(
+    null,
+  );
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [provinceCode, setProvinceCode] = useState("");
+  const [wardCode, setWardCode] = useState("");
+  const [wards, setWards] = useState<HierarchyUnit[]>([]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+  const localityFilter = wardCode || provinceCode;
+
+  const loadAlloc = useCallback(async () => {
+    if (!campaignId) return;
+    const res = await fetch(
+      `/api/admin/receiving-quotas?campaignId=${encodeURIComponent(campaignId)}`,
+    );
+    if (!res.ok) return;
+    const d = await res.json();
+    setParentQuota(d.data?.[0] ? { amount: d.data[0].amount, filled: d.data[0].filled } : null);
+    setProvinceOptions(d.provinceOptions || []);
+    setReceivingUnitOptions(d.receivingUnitOptions || []);
+    setSubQuotas(d.subQuotas || []);
+    const next: Record<string, number> = {};
+    for (const s of d.subQuotas || []) next[s.toUnit] = s.amount;
+    setAmounts(next);
+  }, [campaignId]);
+
+  const loadAssign = useCallback(async () => {
+    if (!campaignId) return;
+    const params = new URLSearchParams({ campaignId });
+    if (statusFilter) params.set("status", statusFilter);
+    if (localityFilter) params.set("unitCode", localityFilter);
+    const res = await fetch(`/api/admin/receiving?${params}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    setRows(d.data || []);
+    setAssignable(d.assignableUnits || []);
+    setCounts({
+      chua_phan_quan: d.counts?.chua_phan_quan || 0,
+      da_phan_quan: d.counts?.da_phan_quan || 0,
+      submitted_to_bo: d.counts?.submitted_to_bo || 0,
+      all:
+        (d.counts?.chua_phan_quan || 0) +
+        (d.counts?.da_phan_quan || 0) +
+        (d.counts?.submitted_to_bo || 0) +
+        (d.counts?.bo_approved || 0) +
+        (d.counts?.published || 0) +
+        (d.counts?.unit_confirmed || 0),
+    });
+    const next: Record<string, string> = {};
+    for (const r of d.data || []) if (r.receivingUnitCode) next[r.id] = r.receivingUnitCode;
+    setDraft(next);
+  }, [campaignId, statusFilter, localityFilter]);
 
   useEffect(() => {
-    setPage(1);
-  }, [search, arrivalFilter, pageSize]);
+    void loadAlloc();
+  }, [loadAlloc]);
+  useEffect(() => {
+    if (tab === "assign") void loadAssign();
+  }, [tab, loadAssign]);
 
-  const arrivedCount = soldiers.filter(
-    (s) => s.arrivalStatus === "arrived",
-  ).length;
-  const reportedIssues = soldiers.filter(
-    (s) => s.unitReport === "health_issue",
-  ).length;
-  const confirmedOk = soldiers.filter((s) => s.unitReport === "ok").length;
+  useEffect(() => {
+    if (!provinceCode) {
+      setWards([]);
+      return;
+    }
+    fetch(
+      `/api/admin/hierarchy/children?parentCode=${encodeURIComponent(provinceCode)}`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) =>
+        setWards(
+          ((d?.items || []) as HierarchyUnit[]).filter((i) => i.level === "xa"),
+        ),
+      )
+      .catch(() => setWards([]));
+  }, [provinceCode]);
 
-  const handleConfirmAll = () => {
-    setSoldiers((prev) =>
-      prev.map((s) =>
-        s.arrivalStatus === "arrived" && !s.unitReport
-          ? { ...s, unitReport: "ok" }
-          : s,
-      ),
-    );
-    setConfirmAll(true);
+  const saveAlloc = async (toUnit: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving-quotas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "allocate_unit",
+          campaignId,
+          toUnit,
+          amount: Number(amounts[toUnit] || 0),
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast({ message: d.error || "Không lưu được", tone: "error" });
+      } else {
+        setToast({
+          message: `Đã giao ${amounts[toUnit] || 0} chỉ tiêu nhận quân`,
+          tone: "success",
+        });
+      }
+      await loadAlloc();
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleReport = (soldier: Soldier) => {
-    setSoldiers((prev) =>
-      prev.map((s) =>
-        s.id === soldier.id
-          ? {
-              ...s,
-              unitReport: reportType,
-              reportNote: reportType === "ok" ? "" : reportNote,
-            }
-          : s,
-      ),
-    );
-    setReportModal(null);
-    setReportNote("");
+  const assignOne = async (id: string) => {
+    const receivingUnitCode = draft[id];
+    if (!receivingUnitCode) return;
+    const res = await fetch("/api/admin/receiving", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "assign", campaignId, id, receivingUnitCode }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setToast({ message: d.error || "Không phân được", tone: "error" });
+    } else {
+      setToast({ message: d.message || "Đã phân quân", tone: "success" });
+    }
+    await loadAssign();
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "submit", campaignId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setConfirmOpen(false);
+      if (!res.ok) {
+        setToast({ message: d.error || "Không chốt được", tone: "error" });
+      } else {
+        setToast({ message: d.message || "Đã gửi Bộ", tone: "success" });
+        setStatusFilter("submitted_to_bo");
+        await loadAssign();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const localityFilters = (
+    <>
+      <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+      {tab === "assign" && (
+        <>
+          <select
+            className={`${ADMIN_SELECT_CLS} max-w-[200px]`}
+            value={provinceCode}
+            onChange={(e) => {
+              setProvinceCode(e.target.value);
+              setWardCode("");
+              setStatusFilter("");
+            }}
+            aria-label="Lọc tỉnh thành"
+          >
+            <option value="">Tất cả tỉnh / TP</option>
+            {provinceOptions.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          {provinceCode && (
+            <select
+              className={`${ADMIN_SELECT_CLS} max-w-[200px]`}
+              value={wardCode}
+              onChange={(e) => {
+                setWardCode(e.target.value);
+                setStatusFilter("");
+              }}
+              aria-label="Lọc xã phường"
+            >
+              <option value="">Tất cả xã / phường</option>
+              {wards.map((w) => (
+                <option key={w.code} value={w.code}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <div className="space-y-5 pb-8">
+      <AdminListHeader
+        title="Chỉ tiêu ĐV nhận · Phân quân · Chốt"
+        countLabel={session.name}
+        filters={localityFilters}
+        actions={
+          tab === "assign" ? (
+            <AdminPrimaryBtn tone="blue" onClick={() => setConfirmOpen(true)}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              Chốt danh sách & gửi Bộ ({counts.da_phan_quan})
+            </AdminPrimaryBtn>
+          ) : undefined
+        }
+      />
+
+      {parentQuota && (
+        <div className="flex flex-wrap items-baseline gap-2 rounded-[16px] border border-black/[0.06] bg-white px-5 py-4">
+          <span className="text-[13px] text-m3-on-surface-variant">
+            Chỉ tiêu Bộ giao
+          </span>
+          <span className="text-[22px] font-bold tracking-tight text-m3-on-surface">
+            {parentQuota.filled}
+            <span className="text-[15px] font-semibold text-m3-on-surface-variant">
+              /{parentQuota.amount}
+            </span>
+          </span>
+        </div>
+      )}
+
+      <AdminStatusTabs
+        tabs={[
+          { value: "alloc", label: "Giao chỉ tiêu ĐV nhận" },
+          { value: "assign", label: "Phân quân & chốt" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as "alloc" | "assign")}
+      />
+
+      {!campaignId ? (
+        <M3Card variant="outlined" rounding="large" className="!p-8 text-center">
+          <p className="text-sm text-m3-on-surface-variant">Chọn đợt tuyển quân</p>
+        </M3Card>
+      ) : tab === "alloc" ? (
+        <AdminListShell page={1} totalPages={1}>
+          <AdminTable>
+            <AdminTHead>
+              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+              <th className={ADMIN_TH_CLS}>Chỉ tiêu</th>
+              <th className={ADMIN_TH_CLS}>Đã phân</th>
+              <th className={ADMIN_TH_CLS}>Lưu</th>
+            </AdminTHead>
+            <tbody>
+              {receivingUnitOptions.map((u, i) => {
+                const filled =
+                  subQuotas.find((s) => s.toUnit === u.code)?.filled ?? 0;
+                return (
+                  <tr key={u.code} className={adminRowClass(i)}>
+                    <td className={ADMIN_TD_CLS}>
+                      <div className="font-semibold">{u.name}</div>
+                      {u.kind && (
+                        <div className="text-[12px] text-m3-on-surface-variant">
+                          {u.kind}
+                        </div>
+                      )}
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      <input
+                        type="number"
+                        min={0}
+                        className="h-10 w-28 rounded-full border border-black/[0.08] bg-white px-3.5 text-sm outline-none focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15"
+                        value={amounts[u.code] ?? 0}
+                        onChange={(e) =>
+                          setAmounts((a) => ({
+                            ...a,
+                            [u.code]: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      {filled}/{amounts[u.code] ?? 0}
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="inline-flex h-9 items-center gap-1 rounded-full bg-emerald-600 px-3.5 text-[13px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                        onClick={() => void saveAlloc(u.code)}
+                      >
+                        <Save size={14} /> Lưu
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {receivingUnitOptions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
+                  >
+                    Chưa có sư đoàn / trung đoàn thuộc quân khu
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </AdminTable>
+        </AdminListShell>
+      ) : (
+        <AdminListShell
+          page={1}
+          totalPages={1}
+          tabs={
+            <AdminStatusTabs
+              tabs={[
+                { value: "", label: `Tất cả (${counts.all})` },
+                { value: "chua_phan_quan", label: `Chưa phân (${counts.chua_phan_quan})` },
+                { value: "da_phan_quan", label: `Đã phân (${counts.da_phan_quan})` },
+                { value: "submitted_to_bo", label: `Đã gửi Bộ (${counts.submitted_to_bo})` },
+              ]}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+          }
+        >
+          <AdminTable>
+            <AdminTHead>
+              <th className={ADMIN_TH_CLS}>Họ tên</th>
+              <th className={ADMIN_TH_CLS}>Địa phương</th>
+              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+              <th className={ADMIN_TH_CLS}></th>
+            </AdminTHead>
+            <tbody>
+              {rows.map((r, i) => {
+                const can =
+                  r.receivingStatus === "chua_phan_quan" ||
+                  r.receivingStatus === "da_phan_quan";
+                return (
+                  <tr key={r.id} className={adminRowClass(i)}>
+                    <td className={ADMIN_TD_CLS}>
+                      <div className="font-bold">{r.fullName}</div>
+                      <div className="font-mono text-[12px]">{r.cccd}</div>
+                    </td>
+                    <td className={ADMIN_TD_CLS}>{r.unitName}</td>
+                    <td className={ADMIN_TD_CLS}>
+                      {can ? (
+                        <select
+                          className="h-10 w-full min-w-[180px] rounded-full border border-black/[0.08] bg-white px-3 text-sm outline-none focus:border-m3-primary/40"
+                          value={draft[r.id] || ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, [r.id]: e.target.value }))
+                          }
+                        >
+                          <option value="">— Sư đoàn / Trung đoàn —</option>
+                          {assignable.map((u) => (
+                            <option key={u.code} value={u.code}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        draft[r.id] || r.receivingUnitCode || "—"
+                      )}
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      {can && (
+                        <button
+                          type="button"
+                          className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm hover:bg-emerald-700"
+                          onClick={() => void assignOne(r.id)}
+                        >
+                          Phân quân
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
+                  >
+                    {wardCode
+                      ? "Không có hồ sơ nhập ngũ tại xã/phường này (chỉ hiện người đã duyệt gọi)."
+                      : provinceCode
+                        ? "Không có hồ sơ nhập ngũ theo bộ lọc hiện tại."
+                        : "Không có hồ sơ trong phạm vi lọc"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </AdminTable>
+        </AdminListShell>
+      )}
+
+      <M3Snackbar
+        open={!!toast}
+        message={toast?.message || ""}
+        tone={toast?.tone || "info"}
+        onClose={() => setToast(null)}
+      />
+      <M3ConfirmDialog
+        open={confirmOpen}
+        title="Chốt & gửi Bộ?"
+        description={`Sẽ gửi ${counts.da_phan_quan} hồ sơ đã phân quân lên Bộ duyệt và công bố.`}
+        confirmLabel="Chốt gửi Bộ"
+        tone="primary"
+        busy={busy}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void submit()}
+      />
+    </div>
+  );
+}
+
+function ReceivingOpsView({ session }: { session: Session }) {
+  const { campaigns, campaignId, setCampaignId } = useCampaigns();
+  const [rows, setRows] = useState<
+    {
+      id: string;
+      fullName: string;
+      cccd: string;
+      unitName: string;
+      receivingStatus: string;
+      receivingUnitName: string;
+    }[]
+  >([]);
+  const [counts, setCounts] = useState({
+    da_phan_quan: 0,
+    submitted_to_bo: 0,
+    bo_approved: 0,
+    published: 0,
+    unit_confirmed: 0,
+  });
+  const [tab, setTab] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ message: string; tone: M3SnackbarTone } | null>(
+    null,
+  );
+  const [confirmAll, setConfirmAll] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!campaignId) return;
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ campaignId });
+      if (tab) qs.set("status", tab);
+      const res = await fetch(`/api/admin/receiving?${qs}`);
+      const d = await res.json();
+      setRows(d.data || []);
+      setCounts({
+        da_phan_quan: d.counts?.da_phan_quan || 0,
+        submitted_to_bo: d.counts?.submitted_to_bo || 0,
+        bo_approved: d.counts?.bo_approved || 0,
+        published: d.counts?.published || 0,
+        unit_confirmed: d.counts?.unit_confirmed || 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [campaignId, tab]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const pending =
+    counts.da_phan_quan +
+    counts.submitted_to_bo +
+    counts.bo_approved +
+    counts.published;
+  const confirmed = counts.unit_confirmed;
+
+  const confirmOne = async (id: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm", campaignId, id }),
+      });
+      const d = await res.json();
+      if (!res.ok) setToast({ message: d.error || "Lỗi", tone: "error" });
+      else {
+        setToast({ message: d.message || "Đã xác nhận", tone: "success" });
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmAllPending = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm", campaignId }),
+      });
+      const d = await res.json();
+      setConfirmAll(false);
+      if (!res.ok) setToast({ message: d.error || "Lỗi", tone: "error" });
+      else {
+        setToast({ message: d.message || "Đã xác nhận", tone: "success" });
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusLabel = (s: string) => {
+    if (s === "unit_confirmed") return "Đã nhận";
+    if (s === "published") return "Đã công bố";
+    if (s === "bo_approved") return "Bộ đã duyệt";
+    if (s === "submitted_to_bo") return "Chờ Bộ";
+    if (s === "da_phan_quan") return "Đã phân về đơn vị";
+    return s;
   };
 
   return (
     <div className="space-y-4 pb-6">
       <AdminListHeader
-        title="Đơn vị nhận quân"
-        countLabel={`${soldiers.length} quân nhân`}
-        actions={
-          !confirmAll ? (
-            <AdminPrimaryBtn onClick={handleConfirmAll}>
-              <CheckCircle2 size={16} />
-              Xác nhận đủ quân
-            </AdminPrimaryBtn>
-          ) : (
-            <span className="inline-flex h-10 items-center gap-2 rounded-full border border-m3-success bg-m3-success-container px-4 text-[13px] font-semibold text-m3-on-success-container">
-              <CheckCircle2 size={16} /> Đã xác nhận đủ quân
-            </span>
-          )
+        title="Quân số được phân · Xác nhận nhận quân"
+        countLabel={session.name}
+        filters={
+          <CampaignSelect
+            campaigns={campaigns}
+            value={campaignId}
+            onChange={setCampaignId}
+          />
         }
       />
 
-      <p className="text-[14px] text-m3-on-surface-variant">
-        Xác nhận danh sách nhận quân và báo cáo tình trạng sức khỏe
-      </p>
-
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          {
-            label: "Tổng quân nhân",
-            value: soldiers.length,
-            color: "var(--m3-on-surface, #1b1d20)",
-          },
-          {
-            label: "Đã trình diện",
-            value: arrivedCount,
-            color: "var(--color-m3-success)",
-          },
-          {
-            label: "Báo cáo đủ SK",
-            value: confirmedOk,
-            color: "var(--m3-primary, #1a73e8)",
-          },
-          {
-            label: "SK không đảm bảo",
-            value: reportedIssues,
-            color: "var(--m3-error, #ba1a1a)",
-          },
-        ].map((s) => (
-          <div key={s.label} className={STAT_CARD_CLS}>
-            <p className="text-[12px] text-m3-on-surface-variant">{s.label}</p>
-            <p
-              className="mt-1 text-[28px] font-bold"
-              style={{ color: s.color }}
-            >
-              {s.value}
-            </p>
-          </div>
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className={STAT}>
+          <p className="text-[12px] text-m3-on-surface-variant">Chờ xác nhận</p>
+          <p className="text-[28px] font-bold text-amber-700">{pending}</p>
+        </div>
+        <div className={STAT}>
+          <p className="text-[12px] text-m3-on-surface-variant">Đã nhận quân</p>
+          <p className="text-[28px] font-bold text-emerald-700">{confirmed}</p>
+        </div>
       </div>
 
-      <div className={STAT_CARD_CLS}>
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[13px] font-medium text-m3-on-surface-variant">
-            Tiến độ nhận quân
-          </p>
-          <span
-            className="text-[13px] font-bold"
-            style={{ color: "var(--m3-primary, #1a73e8)" }}
+      <div className="flex flex-wrap items-center gap-3">
+        <AdminStatusTabs
+          tabs={[
+            { value: "", label: "Tất cả" },
+            { value: "da_phan_quan", label: "Đã phân" },
+            { value: "published", label: "Công bố" },
+            { value: "unit_confirmed", label: "Đã nhận" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+        {pending > 0 && (
+          <button
+            type="button"
+            disabled={busy || !campaignId}
+            onClick={() => setConfirmAll(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-emerald-600 px-4 text-[13px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           >
-            {arrivedCount}/{soldiers.length} (
-            {Math.round((arrivedCount / soldiers.length) * 100)}%)
-          </span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-m3-surface-container">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${Math.round((arrivedCount / soldiers.length) * 100)}%`,
-              background: "var(--m3-primary, #1a73e8)",
-            }}
-          />
-        </div>
+            <Check size={16} /> Xác nhận tất cả đang chờ
+          </button>
+        )}
       </div>
 
-      <AdminListShell
-        page={page}
-        totalPages={totalPages}
-        tabs={
-          <AdminStatusTabs
-            tabs={[...ARRIVAL_TABS]}
-            value={arrivalFilter}
-            onChange={(v) => {
-              setArrivalFilter(v);
-              setPage(1);
-            }}
-          />
-        }
-        toolbar={
-          <AdminListToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Tìm họ tên, CCCD..."
-            page={page}
-            pageSize={pageSize}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(1);
-            }}
-          />
-        }
-      >
-        <AdminTable minWidth="min-w-[960px]">
-          <AdminTHead>
-            <th className={ADMIN_TH_CLS}>Quân nhân</th>
-            <th className={ADMIN_TH_CLS}>Quê quán</th>
-            <th className={`${ADMIN_TH_CLS} text-center`}>Phân loại SK</th>
-            <th className={ADMIN_TH_CLS}>Trình diện</th>
-            <th className={ADMIN_TH_CLS}>Báo cáo</th>
-            <th className={ADMIN_TH_CLS}>Thao tác</th>
-          </AdminTHead>
-          <tbody>
-            {paginated.length === 0 ? (
+      {loading ? (
+        <div className="flex h-32 items-center justify-center">
+          <Loader2 className="animate-spin text-m3-primary" />
+        </div>
+      ) : (
+        <AdminListShell page={1} totalPages={1}>
+          <AdminTable>
+            <AdminTHead>
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-12 text-center text-[14px] text-m3-on-surface-variant"
-                >
-                  Không có kết quả
-                </td>
+                <th className={ADMIN_TH_CLS}>Họ tên / CCCD</th>
+                <th className={ADMIN_TH_CLS}>Địa phương</th>
+                <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+                <th className={ADMIN_TH_CLS}>Trạng thái</th>
+                <th className={ADMIN_TH_CLS} />
               </tr>
-            ) : (
-              paginated.map((s, idx) => {
-                const ac = arrivalConfig[s.arrivalStatus];
+            </AdminTHead>
+            <tbody>
+              {rows.map((r, i) => {
+                const canConfirm = r.receivingStatus !== "unit_confirmed" &&
+                  r.receivingStatus !== "chua_phan_quan";
                 return (
-                  <tr key={s.id} className={adminRowClass(idx)}>
+                  <tr key={r.id} className={adminRowClass(i)}>
                     <td className={ADMIN_TD_CLS}>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-m3-surface-high">
-                          <User2
-                            size={12}
-                            style={{ color: "var(--m3-primary, #1a73e8)" }}
-                          />
-                        </div>
-                        <div>
-                          <div className="text-[14px] font-bold text-m3-on-surface">
-                            {s.fullName}
-                          </div>
-                          <div className="font-mono text-[12px] text-m3-on-surface-variant">
-                            {s.cccd}
-                          </div>
-                        </div>
-                      </div>
+                      <div className="font-bold">{r.fullName}</div>
+                      <div className="font-mono text-[12px]">{r.cccd}</div>
                     </td>
-                    <td
-                      className={`${ADMIN_TD_CLS} max-w-[160px] text-[12px] text-m3-on-surface-variant`}
-                    >
-                      {s.origin}
-                    </td>
-                    <td className={`${ADMIN_TD_CLS} text-center`}>
+                    <td className={ADMIN_TD_CLS}>{r.unitName}</td>
+                    <td className={ADMIN_TD_CLS}>{r.receivingUnitName}</td>
+                    <td className={ADMIN_TD_CLS}>
                       <AdminPill
-                        label={s.healthClass}
-                        bg="var(--m3-primary-container, #dae9fb)"
-                        color="var(--m3-primary, #1a73e8)"
+                        label={statusLabel(r.receivingStatus)}
+                        bg={
+                          r.receivingStatus === "unit_confirmed"
+                            ? "color-mix(in srgb, #059669 14%, transparent)"
+                            : "color-mix(in srgb, #d97706 14%, transparent)"
+                        }
+                        color={
+                          r.receivingStatus === "unit_confirmed"
+                            ? "#047857"
+                            : "#b45309"
+                        }
                       />
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      <AdminPill
-                        label={ac.label}
-                        bg={ac.bg}
-                        color={ac.color}
-                      />
-                    </td>
-                    <td className={ADMIN_TD_CLS}>
-                      {s.unitReport === "ok" && (
-                        <AdminPill
-                          label="Đủ SK"
-                          bg="var(--color-m3-success-container)"
-                          color="var(--color-m3-success)"
-                        />
+                      {canConfirm && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-full bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                          onClick={() => void confirmOne(r.id)}
+                        >
+                          Xác nhận nhận
+                        </button>
                       )}
-                      {s.unitReport === "health_issue" && (
-                        <div>
-                          <AdminPill
-                            label="SK không đảm bảo"
-                            bg="var(--m3-error-container, #ffdad6)"
-                            color="var(--m3-error, #ba1a1a)"
-                          />
-                          {s.reportNote ? (
-                            <p className="mt-0.5 text-[12px] italic text-m3-on-surface-variant">
-                              {s.reportNote}
-                            </p>
-                          ) : null}
-                        </div>
-                      )}
-                      {!s.unitReport && (
-                        <span className="text-[12px] text-m3-on-surface-variant">
-                          Chưa báo cáo
-                        </span>
-                      )}
-                    </td>
-                    <td className={`relative ${ADMIN_TD_CLS}`}>
-                      {s.arrivalStatus === "arrived" && !s.unitReport ? (
-                        <span className="text-[12px] text-m3-on-surface-variant">
-                          Chờ báo cáo
-                        </span>
-                      ) : (
-                        <span className="text-[12px] italic text-m3-on-surface-variant">
-                          {s.unitReport ? "Đã báo" : "—"}
-                        </span>
-                      )}
-                      {s.arrivalStatus === "arrived" && !s.unitReport ? (
-                        <AdminHoverActions>
-                          <AdminIconBtn
-                            title="Báo cáo"
-                            onClick={() => {
-                              setReportModal(s);
-                              setReportType("health_issue");
-                              setReportNote("");
-                            }}
-                            tone="blue"
-                          >
-                            <Send size={14} />
-                          </AdminIconBtn>
-                        </AdminHoverActions>
-                      ) : null}
                     </td>
                   </tr>
                 );
-              })
-            )}
-          </tbody>
-        </AdminTable>
-      </AdminListShell>
-
-      {reportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-[16px] border border-black/[0.06] bg-white shadow-xl">
-            <div className="flex items-center justify-between p-5 border-b border-m3-outline-variant">
-              <h2 className="text-base font-semibold text-m3-on-surface">
-                Báo cáo tình trạng quân nhân
-              </h2>
-              <button
-                onClick={() => setReportModal(null)}
-                className="p-1.5 hover:bg-m3-surface-container rounded-lg"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-m3-surface-high rounded-xl">
-                <div className="w-8 h-8 rounded-full bg-m3-surface-high flex items-center justify-center">
-                  <Shield size={13} style={{ color: "var(--m3-primary, #1a73e8)" }} />
-                </div>
-                <div>
-                  <p className="font-medium text-m3-on-surface text-sm">
-                    {reportModal.fullName}
-                  </p>
-                  <p className="text-xs text-m3-on-surface-variant font-mono">
-                    {reportModal.cccd}
-                  </p>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-m3-on-surface-variant block mb-2">
-                  Kết quả *
-                </label>
-                <div className="flex gap-3">
-                  <label
-                    className="flex-1 flex items-center gap-2 p-3 border-2 rounded-xl cursor-pointer"
-                    style={
-                      reportType === "ok"
-                        ? { borderColor: "var(--color-m3-success)", background: "var(--color-m3-success-container)" }
-                        : { borderColor: "var(--m3-outline-variant, #e3e8ee)" }
-                    }
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
                   >
-                    <input
-                      type="radio"
-                      value="ok"
-                      checked={reportType === "ok"}
-                      onChange={() => setReportType("ok")}
-                      className="accent-m3-success-container"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-m3-on-success-container">
-                        ✅ Đủ sức khỏe
-                      </p>
-                    </div>
-                  </label>
-                  <label
-                    className="flex-1 flex items-center gap-2 p-3 border-2 rounded-xl cursor-pointer"
-                    style={
-                      reportType === "health_issue"
-                        ? { borderColor: "var(--m3-error, #ba1a1a)", background: "var(--m3-error-container, var(--m3-error-container, #ffdad6))" }
-                        : { borderColor: "var(--m3-outline-variant, #e3e8ee)" }
-                    }
-                  >
-                    <input
-                      type="radio"
-                      value="health_issue"
-                      checked={reportType === "health_issue"}
-                      onChange={() => setReportType("health_issue")}
-                      className="accent-m3-error-container"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-m3-on-error-container">
-                        ⚠️ SK không đảm bảo
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-              {reportType === "health_issue" && (
-                <div>
-                  <label className="text-sm font-medium text-m3-on-surface-variant block mb-1">
-                    Mô tả *
-                  </label>
-                  <textarea
-                    className="w-full border border-m3-outline-variant rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary resize-none"
-                    rows={3}
-                    placeholder="Mô tả tình trạng sức khỏe..."
-                    value={reportNote}
-                    onChange={(e) => setReportNote(e.target.value)}
-                  />
-                </div>
+                    Chưa có quân nhân được phân về đơn vị trong đợt này
+                  </td>
+                </tr>
               )}
-            </div>
-            <div className="flex gap-2 p-5 border-t border-m3-outline-variant">
-              <button
-                onClick={() => setReportModal(null)}
-                className="flex-1 py-2.5 border border-m3-outline-variant text-m3-on-surface-variant hover:bg-m3-surface-high rounded-xl text-sm"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={() => handleReport(reportModal)}
-                disabled={reportType === "health_issue" && !reportNote}
-                className="flex-1 py-2.5 bg-m3-primary hover:bg-m3-on-surface-variant disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-              >
-                <Send size={14} /> Gửi báo cáo
-              </button>
-            </div>
-          </div>
+            </tbody>
+          </AdminTable>
+        </AdminListShell>
+      )}
+      <M3Snackbar
+        open={!!toast}
+        message={toast?.message || ""}
+        tone={toast?.tone || "info"}
+        onClose={() => setToast(null)}
+      />
+      <M3ConfirmDialog
+        open={confirmAll}
+        title="Xác nhận nhận quân?"
+        description={`Xác nhận đã nhận toàn bộ ${pending} quân nhân đang chờ trong đợt này.`}
+        confirmLabel="Xác nhận tất cả"
+        tone="success"
+        busy={busy}
+        onCancel={() => setConfirmAll(false)}
+        onConfirm={() => void confirmAllPending()}
+      />
+    </div>
+  );
+}
+
+function TinhView({ session }: { session: Session }) {
+  const { campaigns, campaignId, setCampaignId } = useCampaigns();
+  const [rows, setRows] = useState<
+    {
+      id: string;
+      fullName: string;
+      cccd: string;
+      unitName: string;
+      receivingStatus: string;
+      receivingUnitName?: string;
+    }[]
+  >([]);
+  const [statusFilter, setStatusFilter] = useState("published");
+  const [counts, setCounts] = useState({
+    bo_approved: 0,
+    published: 0,
+    unit_confirmed: 0,
+  });
+
+  const load = useCallback(async () => {
+    if (!campaignId) return;
+    const params = new URLSearchParams({ campaignId, status: statusFilter });
+    const res = await fetch(`/api/admin/receiving?${params}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    setRows(d.data || []);
+    setCounts({
+      bo_approved: d.counts?.bo_approved || 0,
+      published: d.counts?.published || 0,
+      unit_confirmed: d.counts?.unit_confirmed || 0,
+    });
+  }, [campaignId, statusFilter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const statusLabel: Record<string, string> = {
+    bo_approved: "Bộ đã duyệt",
+    published: "Đã công bố",
+    unit_confirmed: "ĐV nhận đã xác nhận",
+  };
+
+  return (
+    <div className="space-y-4 pb-6">
+      <AdminListHeader
+        title="Vị trí nhận quân công dân"
+        countLabel={session.name}
+        filters={
+          <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+        }
+      />
+      {!campaignId ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-m3-on-surface-variant">
+          Chọn đợt tuyển quân
         </div>
+      ) : (
+        <AdminListShell
+          page={1}
+          totalPages={1}
+          tabs={
+            <AdminStatusTabs
+              tabs={[
+                { value: "bo_approved", label: `Bộ duyệt (${counts.bo_approved})` },
+                { value: "published", label: `Công bố (${counts.published})` },
+                {
+                  value: "unit_confirmed",
+                  label: `ĐV nhận xác nhận (${counts.unit_confirmed})`,
+                },
+              ]}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+          }
+        >
+          <AdminTable>
+            <AdminTHead>
+              <th className={ADMIN_TH_CLS}>Họ tên</th>
+              <th className={ADMIN_TH_CLS}>Địa phương</th>
+              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
+              <th className={ADMIN_TH_CLS}>Trạng thái</th>
+            </AdminTHead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.id} className={adminRowClass(i)}>
+                  <td className={ADMIN_TD_CLS}>
+                    <div className="font-bold">{r.fullName}</div>
+                    <div className="font-mono text-[12px]">{r.cccd}</div>
+                  </td>
+                  <td className={ADMIN_TD_CLS}>{r.unitName}</td>
+                  <td className={ADMIN_TD_CLS}>
+                    {r.receivingUnitName || "—"}
+                  </td>
+                  <td className={ADMIN_TD_CLS}>
+                    {statusLabel[r.receivingStatus] || r.receivingStatus}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
+                  >
+                    Chưa có công dân địa bàn ở trạng thái này (sau Bộ duyệt)
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </AdminTable>
+        </AdminListShell>
       )}
     </div>
   );
 }
 
-// ── Main page: picks correct view based on role ─────────────────────────────
 export default function ReceivingUnitPage() {
   const [session, setSession] = useState<Session | null>(null);
 
-  const fetchSession = useCallback(async () => {
-    const res = await fetch("/api/auth/me");
-    if (res.ok) {
-      const d = await res.json();
-      setSession(d.user);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchSession();
-  }, [fetchSession]);
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSession(d?.user || null))
+      .catch(() => setSession(null));
+  }, []);
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-48 text-m3-on-surface-variant text-sm">
+      <div className="flex h-48 items-center justify-center text-sm text-m3-on-surface-variant">
         Đang tải...
       </div>
     );
   }
 
-  return session.hierarchyLevel === "bo" ? <BoView /> : <DonViView />;
+  if (session.hierarchyLevel === "bo") return <BoView session={session} />;
+  if (session.hierarchyLevel === "donvi") {
+    const isQk =
+      /^(dv-qk\d+|dv-btl-hn)$/.test(session.unitCode);
+    if (isQk) return <QuanKhuView session={session} />;
+    return <ReceivingOpsView session={session} />;
+  }
+  if (session.hierarchyLevel === "tinh" || session.hierarchyLevel === "xa") {
+    return <TinhView session={session} />;
+  }
+
+  return null;
 }

@@ -274,7 +274,10 @@ export async function findUsersFromDb(query?: {
     );
   } else if (query?.role === "nhan_quan") {
     where.push(
-      "(u.functional_role = 'nhan_quan' OR r.role_name LIKE '%RECEIVING%' OR IFNULL(r.display_name,'') LIKE '%nhận quân%')",
+      `(u.functional_role = 'nhan_quan'
+        OR r.role_name LIKE '%RECEIVING%'
+        OR IFNULL(r.display_name,'') LIKE '%nhận quân%'
+        OR hu.level = 'donvi')`,
     );
   }
 
