@@ -3,6 +3,7 @@ import { isDetailedHealthPhase } from "@/lib/data";
 import {
   mergeStableHealthYears,
   getNvqsExamYearWindow,
+  type NvqsExamYearOpts,
 } from "@/lib/nvqs-lifecycle";
 
 export type HealthExamRound = "screening" | "detailed";
@@ -13,8 +14,9 @@ export const NVQS_HEALTH_PERIOD = "01/11 – 31/12 hàng năm";
 export function nvqsExamYears(
   dateOfBirth: string | Date | undefined,
   at: Date = new Date(),
+  opts?: NvqsExamYearOpts,
 ): number[] {
-  return getNvqsExamYearWindow(dateOfBirth, at)?.years ?? [];
+  return getNvqsExamYearWindow(dateOfBirth, at, opts)?.years ?? [];
 }
 
 /** @deprecated dùng mergeStableHealthYears */
@@ -22,8 +24,9 @@ export function mergeHealthYearOptions(
   dateOfBirth: string | Date | undefined,
   recordYears: number[],
   at: Date = new Date(),
+  opts?: NvqsExamYearOpts,
 ): number[] {
-  return mergeStableHealthYears(dateOfBirth, recordYears, at);
+  return mergeStableHealthYears(dateOfBirth, recordYears, at, opts);
 }
 
 export function yearHasOpenExamSlot(
@@ -84,6 +87,28 @@ export function canEnterHealthRecords(
   return Boolean(userRole);
 }
 
+/**
+ * Phân quyền vòng khám theo cấp đơn vị:
+ * - Xã: Vòng 1 (sơ tuyển)
+ * - Tỉnh: Vòng 2 (khám chi tiết)
+ * - Bộ: cả hai
+ */
+export function allowedExamRoundsForHierarchy(
+  hierarchyLevel: string | null | undefined,
+): HealthExamRound[] {
+  if (hierarchyLevel === "bo") return ["screening", "detailed"];
+  if (hierarchyLevel === "tinh") return ["detailed"];
+  if (hierarchyLevel === "xa") return ["screening"];
+  return [];
+}
+
+export function canEnterExamRoundAtLevel(
+  round: HealthExamRound,
+  hierarchyLevel: string | null | undefined,
+): boolean {
+  return allowedExamRoundsForHierarchy(hierarchyLevel).includes(round);
+}
+
 export function screeningRecordForYear(
   records: HealthRecord[],
   year: number,
@@ -127,13 +152,22 @@ export function normalizeExamPhase(phaseRaw: string): HealthExamPhase {
 export function getAvailableExamRounds(
   records: HealthRecord[],
   year: number,
+  hierarchyLevel?: string | null,
 ): HealthExamRound[] {
   const screening = screeningRecordForYear(records, year);
   const detailed = detailedRecordForYear(records, year);
 
-  if (!screening) return ["screening"];
-  if (isScreeningPass(screening.conclusion) && !detailed) return ["detailed"];
-  return [];
+  let rounds: HealthExamRound[] = [];
+  if (!screening) rounds = ["screening"];
+  else if (isScreeningPass(screening.conclusion) && !detailed) {
+    rounds = ["detailed"];
+  }
+
+  if (hierarchyLevel != null && hierarchyLevel !== "") {
+    const allowed = allowedExamRoundsForHierarchy(hierarchyLevel);
+    rounds = rounds.filter((r) => allowed.includes(r));
+  }
+  return rounds;
 }
 
 export function getYearExamStatusLabel(

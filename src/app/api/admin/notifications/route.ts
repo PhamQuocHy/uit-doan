@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db, hierarchyUnits } from "@/lib/data";
 import { pingDb, queryRows } from "@/lib/db";
 import { sqlAgeYear } from "@/lib/nvqs-age";
+import { RETURN_TAM_HOAN_MARKER } from "@/lib/enlistment-approval";
 import type { RowDataPacket } from "mysql2";
 
 type NotiItem = {
@@ -39,6 +40,8 @@ function hrefForType(type: string, fallback?: string): string {
   if (fallback) return fallback;
   if (type.startsWith("quota")) return "/admin/quota";
   if (type.startsWith("document")) return "/admin/documents";
+  if (type === "citizen_proposal_returned") return "/admin/citizens";
+  if (type === "citizen_rejected") return "/admin/citizens?callIntent=khong_goi";
   if (type.startsWith("citizen_") || type === "approval_pending") {
     return "/admin/approval";
   }
@@ -80,38 +83,106 @@ async function buildSystemNotifications(
         });
       }
 
-      const recentApproved = await queryRows<
+      const recentCitizens = await queryRows<
         (RowDataPacket & {
           id: string;
           full_name: string;
-          approval_status: string;
+          approval_status: string | null;
+          call_intent: string | null;
+          military_status: string | null;
+          military_status_locked: number | null;
+          military_status_reason: string | null;
+          approval_comment: string | null;
           updated_at: string | Date;
         })[]
       >(
-        `SELECT c.id, c.full_name, c.approval_status, c.updated_at
+        `SELECT c.id, c.full_name, c.approval_status, c.call_intent,
+                c.military_status, c.military_status_locked,
+                c.military_status_reason, c.approval_comment, c.updated_at
          FROM citizens c
          WHERE ${scope.sql}
-           AND c.approval_status IN ('approved','rejected')
+           AND c.archived_at IS NULL
            AND c.updated_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+           AND (
+             c.approval_status IN ('approved','rejected')
+             OR (
+               IFNULL(c.approval_status,'none') = 'none'
+               AND IFNULL(c.military_status_locked,0) = 1
+               AND IFNULL(c.approval_comment,'') <> ''
+             )
+           )
          ORDER BY c.updated_at DESC
-         LIMIT 8`,
+         LIMIT 20`,
         scope.params,
       );
-      for (const row of recentApproved) {
-        const approved = row.approval_status === "approved";
+
+      for (const row of recentCitizens) {
         const updatedAt = new Date(row.updated_at).toISOString();
+        const status = row.approval_status || "none";
+        const intent = row.call_intent || "unset";
+        const locked = Number(row.military_status_locked) === 1;
+        const comment = (row.approval_comment || "").trim();
+        const reason = row.military_status_reason || "";
+        const returned =
+          status === "none" && locked && Boolean(comment);
+
+        let title = "";
+        let message = "";
+        let type = "info";
+        let href = "/admin/citizens";
+        let kindKey = status;
+
+        if (returned && reason === RETURN_TAM_HOAN_MARKER) {
+          kindKey = "returned_tam_hoan";
+          type = "citizen_proposal_returned";
+          title = "Không duyệt tạm hoãn — trả về";
+          message = `${row.full_name} bị Quân khu không duyệt tạm hoãn, đã chuyển về Hồ sơ mới (khóa). Lý do: ${comment}`;
+          href = "/admin/citizens?callIntent=khong_duyet_tam_hoan";
+        } else if (returned) {
+          kindKey = "returned_khong_goi";
+          type = "citizen_proposal_returned";
+          title = "Không duyệt không gọi — trả về";
+          message = `${row.full_name} bị Quân khu không duyệt đề xuất không gọi, đã chuyển về Hồ sơ mới (khóa). Lý do: ${comment}`;
+          href = "/admin/citizens?callIntent=khong_duyet_khong_goi";
+        } else if (status === "rejected") {
+          kindKey = "rejected";
+          type = "citizen_rejected";
+          title = "Không duyệt gọi nhập ngũ";
+          message = `${row.full_name} thuộc phạm vi quản lý của bạn đã bị đánh Không gọi${comment ? `: ${comment}` : reason ? `: ${reason}` : "."}`;
+          href = "/admin/citizens?callIntent=khong_goi";
+        } else if (
+          status === "approved" &&
+          (row.military_status === "nhapngu" || intent === "du_kien_goi")
+        ) {
+          kindKey = "approved_goi";
+          type = "citizen_approved";
+          title = "Thanh niên được duyệt gọi nhập ngũ";
+          message = `${row.full_name} thuộc phạm vi quản lý của bạn đã được duyệt gọi nhập ngũ.`;
+          href = "/admin/approval";
+        } else if (status === "approved" && intent === "khong_goi") {
+          kindKey = "approved_khong_goi";
+          type = "citizen_approved";
+          title = "Quân khu đồng tình không gọi";
+          message = `${row.full_name}: đề xuất không gọi đã được Quân khu chấp thuận.`;
+          href = "/admin/citizens?callIntent=khong_goi";
+        } else if (status === "approved" && row.military_status === "tamhoan") {
+          kindKey = "approved_tam_hoan";
+          type = "citizen_approved";
+          title = "Quân khu duyệt tạm hoãn";
+          message = `${row.full_name}: hồ sơ tạm hoãn đã được Quân khu chấp thuận.`;
+          href = "/admin/citizens";
+        } else {
+          continue;
+        }
+
         items.push({
-          id: `sys-citizen-${row.approval_status}-${row.id}-${updatedAt.slice(0, 10)}`,
-          title: approved
-            ? "Thanh niên được duyệt gọi nhập ngũ"
-            : "Thanh niên không đạt xét duyệt",
-          message: approved
-            ? `${row.full_name} thuộc phạm vi quản lý của bạn đã được duyệt gọi nhập ngũ.`
-            : `${row.full_name} thuộc phạm vi quản lý của bạn đã bị đánh Không đạt.`,
-          type: approved ? "citizen_approved" : "citizen_rejected",
+          id: `sys-citizen-${kindKey}-${row.id}-${updatedAt.slice(0, 13)}`,
+          title,
+          message,
+          type,
           read: false,
           createdAt: updatedAt,
-          href: "/admin/approval",
+          href,
         });
       }
 
@@ -246,8 +317,13 @@ export async function GET() {
   const memory = findMemoryNotifications(session.unitCode);
 
   const seen = new Set<string>();
-  const data = [...system, ...memory]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const data = [...memory, ...system]
+    .sort((a, b) => {
+      const tb = Date.parse(b.createdAt) || 0;
+      const ta = Date.parse(a.createdAt) || 0;
+      if (tb !== ta) return tb - ta;
+      return String(b.id).localeCompare(String(a.id));
+    })
     .filter((n) => {
       if (seen.has(n.id)) return false;
       seen.add(n.id);

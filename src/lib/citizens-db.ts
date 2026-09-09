@@ -1,5 +1,9 @@
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
+import {
+  ensureCitizenCampaignsTable,
+  sqlCitizenInCampaign,
+} from "@/lib/citizen-campaigns-db";
 import type { Citizen } from "@/lib/data";
 import { getUnitDescendants } from "@/lib/data";
 import { toDateOnlyString } from "@/lib/date-vn";
@@ -29,6 +33,9 @@ type CitizenRow = RowDataPacket & {
   military_status: Citizen["militaryStatus"];
   military_status_reason: string | null;
   approval_comment?: string | null;
+  pipeline_status?: string | null;
+  province_comment?: string | null;
+  province_reviewed_at?: string | Date | null;
   military_status_locked: number | null;
   call_intent: Citizen["callIntent"] | null;
   approval_status: Citizen["approvalStatus"] | null;
@@ -92,6 +99,11 @@ function mapCitizen(row: CitizenRow): Citizen {
     militaryStatus: row.military_status,
     militaryStatusReason: row.military_status_reason || undefined,
     approvalComment: row.approval_comment || null,
+    pipelineStatus: (row.pipeline_status || "none") as Citizen["pipelineStatus"],
+    provinceComment: row.province_comment || null,
+    provinceReviewedAt: row.province_reviewed_at
+      ? toIso(row.province_reviewed_at)
+      : null,
     militaryStatusLocked: Boolean(row.military_status_locked),
     callIntent: (row.call_intent || "unset") as Citizen["callIntent"],
     approvalStatus: (row.approval_status || "none") as Citizen["approvalStatus"],
@@ -192,32 +204,94 @@ export async function ensureCitizenApprovalCommentColumn(): Promise<void> {
   }
 }
 
+/** Cột pipeline xã→tỉnh→QK (+ backfill pending cũ → qk_pending). */
+export async function ensureCitizenPipelineColumns(): Promise<void> {
+  if (!(await pingDb())) return;
+  try {
+    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'citizens'
+         AND COLUMN_NAME IN ('pipeline_status','province_comment','province_reviewed_at')`,
+    );
+    const have = new Set(cols.map((c) => c.COLUMN_NAME));
+    if (!have.has("pipeline_status")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN pipeline_status
+           ENUM('none','local_ready','province_pending','province_ok','province_returned','qk_pending')
+           NOT NULL DEFAULT 'none'
+           COMMENT 'Luồng chuyển hồ sơ xã→tỉnh→QK'
+           AFTER approval_status`,
+      );
+    }
+    if (!have.has("province_comment")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN province_comment TEXT NULL
+         COMMENT 'Lý do tỉnh trả về bổ sung'
+         AFTER approval_comment`,
+      );
+    }
+    if (!have.has("province_reviewed_at")) {
+      await queryExecute(
+        `ALTER TABLE citizens
+         ADD COLUMN province_reviewed_at DATETIME NULL
+         COMMENT 'Thời điểm tỉnh đồng tình / trả về'
+         AFTER province_comment`,
+      );
+    }
+    // Hồ sơ còn pending cũ nhưng đang ở bước xã/tỉnh → không coi là hàng đợi QK
+    await queryExecute(
+      `UPDATE citizens
+       SET approval_status = 'none'
+       WHERE approval_status = 'pending'
+         AND IFNULL(pipeline_status, 'none') IN (
+           'local_ready','province_pending','province_ok','province_returned'
+         )`,
+    );
+    await queryExecute(
+      `UPDATE citizens
+       SET pipeline_status = 'qk_pending'
+       WHERE IFNULL(pipeline_status, 'none') = 'none'
+         AND (
+           approval_status IN ('pending','approved','rejected')
+           OR (
+             IFNULL(approval_status,'none') = 'none'
+             AND IFNULL(military_status_locked,0) = 1
+             AND IFNULL(approval_comment,'') <> ''
+           )
+         )`,
+    );
+    // Dữ liệu cũ nhảy thẳng QK: kéo lại chờ xã gửi tỉnh (gọi / không gọi / tạm hoãn)
+    // Chỉ hồ sơ chưa từng qua tỉnh (province_reviewed_at NULL) và QK chưa quyết định.
+    await queryExecute(
+      `UPDATE citizens
+       SET pipeline_status = 'local_ready',
+           approval_status = 'none'
+       WHERE pipeline_status = 'qk_pending'
+         AND approval_status = 'pending'
+         AND province_reviewed_at IS NULL
+         AND (
+           military_status = 'tamhoan'
+           OR call_intent = 'de_xuat_khong_goi'
+           OR call_intent = 'du_kien_goi'
+         )`,
+    );
+  } catch (e) {
+    console.warn("ensureCitizenPipelineColumns:", e);
+  }
+}
+
 /**
- * Chuyển dữ liệu cũ sang luồng chờ QK:
- * - tạm hoãn (approval none) → pending
- * - không gọi địa phương tự chốt (approval none) → đề xuất không gọi pending
- * Không đụng bản QK đã rejected / approved.
+ * Legacy: không còn ép pending thẳng QK (đã có pipeline xã→tỉnh).
+ * Giữ hàm để không vỡ import cũ.
  */
 export async function ensureProposalPendingMigration(): Promise<void> {
   if (!(await pingDb())) return;
   try {
     await ensureCitizenCallIntentDuBi();
-    await queryExecute(
-      `UPDATE citizens
-       SET approval_status = 'pending', updated_at = NOW()
-       WHERE military_status = 'tamhoan'
-         AND IFNULL(approval_status, 'none') = 'none'`,
-    );
-    await queryExecute(
-      `UPDATE citizens
-       SET call_intent = 'de_xuat_khong_goi',
-           approval_status = 'pending',
-           military_status = 'trungtuyen',
-           updated_at = NOW()
-       WHERE call_intent = 'khong_goi'
-         AND IFNULL(approval_status, 'none') = 'none'
-         AND military_status <> 'nhapngu'`,
-    );
+    await ensureCitizenPipelineColumns();
   } catch (e) {
     console.warn("ensureProposalPendingMigration:", e);
   }
@@ -434,8 +508,10 @@ export async function findCitizensFromDb(query: {
   await ensureCitizenAvatarColumn();
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenPipelineColumns();
   await ensureProposalPendingMigration();
   await ensureCitizenReceivingColumns();
+  await ensureCitizenCampaignsTable();
 
   const page = query.page || 1;
   const limit = query.limit || 10;
@@ -486,9 +562,9 @@ export async function findCitizensFromDb(query: {
   }
 
   if (query.campaignId) {
-    // Chỉ hồ sơ thuộc đúng đợt đã chọn (không gộp hồ sơ chưa gán đợt)
-    where.push("c.campaign_id = ?");
-    params.push(query.campaignId);
+    // Thuộc đợt theo lịch sử HOẶC đợt đang làm — gắn 2027 không làm mất khỏi 2026
+    where.push(sqlCitizenInCampaign("?", "c"));
+    params.push(query.campaignId, query.campaignId);
   }
 
   const eduJoin = `
@@ -547,7 +623,7 @@ export async function findCitizensFromDb(query: {
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.approval_comment, c.military_status_locked,
-         c.call_intent, c.approval_status,
+         c.call_intent, c.approval_status, c.pipeline_status, c.province_comment, c.province_reviewed_at,
          c.health_grade, c.campaign_id, c.receiving_status, c.receiving_unit_code,
          c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
@@ -612,6 +688,7 @@ export async function countCitizenStatusSummaryFromDb(query: {
   await ensureCitizenArchivedAtColumn();
   await ensureCitizenCallIntentDuBi();
   await ensureProposalPendingMigration();
+  await ensureCitizenCampaignsTable();
 
   const where: string[] = ["1=1"];
   const params: unknown[] = [];
@@ -644,8 +721,8 @@ export async function countCitizenStatusSummaryFromDb(query: {
   }
 
   if (query.campaignId) {
-    where.push("c.campaign_id = ?");
-    params.push(query.campaignId);
+    where.push(sqlCitizenInCampaign("?", "c"));
+    params.push(query.campaignId, query.campaignId);
   }
 
   const eduJoin = `
@@ -742,7 +819,7 @@ const CITIZEN_SELECT_SQL = `SELECT
          c.nationality, c.ethnicity, c.religion, c.origin_place,
          c.permanent_address, c.current_address, c.phone, c.unit_code,
          c.military_status, c.military_status_reason, c.approval_comment, c.military_status_locked,
-         c.call_intent, c.approval_status,
+         c.call_intent, c.approval_status, c.pipeline_status, c.province_comment, c.province_reviewed_at,
          c.health_grade, c.campaign_id, c.receiving_status, c.receiving_unit_code,
          c.created_at, c.updated_at, c.archived_at,
          edu.level AS education_level,
@@ -783,6 +860,7 @@ export async function findCitizenByIdFromDb(id: string): Promise<Citizen | null>
   await ensureCitizenAvatarColumn();
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenPipelineColumns();
   await ensureCitizenReceivingColumns();
   try {
     const rows = await queryRows<CitizenRow[]>(
@@ -955,6 +1033,7 @@ export async function updateCitizenInDb(
   if (!ok) return null;
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenPipelineColumns();
   await ensureCitizenReceivingColumns();
 
   const fields: string[] = [];
@@ -978,6 +1057,9 @@ export async function updateCitizenInDb(
       data.approvalComment !== undefined ? data.approvalComment : undefined,
     call_intent: data.callIntent,
     approval_status: data.approvalStatus,
+    pipeline_status: data.pipelineStatus,
+    province_comment:
+      data.provinceComment !== undefined ? data.provinceComment : undefined,
     campaign_id:
       data.campaignId !== undefined ? data.campaignId || null : undefined,
     receiving_status:

@@ -10,7 +10,7 @@ import {
   isQuanKhuOrBtl,
   ensureMilitaryUnitsInMemory,
 } from "@/lib/military-regions";
-import { createQuota, findQuotasForUnit } from "@/lib/quotas-db";
+import { createQuota, findQuotasForUnit, findQuotaByCampaignTarget } from "@/lib/quotas-db";
 import type { Quota } from "@/lib/data";
 import { syncOneReceivingFromRecruitment } from "@/lib/receiving-quotas-db";
 
@@ -136,12 +136,52 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const campId = String(campaignId || "").trim();
+  if (!campId) {
+    return NextResponse.json(
+      { error: "Vui lòng chọn đợt tuyển quân" },
+      { status: 400 },
+    );
+  }
+
+  const existing = await findQuotaByCampaignTarget(
+    session.unitCode,
+    toUnit,
+    campId,
+  );
+  if (existing) {
+    return NextResponse.json(
+      {
+        error: `Đã giao chỉ tiêu cho ${validChild.name} trong đợt này. Sửa chỉ tiêu hiện có hoặc chọn đơn vị khác — không giao trùng.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  // memory fallback
+  const memDup = db.quotas
+    .findForUnit(session.unitCode, session.hierarchyLevel)
+    .find(
+      (q) =>
+        q.fromUnit === session.unitCode &&
+        q.toUnit === toUnit &&
+        q.campaignId === campId,
+    );
+  if (memDup) {
+    return NextResponse.json(
+      {
+        error: `Đã giao chỉ tiêu cho ${validChild.name} trong đợt này. Không giao trùng.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const capacity = await getUnitRecruitmentCapacity(toUnit);
   const shortage = qty > capacity.eligible;
   const shortageAmount = Math.max(0, qty - capacity.eligible);
 
   const payload = {
-    campaignId: campaignId || undefined,
+    campaignId: campId,
     year: year || new Date().getFullYear(),
     fromLevel: session.hierarchyLevel as "bo" | "tinh" | "xa" | "donvi",
     fromUnit: session.unitCode,

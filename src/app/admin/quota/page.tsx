@@ -26,6 +26,7 @@ import {
   adminRowClass,
 } from "@/components/admin/list-ui";
 import { M3ConfirmDialog, M3Snackbar, type M3SnackbarTone } from "@/components/m3";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 interface Quota {
   id: string;
@@ -278,6 +279,29 @@ export default function QuotaPage() {
         ? issuedQuotas
         : quotas;
 
+  /** Đơn vị còn trống trong đợt (không giao trùng) */
+  const availableChildUnits = useMemo(() => {
+    if (editingQuota) {
+      return childUnits.filter(
+        (u) =>
+          u.code === editingQuota.toUnit ||
+          !issuedQuotas.some(
+            (q) =>
+              q.toUnit === u.code &&
+              q.campaignId === form.campaignId &&
+              q.id !== editingQuota.id,
+          ),
+      );
+    }
+    if (!form.campaignId) return childUnits;
+    const taken = new Set(
+      issuedQuotas
+        .filter((q) => q.campaignId === form.campaignId)
+        .map((q) => q.toUnit),
+    );
+    return childUnits.filter((u) => !taken.has(u.code));
+  }, [childUnits, issuedQuotas, form.campaignId, editingQuota]);
+
   const filteredQuotas = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return displayQuotas;
@@ -449,8 +473,22 @@ export default function QuotaPage() {
               </tr>
             ) : (
               pagedQuotas.map((q, idx) => {
-                const pct = q.amount > 0 ? Math.round((q.filled / q.amount) * 100) : 0;
-                const done = q.filled >= q.amount;
+                const rawPct =
+                  q.amount > 0 ? (q.filled / q.amount) * 100 : 0;
+                // 6/1230 ≈ 0.5% — không làm tròn về 0%
+                const pctLabel =
+                  q.amount <= 0
+                    ? "0%"
+                    : q.filled > 0 && rawPct < 1
+                      ? `${rawPct < 0.1 ? "<0.1" : rawPct.toFixed(1)}%`
+                      : `${Math.min(100, Math.round(rawPct))}%`;
+                const barWidth =
+                  q.amount <= 0
+                    ? 0
+                    : q.filled > 0 && rawPct < 1
+                      ? Math.max(rawPct, 1.2)
+                      : Math.min(100, Math.round(rawPct));
+                const done = q.filled >= q.amount && q.amount > 0;
                 const canEdit = q.fromUnit === session?.unitCode;
                 return (
                   <tr key={q.id} className={adminRowClass(idx)}>
@@ -477,12 +515,14 @@ export default function QuotaPage() {
                           <div
                             className="h-full rounded-full transition-all"
                             style={{
-                              width: `${pct}%`,
+                              width: `${barWidth}%`,
                               background: done ? "var(--color-m3-success)" : "var(--m3-primary, #1a73e8)",
                             }}
                           />
                         </div>
-                        <span className="text-xs text-m3-on-surface-variant w-8">{pct}%</span>
+                        <span className="w-12 shrink-0 text-right text-xs text-m3-on-surface-variant">
+                          {pctLabel}
+                        </span>
                       </div>
                     </td>
                     <td className={`${ADMIN_TD_CLS} text-xs text-m3-on-surface-variant`}>
@@ -580,23 +620,43 @@ export default function QuotaPage() {
                   Đơn vị nhận *
                 </label>
                 {childUnits.length > 0 ? (
-                  <select
-                    className="w-full border border-black/[0.08] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-m3-primary"
+                  <SearchableSelect
                     value={form.toUnit}
-                    onChange={(e) => setForm({ ...form, toUnit: e.target.value })}
-                  >
-                    <option value="">Chọn đơn vị nhận...</option>
-                    {childUnits.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    disabled={!editingQuota && !form.campaignId}
+                    onChange={(code) => setForm({ ...form, toUnit: code })}
+                    placeholder={
+                      !editingQuota && !form.campaignId
+                        ? "Chọn đợt trước..."
+                        : "Chọn đơn vị nhận..."
+                    }
+                    options={[
+                      {
+                        value: "",
+                        label:
+                          !editingQuota && !form.campaignId
+                            ? "Chọn đợt trước..."
+                            : "Chọn đơn vị nhận...",
+                      },
+                      ...availableChildUnits.map((u) => ({
+                        value: u.code,
+                        label: u.name,
+                      })),
+                    ]}
+                  />
                 ) : (
                   <p className="text-sm text-m3-on-warning-container p-2 rounded-lg bg-m3-warning-container">
                     Không có đơn vị cấp dưới để giao chỉ tiêu.
                   </p>
                 )}
+                {!editingQuota &&
+                  form.campaignId &&
+                  availableChildUnits.length === 0 &&
+                  childUnits.length > 0 && (
+                    <p className="mt-2 text-[13px] text-m3-on-surface-variant">
+                      Đã giao chỉ tiêu cho mọi đơn vị trong đợt này. Muốn đổi số
+                      lượng thì sửa dòng hiện có.
+                    </p>
+                  )}
                 {capacity && form.toUnit && (
                   <p
                     className={`mt-2 rounded-xl px-3 py-2 text-[13px] ${

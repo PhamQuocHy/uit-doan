@@ -16,6 +16,25 @@ export function calcAgeYears(
   return at.getFullYear() - dob.getFullYear();
 }
 
+/** Tuổi theo năm đợt khám (năm đợt − năm sinh). */
+export function calcAgeInYear(
+  dateOfBirth: string | Date,
+  campaignYear: number,
+): number {
+  const dob = dateOfBirth instanceof Date ? dateOfBirth : new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return 0;
+  return campaignYear - dob.getFullYear();
+}
+
+/** Còn trong khung tuổi NVQS trong năm đợt. */
+export function isNvqsAgeInYear(
+  dateOfBirth: string | Date,
+  campaignYear: number,
+): boolean {
+  const age = calcAgeInYear(dateOfBirth, campaignYear);
+  return age >= NVQS_AGE_MIN && age <= NVQS_AGE_MAX;
+}
+
 /** Biểu thức SQL tuổi theo năm (cột date_of_birth, có thể kèm alias bảng). */
 export function sqlAgeYear(column = "c.date_of_birth"): string {
   return `(YEAR(CURDATE()) - YEAR(${column}))`;

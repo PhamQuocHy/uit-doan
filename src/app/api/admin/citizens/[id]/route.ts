@@ -8,10 +8,15 @@ import {
 import { pingDb, queryExecute } from "@/lib/db";
 import {
   resolveCallIntentUpdate,
+  resetNvqsForNewCampaign,
   type CallIntent,
 } from "@/lib/enlistment-approval";
 import { verifyEditPinAsync } from "@/lib/unit-pin";
 import { countCitizenNvqsAttachments } from "@/lib/citizen-nvqs-attachments-db";
+import {
+  snapshotFromCitizen,
+  upsertCitizenCampaignHistory,
+} from "@/lib/citizen-campaigns-db";
 
 export async function GET(
   _request: NextRequest,
@@ -107,9 +112,30 @@ export async function PUT(
       editPin: _editPin,
       unlockViaProfile: _unlock,
       requireEditPin: _reqPin,
+      unlockApproved: _unlockApproved,
       ...safeBody
     } = body;
     const payload = { ...safeBody };
+
+    // Đổi đợt khám tuyển → trạng thái xét duyệt đợt cũ hết hiệu lực, duyệt lại từ đầu
+    const nextCampaignId =
+      body.campaignId !== undefined ? String(body.campaignId || "") : undefined;
+    const campaignChanged =
+      nextCampaignId !== undefined &&
+      nextCampaignId !== String(existing.campaignId || "");
+    if (campaignChanged) {
+      const reset = resetNvqsForNewCampaign(existing);
+      if (reset) {
+        Object.assign(payload, reset);
+        // Giữ ghi chú / khóa mà client gửi kèm khi đề xuất lại trong đợt mới
+        if (body.militaryStatusReason !== undefined) {
+          payload.militaryStatusReason = body.militaryStatusReason;
+        }
+        if (body.militaryStatusLocked !== undefined) {
+          payload.militaryStatusLocked = body.militaryStatusLocked;
+        }
+      }
+    }
 
     if (updatesCallIntent || body.militaryStatus === "tamhoan" || body.militaryStatus === "miengoi") {
       if (body.militaryStatus === "miengoi") {
@@ -117,6 +143,16 @@ export async function PUT(
         payload.approvalStatus = "none";
         payload.militaryStatus = "miengoi";
         payload.approvalComment = null;
+        const files = await countCitizenNvqsAttachments(id, "giay_mien_goi");
+        if (files < 1) {
+          return NextResponse.json(
+            {
+              error:
+                "Miễn gọi cần tải lên ít nhất 1 giấy miễn gọi (minh chứng) trước khi lưu",
+            },
+            { status: 400 },
+          );
+        }
       } else if (body.militaryStatus === "tamhoan") {
         const note = String(body.militaryStatusReason || "").trim();
         if (!note) {
@@ -125,7 +161,7 @@ export async function PUT(
             { status: 400 },
           );
         }
-        const files = await countCitizenNvqsAttachments(id, "tam_hoan");
+        const files = await countCitizenNvqsAttachments(id, "giay_tam_hoan");
         if (files < 1) {
           return NextResponse.json(
             {
@@ -138,6 +174,7 @@ export async function PUT(
         const resolved = resolveCallIntentUpdate("unset", "tamhoan");
         payload.callIntent = resolved.callIntent;
         payload.approvalStatus = resolved.approvalStatus;
+        payload.pipelineStatus = resolved.pipelineStatus;
         payload.militaryStatus = "tamhoan";
         payload.approvalComment = null;
       } else {
@@ -147,10 +184,7 @@ export async function PUT(
           existing.militaryStatus,
         );
 
-        if (
-          resolved.callIntent === "de_xuat_khong_goi" &&
-          resolved.approvalStatus === "pending"
-        ) {
+        if (resolved.callIntent === "de_xuat_khong_goi") {
           const note = String(body.militaryStatusReason || "").trim();
           if (!note) {
             return NextResponse.json(
@@ -161,12 +195,12 @@ export async function PUT(
               { status: 400 },
             );
           }
-          const files = await countCitizenNvqsAttachments(id, "khong_goi");
+          const files = await countCitizenNvqsAttachments(id, "giay_kham_suc_khoe");
           if (files < 1) {
             return NextResponse.json(
               {
                 error:
-                  "Đề xuất không gọi cần tải lên ít nhất 1 tệp minh chứng trước khi lưu",
+                  "Đề xuất không gọi cần tải lên ít nhất 1 giấy khám sức khỏe (minh chứng) trước khi lưu",
               },
               { status: 400 },
             );
@@ -175,6 +209,7 @@ export async function PUT(
 
         payload.callIntent = resolved.callIntent;
         payload.approvalStatus = resolved.approvalStatus;
+        payload.pipelineStatus = resolved.pipelineStatus;
         if (resolved.militaryStatus) {
           payload.militaryStatus = resolved.militaryStatus;
         }
@@ -189,7 +224,28 @@ export async function PUT(
     }
 
     const updatedDb = await updateCitizenInDb(id, payload);
-    if (updatedDb) return NextResponse.json(updatedDb);
+    if (updatedDb) {
+      const nextCamp = String(updatedDb.campaignId || "").trim();
+      if (nextCamp) {
+        await upsertCitizenCampaignHistory({
+          citizenId: id,
+          campaignId: nextCamp,
+          previous: campaignChanged ? snapshotFromCitizen(existing) : null,
+          next: {
+            callIntent: updatedDb.callIntent || "unset",
+            approvalStatus: updatedDb.approvalStatus || "none",
+            militaryStatus: updatedDb.militaryStatus || null,
+            militaryStatusReason: updatedDb.militaryStatusReason || null,
+            pipelineStatus: updatedDb.pipelineStatus || "none",
+            note: campaignChanged
+              ? "Gắn / chuyển đợt làm việc (giữ lịch sử đợt cũ)"
+              : "Cập nhật trạng thái trong đợt",
+          },
+          source: "manual",
+        });
+      }
+      return NextResponse.json(updatedDb);
+    }
 
     const updated = db.citizens.update(id, payload);
     if (!updated) {

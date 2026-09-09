@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, Plus } from "lucide-react";
+import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, Plus, Sparkles, Upload, Trash2, CalendarClock } from "lucide-react";
 import type { Citizen, EducationRecord, HealthRecord, ResidenceRecord, ResidenceType } from "@/lib/data";
 import {
   getHealthConclusionMeaning,
@@ -12,6 +12,16 @@ import {
   getCallDisplayLabel,
   type CallIntent,
 } from "@/lib/enlistment-approval";
+import {
+  MINH_CHUNG_LOAI_OPTIONS,
+  minhChungLabel,
+  purposesEquivalentTo,
+  type MinhChungLoai,
+} from "@/lib/citizen-nvqs-attachments";
+import {
+  isDiskAvatarPath,
+  resolveCitizenAvatarSrc,
+} from "@/lib/citizen-avatar";
 import HealthExamWorkflow from "@/components/admin/HealthExamWorkflow";
 import HealthExamFormModal from "@/components/admin/HealthExamFormModal";
 import {
@@ -29,7 +39,14 @@ import {
 import DateVnInput from "@/components/admin/DateVnInput";
 import { formatVnDate } from "@/lib/date-vn";
 
-type TabId = "identity" | "education" | "health" | "residence" | "nvqs" | "comments";
+type TabId =
+  | "identity"
+  | "education"
+  | "health"
+  | "residence"
+  | "nvqs"
+  | "campaigns"
+  | "comments";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "identity", label: "Định danh" },
@@ -37,6 +54,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "health", label: "Sức khỏe" },
   { id: "residence", label: "Cư trú" },
   { id: "nvqs", label: "NVQS" },
+  { id: "campaigns", label: "Đợt khám" },
   { id: "comments", label: "Nhận xét" },
 ];
 
@@ -87,7 +105,7 @@ const MILITARY_STATUS: Record<string, string> = {
 type NvqsCallChoice = CallIntent | "tamhoan" | "miengoi";
 
 const NVQS_CALL_OPTIONS: { value: NvqsCallChoice; label: string }[] = [
-  { value: "unset", label: "Chưa xác định" },
+  { value: "unset", label: "Hồ sơ mới" },
   { value: "du_kien_goi", label: "Dự kiến gọi (chuyển xét duyệt)" },
   { value: "du_bi", label: "Dự bị" },
   { value: "khong_goi", label: "Đề xuất không gọi" },
@@ -107,12 +125,13 @@ function citizenToNvqsChoice(c: Citizen): NvqsCallChoice {
 }
 
 function nvqsChoiceNeedsReason(choice: NvqsCallChoice) {
-  return choice === "tamhoan" || choice === "khong_goi";
+  return choice === "tamhoan" || choice === "khong_goi" || choice === "miengoi";
 }
 
-function nvqsChoiceNeedsFiles(choice: NvqsCallChoice): "khong_goi" | "tam_hoan" | null {
-  if (choice === "khong_goi") return "khong_goi";
-  if (choice === "tamhoan") return "tam_hoan";
+function nvqsChoiceNeedsFiles(choice: NvqsCallChoice): MinhChungLoai | null {
+  if (choice === "khong_goi") return "giay_kham_suc_khoe";
+  if (choice === "tamhoan") return "giay_tam_hoan";
+  if (choice === "miengoi") return "giay_mien_goi";
   return null;
 }
 
@@ -271,7 +290,20 @@ export default function CitizenDetailModal({
   const [nvqsError, setNvqsError] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string; year: number }[]>([]);
   const [campaignId, setCampaignId] = useState("");
+  const [campaignHistory, setCampaignHistory] = useState<
+    {
+      id: number;
+      campaignId: string;
+      campaignName?: string | null;
+      campaignYear?: number | null;
+      callIntent: string | null;
+      militaryStatus: string | null;
+      isCurrent: boolean;
+      note?: string | null;
+    }[]
+  >([]);
   const [sessionLevel, setSessionLevel] = useState<string | null>(null);
+  const [sessionUnitCode, setSessionUnitCode] = useState<string | null>(null);
   const [sessionFunctionalRole, setSessionFunctionalRole] = useState<string | null>(null);
   const [sessionUserRole, setSessionUserRole] = useState<string | null>(null);
   const [healthFormRound, setHealthFormRound] = useState<HealthExamRound | null>(null);
@@ -298,6 +330,24 @@ export default function CitizenDetailModal({
     { id: string; fileName: string; url: string; purpose: string }[]
   >([]);
   const [nvqsUploading, setNvqsUploading] = useState(false);
+  const [minhChungPickerOpen, setMinhChungPickerOpen] = useState(false);
+  const [pendingMinhChungLoai, setPendingMinhChungLoai] =
+    useState<MinhChungLoai | null>(null);
+  const minhChungFileRef = useRef<HTMLInputElement>(null);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [aiSuggestBusy, setAiSuggestBusy] = useState(false);
+  const [aiSuggestError, setAiSuggestError] = useState<string | null>(null);
+  const [aiSuggest, setAiSuggest] = useState<{
+    suggestion: NvqsCallChoice;
+    confidence: number;
+    reasons: string[];
+    draftNote: string;
+    warnings: string[];
+    label: string;
+    source: string;
+  } | null>(null);
 
   const needsPinToEdit = sessionLevel !== null && hierarchyNeedsEditPin(sessionLevel);
   const nvqsIsLocked = citizen?.militaryStatusLocked === true;
@@ -310,6 +360,68 @@ export default function CitizenDetailModal({
     approvalReview &&
     citizen?.approvalStatus === "pending" &&
     typeof onApprovalDecision === "function";
+  const showLocalAiSuggest =
+    !approvalReview &&
+    (sessionLevel === "xa" || sessionLevel === "tinh" || sessionLevel === "bo");
+
+  const requestAiSuggest = async () => {
+    if (!citizen?.id || aiSuggestBusy) return;
+    setAiSuggestBusy(true);
+    setAiSuggestError(null);
+    try {
+      const res = await fetch("/api/admin/ai/approval-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citizenId: citizen.id, mode: "local" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Không tạo được gợi ý AI");
+      }
+      const item = (data.items || [])[0] as
+        | {
+            suggestion?: string;
+            confidence?: number;
+            reasons?: string[];
+            draftNote?: string;
+            warnings?: string[];
+            label?: string;
+            source?: string;
+          }
+        | undefined;
+      if (!item?.suggestion) {
+        throw new Error("AI không trả về gợi ý");
+      }
+      const sug = item.suggestion as NvqsCallChoice;
+      const allowed = new Set(NVQS_CALL_OPTIONS.map((o) => o.value));
+      if (!allowed.has(sug)) {
+        throw new Error("Gợi ý không hợp lệ");
+      }
+      setAiSuggest({
+        suggestion: sug,
+        confidence: Number(item.confidence) || 0,
+        reasons: Array.isArray(item.reasons) ? item.reasons.map(String) : [],
+        draftNote: String(item.draftNote || ""),
+        warnings: Array.isArray(item.warnings) ? item.warnings.map(String) : [],
+        label: String(item.label || sug),
+        source: String(item.source || "rules"),
+      });
+    } catch (e) {
+      setAiSuggest(null);
+      setAiSuggestError(
+        e instanceof Error ? e.message : "Không tạo được gợi ý AI",
+      );
+    } finally {
+      setAiSuggestBusy(false);
+    }
+  };
+
+  const applyAiSuggest = () => {
+    if (!aiSuggest || !nvqsCanEdit) return;
+    setNvqsCallChoice(aiSuggest.suggestion);
+    if (aiSuggest.draftNote) setNvqsReason(aiSuggest.draftNote);
+    setNvqsError(null);
+  };
 
   const runApprovalDecision = async (action: "approve" | "reject") => {
     if (!onApprovalDecision || approvalBusy) return;
@@ -345,6 +457,8 @@ export default function CitizenDetailModal({
     setCitizen(citizenProp);
     setEditing(false);
     setSaveError(null);
+    setAiSuggest(null);
+    setAiSuggestError(null);
     setProfilePin("");
     setShowEduForm(false);
     setShowResForm(false);
@@ -402,10 +516,14 @@ export default function CitizenDetailModal({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         setSessionLevel(data?.user?.hierarchyLevel ?? null);
+        setSessionUnitCode(data?.user?.unitCode ?? null);
         setSessionFunctionalRole(data?.user?.functionalRole ?? null);
         setSessionUserRole(data?.user?.role ?? null);
       })
-      .catch(() => setSessionLevel(null));
+      .catch(() => {
+        setSessionLevel(null);
+        setSessionUnitCode(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -593,10 +711,8 @@ export default function CitizenDetailModal({
     return () => ac.abort();
   }, [citizen?.id, listsTick]);
 
-  const uploadNvqsFiles = async (files: FileList) => {
+  const uploadNvqsFiles = async (files: FileList, purpose: MinhChungLoai) => {
     if (!citizen) return;
-    const purpose = nvqsChoiceNeedsFiles(nvqsCallChoice);
-    if (!purpose) return;
     setNvqsUploading(true);
     setNvqsError(null);
     try {
@@ -619,7 +735,20 @@ export default function CitizenDetailModal({
       setNvqsError("Lỗi kết nối khi tải minh chứng");
     } finally {
       setNvqsUploading(false);
+      setPendingMinhChungLoai(null);
     }
+  };
+
+  const openMinhChungUpload = () => {
+    const suggested = nvqsChoiceNeedsFiles(nvqsCallChoice);
+    setPendingMinhChungLoai(suggested);
+    setMinhChungPickerOpen(true);
+  };
+
+  const confirmMinhChungLoaiAndPickFiles = (loai: MinhChungLoai) => {
+    setPendingMinhChungLoai(loai);
+    setMinhChungPickerOpen(false);
+    window.setTimeout(() => minhChungFileRef.current?.click(), 50);
   };
 
   const removeNvqsFile = async (attachmentId: string) => {
@@ -642,12 +771,98 @@ export default function CitizenDetailModal({
     }
   };
 
+  const uploadAvatarFile = async (file: File) => {
+    if (!citizen) return;
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      const form = new FormData();
+      form.set("citizenId", citizen.id);
+      form.set("file", file);
+      const res = await fetch("/api/admin/citizen-avatar", {
+        method: "POST",
+        body: form,
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAvatarError(
+          typeof data.error === "string" ? data.error : "Không tải được ảnh",
+        );
+        return;
+      }
+      if (data.data) {
+        setCitizen(data.data as Citizen);
+        onCitizenUpdated?.(data.data as Citizen);
+      } else if (typeof data.avatar === "string") {
+        setCitizen((prev) =>
+          prev ? { ...prev, avatar: data.avatar as string } : prev,
+        );
+      }
+    } catch {
+      setAvatarError("Lỗi kết nối khi tải ảnh");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const removeAvatarFile = async () => {
+    if (!citizen) return;
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/citizen-avatar?citizenId=${encodeURIComponent(citizen.id)}`,
+        { method: "DELETE", cache: "no-store" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAvatarError(
+          typeof data.error === "string" ? data.error : "Không xóa được ảnh",
+        );
+        return;
+      }
+      if (data.data) {
+        setCitizen(data.data as Citizen);
+        onCitizenUpdated?.(data.data as Citizen);
+      } else {
+        setCitizen((prev) => (prev ? { ...prev, avatar: undefined } : prev));
+      }
+    } catch {
+      setAvatarError("Lỗi kết nối khi xóa ảnh");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   useEffect(() => {
     fetch("/api/admin/recruitment?limit=100")
       .then((res) => res.json())
       .then((data) => setCampaigns(data.data || []))
       .catch(() => setCampaigns([]));
   }, []);
+
+  useEffect(() => {
+    const id = citizen?.id;
+    if (!id) {
+      setCampaignHistory([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/admin/citizens/${encodeURIComponent(id)}/campaigns`)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((json) => {
+        if (!cancelled) {
+          setCampaignHistory(Array.isArray(json.data) ? json.data : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCampaignHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [citizen?.id, citizen?.campaignId, listsTick]);
 
   useEffect(() => {
     if (!citizen) return;
@@ -676,14 +891,50 @@ export default function CitizenDetailModal({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [healthFilterOpen]);
 
+  const assignedCampaign = useMemo(() => {
+    const id = citizen?.campaignId || "";
+    if (!id) return null;
+    return campaigns.find((c) => c.id === id) || null;
+  }, [citizen?.campaignId, campaigns]);
+
+  const campaignHeaderLabel = useMemo(() => {
+    if (!citizen) return null;
+    if (assignedCampaign) {
+      return `${assignedCampaign.year} · ${assignedCampaign.name}`;
+    }
+    if (citizen.campaignId) {
+      return `Đợt ${citizen.campaignId}`;
+    }
+    return null;
+  }, [citizen, assignedCampaign]);
+
+  const campaignExamYears = useMemo(() => {
+    const years = new Set<number>();
+    for (const h of campaignHistory) {
+      if (h.campaignYear != null && Number.isFinite(h.campaignYear)) {
+        years.add(Number(h.campaignYear));
+      }
+    }
+    if (assignedCampaign?.year) years.add(assignedCampaign.year);
+    return [...years].sort((a, b) => b - a);
+  }, [campaignHistory, assignedCampaign?.year]);
+
+  const examYearOpts = useMemo(
+    () => ({
+      throughYear: campaignExamYears[0] ?? null,
+      campaignYears: campaignExamYears,
+    }),
+    [campaignExamYears],
+  );
+
   const lifecycleStage = useMemo(() => {
     if (!citizen) return null;
     return resolveLifecycleStage(citizen.dateOfBirth, citizen.archivedAt);
   }, [citizen?.dateOfBirth, citizen?.archivedAt]);
 
   const examWindow = useMemo(
-    () => getNvqsExamYearWindow(citizen?.dateOfBirth),
-    [citizen?.dateOfBirth],
+    () => getNvqsExamYearWindow(citizen?.dateOfBirth, new Date(), examYearOpts),
+    [citizen?.dateOfBirth, examYearOpts],
   );
 
   const citizenAge = useMemo(
@@ -697,9 +948,28 @@ export default function CitizenDetailModal({
   );
 
   const healthYearOptions = useMemo(
-    () => mergeHealthYearOptions(citizen?.dateOfBirth, healthYearsFromRecords),
-    [citizen?.dateOfBirth, healthYearsFromRecords],
+    () =>
+      mergeHealthYearOptions(
+        citizen?.dateOfBirth,
+        healthYearsFromRecords,
+        new Date(),
+        examYearOpts,
+      ),
+    [citizen?.dateOfBirth, healthYearsFromRecords, examYearOpts],
   );
+
+  // Ưu tiên năm đợt đang làm (vd. 2027) khi mở tab sức khỏe
+  useEffect(() => {
+    if (!healthYearOptions.length) return;
+    const preferred =
+      assignedCampaign?.year && healthYearOptions.includes(assignedCampaign.year)
+        ? assignedCampaign.year
+        : healthYearOptions[0];
+    setHealthYear((prev) => {
+      if (prev != null && healthYearOptions.includes(prev)) return prev;
+      return preferred;
+    });
+  }, [healthYearOptions, assignedCampaign?.year]);
 
   const filteredHealthRecords = useMemo(() => {
     const list =
@@ -733,17 +1003,28 @@ export default function CitizenDetailModal({
         const records: HealthRecord[] = Array.isArray(data?.data) ? data.data : [];
         setHealthRecords(records);
         const years = [...new Set(records.map((r) => r.year))].sort((a, b) => b - a);
-        const options = mergeHealthYearOptions(citizen.dateOfBirth, years);
+        const options = mergeHealthYearOptions(
+          citizen.dateOfBirth,
+          years,
+          new Date(),
+          examYearOpts,
+        );
         if (keepYear != null && options.includes(keepYear)) {
           setHealthYear(keepYear);
         } else {
+          const preferred =
+            assignedCampaign?.year && options.includes(assignedCampaign.year)
+              ? assignedCampaign.year
+              : null;
           const open = options.find((y) => yearHasOpenExamSlot(records, y));
-          setHealthYear(open ?? options[0] ?? new Date().getFullYear());
+          setHealthYear(
+            preferred ?? open ?? options[0] ?? new Date().getFullYear(),
+          );
         }
       })
       .catch(() => setHealthRecords([]))
       .finally(() => setHealthLoading(false));
-  }, [citizen, healthYear]);
+  }, [citizen, healthYear, examYearOpts, assignedCampaign?.year]);
 
   const startEdit = useCallback(() => {
     if (!citizen) return;
@@ -785,12 +1066,23 @@ export default function CitizenDetailModal({
     // Khi sửa: ưu tiên năm còn chỗ nhập (vd. năm hiện tại chưa khám)
     setHealthRecords((records) => {
       const years = [...new Set(records.map((r) => r.year))];
-      const options = mergeHealthYearOptions(citizen.dateOfBirth, years);
+      const options = mergeHealthYearOptions(
+        citizen.dateOfBirth,
+        years,
+        new Date(),
+        examYearOpts,
+      );
+      const preferred =
+        assignedCampaign?.year && options.includes(assignedCampaign.year)
+          ? assignedCampaign.year
+          : null;
       const open = options.find((y) => yearHasOpenExamSlot(records, y));
-      if (open != null) setHealthYear(open);
+      if (preferred != null || open != null) {
+        setHealthYear(preferred ?? open!);
+      }
       return records;
     });
-  }, [citizen]);
+  }, [citizen, examYearOpts, assignedCampaign?.year]);
 
   const saveProfile = useCallback(async () => {
     if (!citizen) return;
@@ -809,17 +1101,28 @@ export default function CitizenDetailModal({
         setNvqsError(
           nvqsCallChoice === "tamhoan"
             ? "Vui lòng nhập ghi chú / lý do tạm hoãn."
-            : "Vui lòng nhập ghi chú / lý do đề xuất không gọi.",
+            : nvqsCallChoice === "miengoi"
+              ? "Vui lòng nhập ghi chú / lý do miễn gọi."
+              : "Vui lòng nhập ghi chú / lý do đề xuất không gọi.",
         );
         setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
         return;
       }
       const filePurpose = nvqsChoiceNeedsFiles(nvqsCallChoice);
-      if (filePurpose && nvqsAttachments.filter((a) => a.purpose === filePurpose).length < 1) {
+      if (
+        filePurpose &&
+        nvqsAttachments.filter((a) =>
+          purposesEquivalentTo(filePurpose).includes(
+            a.purpose as "giay_tam_hoan" | "giay_mien_goi" | "giay_kham_suc_khoe" | "khong_goi" | "tam_hoan",
+          ),
+        ).length < 1
+      ) {
         setNvqsError(
-          filePurpose === "tam_hoan"
+          filePurpose === "giay_tam_hoan"
             ? "Cần tải lên giấy tạm hoãn (minh chứng) trước khi lưu."
-            : "Cần tải lên tệp minh chứng (giấy khám SK…) trước khi lưu đề xuất không gọi.",
+            : filePurpose === "giay_mien_goi"
+              ? "Cần tải lên giấy miễn gọi (minh chứng) trước khi lưu."
+              : "Cần tải lên giấy khám sức khỏe (minh chứng) trước khi lưu đề xuất không gọi.",
         );
         setSaveError("Vui lòng hoàn thiện thông tin tab NVQS trước khi lưu.");
         return;
@@ -1232,14 +1535,29 @@ export default function CitizenDetailModal({
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/[0.06] px-5 py-4">
-          <div className="min-w-0">
-            <h2
-              id="citizen-drawer-title"
-              className="truncate text-[20px] font-semibold text-m3-on-surface"
-            >
-              Hồ sơ lý lịch
-            </h2>
-          
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h2
+                id="citizen-drawer-title"
+                className="truncate text-[20px] font-semibold text-m3-on-surface"
+              >
+                Hồ sơ lý lịch
+              </h2>
+              {campaignHeaderLabel ? (
+                <span
+                  title={campaignHeaderLabel}
+                  className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full bg-m3-primary-container/80 px-2.5 py-1 text-[12px] font-semibold text-m3-on-primary-container"
+                >
+                  <CalendarClock size={13} className="shrink-0" />
+                  <span className="truncate">{campaignHeaderLabel}</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-m3-surface-container-high px-2.5 py-1 text-[12px] font-semibold text-m3-on-surface-variant">
+                  <CalendarClock size={13} className="shrink-0" />
+                  Chưa gắn đợt khám
+                </span>
+              )}
+            </div>
           </div>
           <button
             type="button"
@@ -1255,7 +1573,11 @@ export default function CitizenDetailModal({
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-black/[0.06] px-4">
           {TABS.filter((t) => {
             if (sessionFunctionalRole === "y_te") return t.id === "health";
-            if (t.id === "comments") return Boolean(citizen?.approvalComment);
+            if (t.id === "comments")
+              return Boolean(
+                citizen?.approvalComment?.trim() ||
+                  citizen?.provinceComment?.trim(),
+              );
             return true;
           }).map((t) => (
             <button
@@ -1278,19 +1600,65 @@ export default function CitizenDetailModal({
           {tab === "identity" && (
             <div className="flex flex-col gap-4">
               {/* Profile banner */}
-              <div className="flex items-center gap-4 rounded-[16px] bg-gradient-to-r from-m3-primary/8 to-transparent p-4">
-                <img
-                  src={
-                    citizen.avatar
-                      ? citizen.avatar.startsWith("data:") ||
-                        citizen.avatar.startsWith("http")
-                        ? citizen.avatar
-                        : `data:image/jpeg;base64,${citizen.avatar}`
-                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(citizen.fullName)}&background=007aff&color=fff&size=128&font-size=0.33`
-                  }
-                  alt=""
-                  className="h-30 w-24 shrink-0 rounded-[14px] object-cover shadow-xs"
-                />
+              <div className="flex items-start gap-4 rounded-[16px] bg-gradient-to-r from-m3-primary/8 to-transparent p-4">
+                <div className="flex shrink-0 flex-col items-center gap-1.5">
+                  <div className="relative h-[120px] w-[90px] overflow-hidden rounded-[14px] shadow-xs">
+                    <img
+                      src={resolveCitizenAvatarSrc(
+                        citizen.avatar,
+                        citizen.fullName,
+                      )}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    {editing && !approvalReview && (
+                      <>
+                        <input
+                          ref={avatarFileRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+                          className="hidden"
+                          disabled={avatarUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (file) void uploadAvatarFile(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={avatarUploading}
+                          onClick={() => avatarFileRef.current?.click()}
+                          title={avatarUploading ? "Đang tải…" : "Tải ảnh 3×4"}
+                          aria-label="Tải ảnh 3×4"
+                          className="absolute inset-x-0 bottom-0 flex h-9 items-center justify-center gap-1 bg-black/55 text-white backdrop-blur-[2px] transition hover:bg-black/70 disabled:opacity-60"
+                        >
+                          <Upload size={15} />
+                          <span className="text-[11px] font-semibold">
+                            {avatarUploading ? "…" : "Tải"}
+                          </span>
+                        </button>
+                        {isDiskAvatarPath(citizen.avatar) && (
+                          <button
+                            type="button"
+                            disabled={avatarUploading}
+                            onClick={() => void removeAvatarFile()}
+                            title="Xóa ảnh"
+                            aria-label="Xóa ảnh"
+                            className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-[2px] hover:bg-m3-error disabled:opacity-60"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {editing && avatarError && (
+                    <p className="max-w-[90px] text-center text-[11px] leading-snug text-m3-error">
+                      {avatarError}
+                    </p>
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   {editing ? (
                     <div className="flex flex-col gap-2">
@@ -1346,6 +1714,31 @@ export default function CitizenDetailModal({
                         {formatVnDate(citizen.dateOfBirth)}
                         {citizen.phone ? ` · ${citizen.phone}` : ""}
                       </p>
+                      <p className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-m3-primary">
+                        <CalendarClock size={14} className="shrink-0" />
+                        {campaignHeaderLabel
+                          ? `Đợt đang làm: ${campaignHeaderLabel}`
+                          : "Chưa gắn đợt khám tuyển"}
+                      </p>
+                      {campaignHistory.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {campaignHistory.map((h) => (
+                            <li
+                              key={`${h.campaignId}-${h.id}`}
+                              className="text-[12px] text-m3-on-surface-variant"
+                            >
+                              <span className="font-semibold text-m3-on-surface">
+                                {h.campaignYear ? `${h.campaignYear} · ` : ""}
+                                {h.campaignName || h.campaignId}
+                              </span>
+                              {h.isCurrent ? " · đang làm" : ""}
+                              {h.militaryStatus || h.callIntent
+                                ? ` · ${[h.militaryStatus, h.callIntent].filter(Boolean).join("/")}`
+                                : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </>
                   )}
                 </div>
@@ -1815,11 +2208,14 @@ export default function CitizenDetailModal({
                     Vòng đời NVQS · {lifecycleStageLabel(lifecycleStage)}
                   </p>
                   <p className="mt-1 text-[12px] leading-snug text-m3-on-surface-variant">
-                    Tuổi hiện tại {citizenAge} (năm hiện tại − năm sinh). Cửa sổ
-                    khám {NVQS_AGE_MIN}–{NVQS_AGE_MAX}: năm {examWindow.fromYear}
-                    –{examWindow.toYear || "—"}. Hồ sơ lưu vĩnh viễn; hết tuổi
-                    chuyển Hồ sơ lưu trữ sau khi duyệt — lịch sử khám các năm
-                    vẫn giữ để đối chiếu.
+                    Tuổi hiện tại {citizenAge} (năm máy − năm sinh). Cửa sổ khám{" "}
+                    {NVQS_AGE_MIN}–{NVQS_AGE_MAX}: năm {examWindow.fromYear}–
+                    {examWindow.toYear || "—"}.
+                    {assignedCampaign?.year
+                      ? ` Đợt đang làm ${assignedCampaign.year} → mở năm khám ${assignedCampaign.year}.`
+                      : ""}{" "}
+                    Hồ sơ lưu vĩnh viễn; hết tuổi chuyển lưu trữ — lịch sử khám
+                    các năm vẫn giữ để đối chiếu.
                   </p>
                   {examWindow.years.length > 0 && (
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -1869,7 +2265,10 @@ export default function CitizenDetailModal({
               <HealthExamWorkflow
                 year={examYear}
                 records={healthRecords}
-                canEnter={editing}
+                canEnter={
+                  Boolean(sessionLevel) && canEnterHealth && !approvalReview
+                }
+                hierarchyLevel={sessionLevel}
                 yearOptions={healthYearOptions}
                 onYearChange={(y) => {
                   setHealthYear(y);
@@ -1997,9 +2396,9 @@ export default function CitizenDetailModal({
                   {filteredHealthRecords.length === 0 ? (
                     <p className="rounded-[14px] border border-dashed border-black/[0.1] py-8 text-center text-[14px] text-m3-on-surface-variant">
                       Chưa có lần khám năm {examYear}.
-                      {editing
-                        ? " Dùng «Nhập vòng 1» phía trên để thêm chu kỳ khám năm này."
-                        : " Bấm Sửa hồ sơ để nhập khám cho năm này."}
+                      {canEnterHealth && !approvalReview
+                        ? " Dùng nút nhập vòng khám phía trên để thêm chu kỳ khám năm này."
+                        : " Tài khoản hiện tại không có quyền nhập khám."}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -2377,8 +2776,160 @@ export default function CitizenDetailModal({
             </div>
           )}
 
+          {tab === "campaigns" && (
+            <div className="flex flex-col gap-4">
+              <div className="rounded-[16px] border border-black/[0.06] bg-m3-surface-high p-4">
+                <p className="text-[15px] font-bold text-m3-on-surface">
+                  Lịch sử các đợt khám / tuyển quân
+                </p>
+                <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+                  Một hồ sơ có thể gắn nhiều đợt (2026, 2027…). Đợt cũ vẫn giữ
+                  khi thêm đợt mới. Hết tuổi NVQS mới chuyển lưu trữ.
+                </p>
+              </div>
+
+              {campaignHistory.length === 0 ? (
+                <div className="rounded-[16px] border border-dashed border-black/[0.1] px-4 py-10 text-center text-[14px] text-m3-on-surface-variant">
+                  Chưa có lịch sử đợt khám. Gắn đợt ở tab NVQS hoặc form sửa hồ
+                  sơ.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {campaignHistory.map((h) => (
+                    <div
+                      key={`${h.campaignId}-${h.id}`}
+                      className={`rounded-[16px] border px-4 py-3 ${
+                        h.isCurrent
+                          ? "border-m3-primary/30 bg-m3-primary-container/25"
+                          : "border-black/[0.06] bg-white"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CalendarClock
+                          size={16}
+                          className="text-m3-primary shrink-0"
+                        />
+                        <p className="text-[15px] font-bold text-m3-on-surface">
+                          {h.campaignYear ? `${h.campaignYear} · ` : ""}
+                          {h.campaignName || h.campaignId}
+                        </p>
+                        {h.isCurrent ? (
+                          <span className="rounded-full bg-m3-primary px-2 py-0.5 text-[11px] font-semibold text-white">
+                            Đang làm
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-semibold text-m3-on-surface-variant">
+                            Lịch sử
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-m3-on-surface-variant">
+                        {h.militaryStatus ? (
+                          <span>NVQS: {h.militaryStatus}</span>
+                        ) : null}
+                        {h.callIntent ? (
+                          <span>Dự kiến: {h.callIntent}</span>
+                        ) : null}
+                        {h.note ? (
+                          <span className="italic">{h.note}</span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-2.5 text-[13px] font-semibold text-m3-primary hover:underline"
+                        onClick={() => {
+                          if (h.campaignYear) {
+                            setHealthYear(h.campaignYear);
+                            setTab("health");
+                          }
+                        }}
+                      >
+                        Xem / nhập sức khỏe năm {h.campaignYear || "—"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {tab === "nvqs" && (
             <div className="rounded-[16px] bg-m3-surface-high p-4">
+              {showLocalAiSuggest && (
+                <div className="mb-4 rounded-[14px] border border-m3-primary/20 bg-white p-3.5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-[14px] font-bold text-m3-on-surface">
+                        <Sparkles size={16} className="text-m3-primary" />
+                        AI hỗ trợ duyệt
+                      </p>
+                      <p className="mt-1 text-[12px] leading-snug text-m3-on-surface-variant">
+                        Gợi ý từ hồ sơ công dân + sức khỏe — cần cán bộ xác nhận trước khi lưu.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={aiSuggestBusy || !citizen?.id}
+                      onClick={() => void requestAiSuggest()}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-m3-primary px-3.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      <Sparkles size={14} />
+                      {aiSuggestBusy ? "Đang phân tích…" : "Gợi ý AI"}
+                    </button>
+                  </div>
+                  {aiSuggestError && (
+                    <p className="mt-2 text-[13px] text-m3-error">{aiSuggestError}</p>
+                  )}
+                  {aiSuggest && (
+                    <div className="mt-3 rounded-[12px] bg-[#f7f9fb] px-3.5 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-m3-primary-container px-2.5 py-1 text-[12px] font-bold text-m3-on-primary-container">
+                          {aiSuggest.label}
+                        </span>
+                        <span className="text-[12px] text-m3-on-surface-variant">
+                          Độ tin cậy {Math.round(aiSuggest.confidence * 100)}%
+                          {aiSuggest.source !== "rules"
+                            ? " · Gemini"
+                            : " · Quy tắc"}
+                        </span>
+                      </div>
+                      {aiSuggest.reasons.length > 0 && (
+                        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[13px] text-m3-on-surface">
+                          {aiSuggest.reasons.map((r) => (
+                            <li key={r}>{r}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {aiSuggest.warnings.length > 0 && (
+                        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[13px] text-m3-warning">
+                          {aiSuggest.warnings.map((w) => (
+                            <li key={w}>{w}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {aiSuggest.draftNote && (
+                        <p className="mt-2 text-[13px] italic text-m3-on-surface-variant">
+                          Ghi chú gợi ý: {aiSuggest.draftNote}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        disabled={!nvqsCanEdit}
+                        onClick={applyAiSuggest}
+                        className="mt-3 inline-flex h-9 items-center rounded-full border border-m3-primary/30 bg-white px-3.5 text-[13px] font-semibold text-m3-primary hover:bg-m3-primary-container/40 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={
+                          nvqsCanEdit
+                            ? "Điền vào form — chưa lưu"
+                            : "Bấm Sửa hồ sơ để áp dụng gợi ý"
+                        }
+                      >
+                        Áp dụng gợi ý
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {nvqsIsLocked && !editing && (
                 <div className="mb-4 flex items-start gap-3 rounded-[12px] border border-m3-warning/25 bg-m3-warning/8 px-3.5 py-3">
                   <Lock size={18} className="mt-0.5 shrink-0 text-m3-error" />
@@ -2435,7 +2986,7 @@ export default function CitizenDetailModal({
                     nvqsCallChoice === "tamhoan") && (
                   <div className="min-w-0">
                     <label htmlFor="nvqs-campaign" className="text-[14px] font-medium text-m3-on-surface-variant">
-                      Đợt khám tuyển <span className="text-m3-error">*</span>
+                      Đợt đang làm việc <span className="text-m3-error">*</span>
                     </label>
                     <select
                       id="nvqs-campaign"
@@ -2453,6 +3004,16 @@ export default function CitizenDetailModal({
                         </option>
                       ))}
                     </select>
+                    <p className="mt-1.5 text-[12px] leading-snug text-m3-on-surface-variant">
+                      Đổi đợt = thêm / chuyển đợt đang làm; đợt cũ vẫn nằm trong lịch sử hồ sơ (không mất khỏi lọc đợt cũ).
+                    </p>
+                    {campaignId &&
+                      citizen.campaignId &&
+                      campaignId !== citizen.campaignId && (
+                        <p className="mt-1.5 text-[12px] leading-snug text-amber-800">
+                          Trạng thái xét duyệt sẽ làm lại từ đầu cho đợt mới; snapshot đợt cũ được giữ trong lịch sử.
+                        </p>
+                      )}
                   </div>
                 )}
 
@@ -2493,11 +3054,30 @@ export default function CitizenDetailModal({
                   renderStackField("Ghi chú", citizen.militaryStatusReason)
                 )}
 
+                {(citizen.pipelineStatus === "province_returned" ||
+                  Boolean(citizen.provinceComment?.trim())) && (
+                  <div className="min-w-0 rounded-[12px] border border-m3-error/30 bg-m3-error-container/50 px-3.5 py-3">
+                    <p className="text-[14px] font-medium text-m3-on-surface-variant">
+                      Nhận xét của tỉnh
+                      {citizen.pipelineStatus === "province_returned" ? (
+                        <span className="ml-1.5 rounded-full bg-m3-error/15 px-2 py-0.5 text-[11px] font-bold text-m3-error">
+                          Trả về bổ sung
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-1.5 text-[16px] font-semibold leading-snug text-m3-error">
+                      {citizen.provinceComment?.trim() || "—"}
+                    </p>
+                  </div>
+                )}
+
                 {(nvqsCanEdit
-                  ? nvqsChoiceNeedsFiles(nvqsCallChoice)
+                  ? true
                   : citizen.callIntent === "de_xuat_khong_goi" ||
                       citizen.callIntent === "khong_goi" ||
-                      citizen.militaryStatus === "tamhoan") && (
+                      citizen.militaryStatus === "tamhoan" ||
+                      citizen.militaryStatus === "miengoi" ||
+                      nvqsAttachments.length > 0) && (
                   <div className="min-w-0">
                     <p className="text-[14px] font-medium text-m3-on-surface-variant">
                       Minh chứng đính kèm
@@ -2508,26 +3088,43 @@ export default function CitizenDetailModal({
                     <ul className="mt-2 space-y-1.5">
                       {nvqsAttachments
                         .filter((a) => {
-                          const need = nvqsChoiceNeedsFiles(nvqsCallChoice);
-                          if (nvqsCanEdit && need) return a.purpose === need;
-                          if (citizen.militaryStatus === "tamhoan") {
-                            return a.purpose === "tam_hoan";
+                          if (!nvqsCanEdit) {
+                            const need = nvqsChoiceNeedsFiles(
+                              citizenToNvqsChoice(citizen),
+                            );
+                            if (need) {
+                              return purposesEquivalentTo(need).includes(
+                                a.purpose as MinhChungLoai | "khong_goi" | "tam_hoan",
+                              );
+                            }
+                            return true;
                           }
-                          return a.purpose === "khong_goi";
+                          const need = nvqsChoiceNeedsFiles(nvqsCallChoice);
+                          if (need) {
+                            return purposesEquivalentTo(need).includes(
+                              a.purpose as MinhChungLoai | "khong_goi" | "tam_hoan",
+                            );
+                          }
+                          return true;
                         })
                         .map((a) => (
                           <li
                             key={a.id}
                             className="flex items-center justify-between gap-2 rounded-[10px] border border-black/[0.06] bg-white px-3 py-2 text-[13px]"
                           >
-                            <a
-                              href={a.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="truncate font-medium text-m3-primary hover:underline"
-                            >
-                              {a.fileName}
-                            </a>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-m3-on-surface-variant">
+                                {minhChungLabel(a.purpose)}
+                              </p>
+                              <a
+                                href={a.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate font-medium text-m3-primary hover:underline"
+                              >
+                                {a.fileName}
+                              </a>
+                            </div>
                             {nvqsCanEdit && (
                               <button
                                 type="button"
@@ -2540,9 +3137,10 @@ export default function CitizenDetailModal({
                           </li>
                         ))}
                     </ul>
-                    {nvqsCanEdit && nvqsChoiceNeedsFiles(nvqsCallChoice) && (
-                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3 py-2 text-[13px] font-semibold text-m3-on-surface hover:bg-m3-surface-high">
+                    {nvqsCanEdit && (
+                      <>
                         <input
+                          ref={minhChungFileRef}
                           type="file"
                           className="hidden"
                           multiple
@@ -2550,12 +3148,24 @@ export default function CitizenDetailModal({
                           disabled={nvqsUploading}
                           onChange={(e) => {
                             const files = e.target.files;
-                            if (files?.length) void uploadNvqsFiles(files);
+                            const loai = pendingMinhChungLoai;
+                            if (files?.length && loai) {
+                              void uploadNvqsFiles(files, loai);
+                            } else if (files?.length && !loai) {
+                              setNvqsError("Vui lòng chọn loại minh chứng trước khi tải lên");
+                            }
                             e.target.value = "";
                           }}
                         />
-                        {nvqsUploading ? "Đang tải..." : "Tải tệp minh chứng"}
-                      </label>
+                        <button
+                          type="button"
+                          disabled={nvqsUploading}
+                          onClick={openMinhChungUpload}
+                          className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-full border border-black/[0.08] bg-white px-3 py-2 text-[13px] font-semibold text-m3-on-surface hover:bg-m3-surface-high disabled:opacity-60"
+                        >
+                          {nvqsUploading ? "Đang tải..." : "Tải minh chứng lên"}
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -2572,16 +3182,22 @@ export default function CitizenDetailModal({
                 <strong className="text-m3-on-surface">
                   {getCallDisplayLabel(citizen).label}
                 </strong>
+                {citizen.pipelineStatus === "province_returned" && (
+                    <> — tỉnh trả về, xem nhận xét bên dưới để bổ sung rồi đẩy lại</>
+                  )}
                 {citizen.approvalStatus === "pending" &&
-                  citizen.callIntent === "du_kien_goi" && (
+                  citizen.callIntent === "du_kien_goi" &&
+                  citizen.pipelineStatus !== "province_returned" && (
                     <> — đang chờ xét duyệt tại mục Xét duyệt danh sách</>
                   )}
                 {citizen.approvalStatus === "pending" &&
-                  citizen.callIntent === "de_xuat_khong_goi" && (
+                  citizen.callIntent === "de_xuat_khong_goi" &&
+                  citizen.pipelineStatus !== "province_returned" && (
                     <> — đề xuất không gọi đang chờ Quân khu đồng tình</>
                   )}
                 {citizen.approvalStatus === "pending" &&
-                  citizen.militaryStatus === "tamhoan" && (
+                  citizen.militaryStatus === "tamhoan" &&
+                  citizen.pipelineStatus !== "province_returned" && (
                     <> — tạm hoãn đang chờ Quân khu duyệt</>
                   )}
                 {nvqsIsLocked && (
@@ -2614,24 +3230,43 @@ export default function CitizenDetailModal({
           )}
 
           {tab === "comments" && (
-            <div className="rounded-[16px] border border-m3-error/20 bg-m3-error/[0.04] p-4">
-              <h3 className="text-[15px] font-bold text-m3-on-surface">
-                Nhận xét Quân khu
-              </h3>
-              <p className="mt-1 text-[13px] text-m3-on-surface-variant">
-                Lý do không chấp nhận đề xuất không gọi hoặc hủy tạm hoãn. Hồ sơ đã
-                chuyển về Chưa xác định và bị khóa — cập nhật minh chứng rồi gửi duyệt
-                lại.
-              </p>
-              <div className="mt-4 rounded-[12px] border border-black/[0.06] bg-white px-4 py-3">
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-m3-on-surface">
-                  {citizen.approvalComment || "—"}
-                </p>
-              </div>
-              {nvqsIsLocked && (
-                <p className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-m3-error">
-                  <Lock size={14} /> Hồ sơ đang bị khóa sau khi Quân khu trả về
-                </p>
+            <div className="space-y-4">
+              {Boolean(citizen.provinceComment?.trim()) && (
+                <div className="rounded-[16px] border border-m3-error/20 bg-m3-error/[0.04] p-4">
+                  <h3 className="text-[15px] font-bold text-m3-on-surface">
+                    Nhận xét của tỉnh
+                  </h3>
+                  <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+                    Lý do tỉnh trả về để xã bổ sung / chỉnh sửa trước khi gửi lại.
+                  </p>
+                  <div className="mt-4 rounded-[12px] border border-black/[0.06] bg-white px-4 py-3">
+                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-m3-on-surface">
+                      {citizen.provinceComment}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {Boolean(citizen.approvalComment?.trim()) && (
+                <div className="rounded-[16px] border border-m3-error/20 bg-m3-error/[0.04] p-4">
+                  <h3 className="text-[15px] font-bold text-m3-on-surface">
+                    Nhận xét Quân khu
+                  </h3>
+                  <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+                    Lý do không chấp nhận đề xuất không gọi hoặc hủy tạm hoãn. Hồ sơ đã
+                    chuyển về Hồ sơ mới và bị khóa — cập nhật minh chứng rồi gửi duyệt
+                    lại.
+                  </p>
+                  <div className="mt-4 rounded-[12px] border border-black/[0.06] bg-white px-4 py-3">
+                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-m3-on-surface">
+                      {citizen.approvalComment || "—"}
+                    </p>
+                  </div>
+                  {nvqsIsLocked && (
+                    <p className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-m3-error">
+                      <Lock size={14} /> Hồ sơ đang bị khóa sau khi Quân khu trả về
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -2785,6 +3420,74 @@ export default function CitizenDetailModal({
           )}
         </div>
       </aside>
+
+      {minhChungPickerOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4">
+          <button
+            type="button"
+            aria-label="Đóng"
+            className="absolute inset-0 bg-black/45"
+            onClick={() => setMinhChungPickerOpen(false)}
+          />
+          <div className="relative w-full max-w-md rounded-t-[20px] bg-m3-surface-lowest p-5 shadow-2xl sm:rounded-[20px]">
+            <h3 className="text-[17px] font-bold text-m3-on-surface">
+              Chọn loại minh chứng
+            </h3>
+            <p className="mt-1 text-[13px] text-m3-on-surface-variant">
+              Chọn loại giấy tờ trước khi tải tệp. Hệ thống tự map thư mục theo
+              đơn vị đang gửi
+              {sessionLevel === "xa"
+                ? " (xã/phường tài khoản)"
+                : sessionLevel === "tinh"
+                  ? " (tỉnh tài khoản + xã trên hồ sơ)"
+                  : " (địa phương đăng ký của hồ sơ)"}
+              .
+            </p>
+            {citizen?.unitCode || sessionUnitCode ? (
+              <p className="mt-2 rounded-[12px] bg-m3-primary/6 px-3 py-2 text-[12px] font-medium text-m3-primary">
+                {citizen?.unitCode
+                  ? `Hồ sơ đăng ký: ${citizen.unitCode}`
+                  : null}
+                {citizen?.unitCode && sessionUnitCode ? " · " : null}
+                {sessionUnitCode ? `Tài khoản gửi: ${sessionUnitCode}` : null}
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-col gap-2">
+              {MINH_CHUNG_LOAI_OPTIONS.map((opt) => {
+                const suggested = nvqsChoiceNeedsFiles(nvqsCallChoice);
+                const highlight = suggested === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => confirmMinhChungLoaiAndPickFiles(opt.value)}
+                    className={`rounded-[14px] border px-4 py-3 text-left transition ${
+                      highlight
+                        ? "border-m3-primary bg-m3-primary/8"
+                        : "border-black/[0.08] bg-white hover:bg-m3-surface-high"
+                    }`}
+                  >
+                    <span className="block text-[15px] font-bold text-m3-on-surface">
+                      {opt.label}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] text-m3-on-surface-variant">
+                      Thư mục: {opt.folder}
+                      {highlight ? " · gợi ý theo trạng thái NVQS đang chọn" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMinhChungPickerOpen(false)}
+              className="mt-4 w-full min-h-[44px] rounded-[12px] border border-black/[0.1] text-[14px] font-semibold text-m3-on-surface"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
 
       {healthFormRound && citizen && (
         <HealthExamFormModal

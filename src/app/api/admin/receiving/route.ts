@@ -14,6 +14,7 @@ import {
   isReceivingOperationalUnit,
   receivingScopeUnitCodes,
   ensureMilitaryUnitsInMemory,
+  MILITARY_REGIONS,
 } from "@/lib/military-regions";
 
 ensureMilitaryUnitsInMemory();
@@ -63,11 +64,15 @@ function scopeForSession(
   level: string,
   unitCode: string,
   localityFilter?: string,
+  quanKhuFilter?: string,
 ): {
   sql: string;
   params: string[];
 } {
   if (level === "bo") {
+    if (quanKhuFilter && isQuanKhuOrBtl(quanKhuFilter)) {
+      return citizenScopeForQuanKhu(quanKhuFilter);
+    }
     if (!localityFilter) return { sql: "1=1", params: [] };
     return {
       sql: "(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))",
@@ -110,6 +115,7 @@ export async function GET(request: NextRequest) {
   const statusFilter = searchParams.get("status") || "";
   const search = (searchParams.get("search") || "").trim();
   const localityFilter = (searchParams.get("unitCode") || "").trim();
+  const quanKhuFilter = (searchParams.get("quanKhuCode") || "").trim();
   const level = session.hierarchyLevel;
 
   const quanKhuCode =
@@ -122,12 +128,17 @@ export async function GET(request: NextRequest) {
           kind: u.kind,
         }))
       : [];
+  const militaryRegions =
+    level === "bo"
+      ? MILITARY_REGIONS.map((r) => ({ code: r.code, name: r.name }))
+      : [];
 
   if (!(await pingDb()) || !campaignId) {
     return NextResponse.json({
       data: [],
       counts: emptyCounts,
       assignableUnits: assignable,
+      militaryRegions,
       campaignId: campaignId || null,
       canAssign: false,
       canSubmit: false,
@@ -140,7 +151,12 @@ export async function GET(request: NextRequest) {
   }
 
   await ensureCitizenReceivingColumns();
-  const scope = scopeForSession(level, session.unitCode, localityFilter || undefined);
+  const scope = scopeForSession(
+    level,
+    session.unitCode,
+    localityFilter || undefined,
+    quanKhuFilter || undefined,
+  );
   const baseWhere = [
     scope.sql,
     "c.military_status = 'nhapngu'",
@@ -215,6 +231,7 @@ export async function GET(request: NextRequest) {
     })),
     counts,
     assignableUnits: assignable,
+    militaryRegions,
     campaignId,
     canAssign: isQk,
     canSubmit: isQk,
@@ -334,13 +351,16 @@ export async function POST(request: NextRequest) {
     if (session.hierarchyLevel !== "bo") {
       return NextResponse.json({ error: "Chỉ Bộ được duyệt danh sách" }, { status: 403 });
     }
+    const quanKhuFilter = String(body.quanKhuCode || "").trim();
+    const scope = scopeForSession("bo", "bo", undefined, quanKhuFilter || undefined);
     const result = await queryExecute(
-      `UPDATE citizens SET receiving_status = 'bo_approved', updated_at = NOW()
-       WHERE military_status = 'nhapngu'
-         AND campaign_id = ?
-         AND receiving_status = 'submitted_to_bo'
-         AND archived_at IS NULL`,
-      [campaignId],
+      `UPDATE citizens c SET receiving_status = 'bo_approved', updated_at = NOW()
+       WHERE ${scope.sql}
+         AND c.military_status = 'nhapngu'
+         AND c.campaign_id = ?
+         AND c.receiving_status = 'submitted_to_bo'
+         AND c.archived_at IS NULL`,
+      [...scope.params, campaignId],
     );
     if (result.affectedRows === 0) {
       return NextResponse.json({ error: "Không có hồ sơ chờ duyệt" }, { status: 400 });
@@ -357,13 +377,16 @@ export async function POST(request: NextRequest) {
     if (session.hierarchyLevel !== "bo") {
       return NextResponse.json({ error: "Chỉ Bộ được công bố" }, { status: 403 });
     }
+    const quanKhuFilter = String(body.quanKhuCode || "").trim();
+    const scope = scopeForSession("bo", "bo", undefined, quanKhuFilter || undefined);
     const result = await queryExecute(
-      `UPDATE citizens SET receiving_status = 'published', updated_at = NOW()
-       WHERE military_status = 'nhapngu'
-         AND campaign_id = ?
-         AND receiving_status = 'bo_approved'
-         AND archived_at IS NULL`,
-      [campaignId],
+      `UPDATE citizens c SET receiving_status = 'published', updated_at = NOW()
+       WHERE ${scope.sql}
+         AND c.military_status = 'nhapngu'
+         AND c.campaign_id = ?
+         AND c.receiving_status = 'bo_approved'
+         AND c.archived_at IS NULL`,
+      [...scope.params, campaignId],
     );
     if (result.affectedRows === 0) {
       return NextResponse.json({ error: "Không có hồ sơ đã duyệt để công bố" }, { status: 400 });

@@ -241,6 +241,23 @@ export async function findQuotaById(id: string): Promise<Quota | null> {
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+export async function findQuotaByCampaignTarget(
+  fromUnit: string,
+  toUnit: string,
+  campaignId: string,
+): Promise<Quota | null> {
+  if (!(await ensureQuotasTable())) return null;
+  const rows = await queryRows<QuotaRow[]>(
+    `SELECT * FROM quotas
+     WHERE from_unit = ?
+       AND to_unit = ?
+       AND campaign_id = ?
+     LIMIT 1`,
+    [fromUnit, toUnit, campaignId],
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
 export async function createQuota(data: Omit<Quota, "id" | "createdAt">): Promise<Quota | null> {
   if (!(await ensureQuotasTable())) return null;
   await ensureUnit(

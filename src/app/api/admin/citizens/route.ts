@@ -331,6 +331,26 @@ export async function POST(request: NextRequest) {
     });
 
     if (created?.ok) {
+      const campId = String(created.data.campaignId || body.campaignId || "").trim();
+      if (campId) {
+        const { upsertCitizenCampaignHistory } = await import(
+          "@/lib/citizen-campaigns-db"
+        );
+        await upsertCitizenCampaignHistory({
+          citizenId: created.data.id,
+          campaignId: campId,
+          previous: null,
+          next: {
+            callIntent: created.data.callIntent || "unset",
+            approvalStatus: created.data.approvalStatus || "none",
+            militaryStatus: created.data.militaryStatus || null,
+            militaryStatusReason: created.data.militaryStatusReason || null,
+            pipelineStatus: created.data.pipelineStatus || "none",
+            note: "Tạo hồ sơ mới",
+          },
+          source: "manual",
+        });
+      }
       return NextResponse.json(created.data, { status: 201 });
     }
     if (created && !created.ok) {

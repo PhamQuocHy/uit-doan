@@ -8,6 +8,7 @@ import {
   getAvailableExamRounds,
   getYearExamStatusLabel,
   yearHasOpenExamSlot,
+  allowedExamRoundsForHierarchy,
   type HealthExamRound,
 } from "@/lib/health-exam";
 import { Check, ChevronDown } from "lucide-react";
@@ -17,6 +18,7 @@ type Props = {
   records: HealthRecord[];
   canEnter: boolean;
   yearOptions: number[];
+  hierarchyLevel?: string | null;
   onYearChange: (year: number) => void;
   onEnterRound: (round: HealthExamRound) => void;
 };
@@ -26,12 +28,15 @@ export default function HealthExamWorkflow({
   records,
   canEnter,
   yearOptions,
+  hierarchyLevel,
   onYearChange,
   onEnterRound,
 }: Props) {
   const screening = screeningRecordForYear(records, year);
   const detailed = detailedRecordForYear(records, year);
-  const available = getAvailableExamRounds(records, year);
+  const processAvailable = getAvailableExamRounds(records, year);
+  const available = getAvailableExamRounds(records, year, hierarchyLevel);
+  const levelAllowed = allowedExamRoundsForHierarchy(hierarchyLevel);
   const statusLabel = getYearExamStatusLabel(records, year);
   const currentYear = new Date().getFullYear();
   const hasOpenSlot = yearHasOpenExamSlot(records, year);
@@ -61,6 +66,26 @@ export default function HealthExamWorkflow({
       result: detailed?.conclusion,
     },
   ];
+
+  const showRound1Btn = levelAllowed.includes("screening");
+  const showRound2Btn = levelAllowed.includes("detailed");
+
+  let hint = "";
+  if (canEnter) {
+    if (
+      processAvailable.includes("screening") &&
+      !levelAllowed.includes("screening")
+    ) {
+      hint = "Vòng 1 do y tế / địa phương cấp xã nhập. Cấp tỉnh nhập Vòng 2 sau khi sơ tuyển đạt.";
+    } else if (
+      processAvailable.includes("detailed") &&
+      !levelAllowed.includes("detailed")
+    ) {
+      hint = "Vòng 2 do y tế cấp tỉnh nhập. Cấp xã chỉ nhập Vòng 1 sơ tuyển.";
+    } else if (hasOpenSlot && !round1Done && showRound1Btn) {
+      hint = `Năm ${year} chưa có sơ tuyển — bấm Nhập vòng 1 để ghi nhận lần khám.`;
+    }
+  }
 
   return (
     <div className="overflow-hidden rounded-[16px] bg-m3-primary">
@@ -130,22 +155,26 @@ export default function HealthExamWorkflow({
 
       {canEnter && (
         <div className="flex flex-wrap gap-2 border-t border-white/15 bg-m3-primary/40 px-4 py-3 sm:px-5">
-          <button
-            type="button"
-            disabled={!available.includes("screening")}
-            onClick={() => onEnterRound("screening")}
-            className="min-h-[40px] rounded-[12px] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-primary transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Nhập vòng 1 · {year}
-          </button>
-          <button
-            type="button"
-            disabled={!available.includes("detailed")}
-            onClick={() => onEnterRound("detailed")}
-            className="min-h-[40px] rounded-[12px] border border-white/60 bg-transparent px-4 text-[14px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Nhập vòng 2 · {year}
-          </button>
+          {showRound1Btn && (
+            <button
+              type="button"
+              disabled={!available.includes("screening")}
+              onClick={() => onEnterRound("screening")}
+              className="min-h-[40px] rounded-[12px] bg-m3-surface-lowest px-4 text-[14px] font-semibold text-m3-primary transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Nhập vòng 1 · {year}
+            </button>
+          )}
+          {showRound2Btn && (
+            <button
+              type="button"
+              disabled={!available.includes("detailed")}
+              onClick={() => onEnterRound("detailed")}
+              className="min-h-[40px] rounded-[12px] border border-white/60 bg-transparent px-4 text-[14px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Nhập vòng 2 · {year}
+            </button>
+          )}
 
           {!hasOpenSlot &&
             round1Done &&
@@ -189,18 +218,16 @@ export default function HealthExamWorkflow({
             </p>
           )}
 
-          {hasOpenSlot && !round1Done && (
-            <p className="w-full text-[12px] text-white/80">
-              Năm {year} chưa có sơ tuyển — bấm Nhập vòng 1 để ghi nhận lần khám.
-            </p>
-          )}
+          {hint ? (
+            <p className="w-full text-[12px] text-white/80">{hint}</p>
+          ) : null}
         </div>
       )}
 
       {!canEnter && (
         <div className="border-t border-white/15 px-4 py-2.5 sm:px-5">
           <p className="text-[12px] text-white/75">
-            Bấm <strong>Sửa hồ sơ</strong> rồi chọn năm để nhập vòng khám.
+            Bạn không có quyền nhập khám trên tài khoản này.
           </p>
         </div>
       )}

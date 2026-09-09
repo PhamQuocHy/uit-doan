@@ -1,25 +1,33 @@
 import mysql, { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import type { ExecuteValues } from "mysql2";
 
-let pool: Pool | null = null;
+/** Giữ pool qua HMR Next.js — tránh mỗi reload tạo pool mới → hết max_connections. */
+const globalForDb = globalThis as typeof globalThis & {
+  __nvqsMysqlPool?: Pool;
+};
 
 export function getPool(): Pool {
-  if (!pool) {
-    pool = mysql.createPool({
+  if (!globalForDb.__nvqsMysqlPool) {
+    globalForDb.__nvqsMysqlPool = mysql.createPool({
       host: process.env.DB_HOST || "localhost",
       user: process.env.DB_USER || "root",
       password: process.env.DB_PASSWORD || "",
       database: process.env.DB_NAME || "quan_ly_nvqs",
       port: parseInt(process.env.DB_PORT || "3306", 10),
       waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
+      connectionLimit: 8,
+      maxIdle: 4,
+      idleTimeout: 30_000,
+      queueLimit: 50,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10_000,
       // DATE trả chuỗi yyyy-MM-dd — tránh Date→toISOString trừ 1 ngày (UTC+7)
       dateStrings: ["DATE"],
     });
   }
-  return pool;
+  return globalForDb.__nvqsMysqlPool;
 }
+
 export async function queryRows<T extends RowDataPacket[]>(
   sql: string,
   params?: readonly unknown[]

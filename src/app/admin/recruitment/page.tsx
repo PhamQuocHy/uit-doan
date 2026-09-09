@@ -17,6 +17,7 @@ import {
   XCircle,
   AlertTriangle,
   X,
+  Sparkles,
 } from "lucide-react";
 import {
   AdminListHeader,
@@ -36,6 +37,23 @@ import {
   adminRowClass,
 } from "@/components/admin/list-ui";
 import { M3ConfirmDialog } from "@/components/m3";
+import CampaignAiSampleModal from "@/components/admin/CampaignAiSampleModal";
+
+function formatProgressPct(filled: number, total: number): {
+  label: string;
+  bar: number;
+} {
+  if (total <= 0) return { label: "—", bar: 0 };
+  const raw = (filled / total) * 100;
+  if (filled > 0 && raw < 1) {
+    return {
+      label: `${raw < 0.1 ? "<0.1" : raw.toFixed(1)}%`,
+      bar: Math.max(raw, 1.2),
+    };
+  }
+  const rounded = Math.min(100, Math.round(raw));
+  return { label: `${rounded}%`, bar: rounded };
+}
 
 interface Candidate {
   id: string;
@@ -130,6 +148,10 @@ export default function RecruitmentPage() {
   const [campaignError, setCampaignError] = useState("");
   const [campaignCandidates, setCampaignCandidates] = useState<Candidate[]>([]);
   const [campaignReserves, setCampaignReserves] = useState<ReserveRow[]>([]);
+  const [runAiAfterCreate, setRunAiAfterCreate] = useState(true);
+  const [aiSampleCamp, setAiSampleCamp] = useState<RecruitmentCampaign | null>(
+    null,
+  );
 
   const [selectedCamp, setSelectedCamp] = useState<RecruitmentCampaign | null>(null);
   const [tab, setTab] = useState<"candidates" | "reserve" | "returned">("candidates");
@@ -290,6 +312,7 @@ export default function RecruitmentPage() {
     setCampaignSaving(true);
     setCampaignError("");
     try {
+      const isCreate = !editingCampaign;
       const response = await fetch(
         editingCampaign ? `/api/admin/recruitment/${editingCampaign.id}` : "/api/admin/recruitment",
         {
@@ -306,6 +329,9 @@ export default function RecruitmentPage() {
       if (!response.ok) throw new Error(json.error || "Không thể lưu đợt khám");
       setCampaignFormOpen(false);
       await fetchCampaigns();
+      if (isCreate && runAiAfterCreate && json.data?.id) {
+        setAiSampleCamp(json.data as RecruitmentCampaign);
+      }
     } catch (cause) {
       setCampaignError(cause instanceof Error ? cause.message : "Lỗi lưu đợt khám");
     } finally {
@@ -434,6 +460,14 @@ export default function RecruitmentPage() {
               {new Date(selectedCamp.endDate).toLocaleDateString("vi-VN")} · Năm{" "}
               {selectedCamp.year}
             </p>
+          </div>
+          <div className="ml-auto">
+            <AdminPrimaryBtn
+              tone="blue"
+              onClick={() => setAiSampleCamp(selectedCamp)}
+            >
+              <Sparkles size={16} /> AI danh sách mẫu
+            </AdminPrimaryBtn>
           </div>
         </div>
 
@@ -716,6 +750,17 @@ export default function RecruitmentPage() {
             </AdminTable>
           </AdminListShell>
         )}
+
+        <CampaignAiSampleModal
+          open={Boolean(aiSampleCamp)}
+          campaignId={aiSampleCamp?.id || ""}
+          campaignName={aiSampleCamp?.name || ""}
+          campaignYear={aiSampleCamp?.year || new Date().getFullYear()}
+          onClose={() => setAiSampleCamp(null)}
+          onApplied={() => {
+            if (selectedCamp) setSelectedCamp({ ...selectedCamp });
+          }}
+        />
       </div>
     );
   }
@@ -740,6 +785,7 @@ export default function RecruitmentPage() {
             aria-label="Lọc theo năm"
           >
             <option value="">Tất cả năm</option>
+            <option value="2027">Năm 2027</option>
             <option value="2026">Năm 2026</option>
             <option value="2025">Năm 2025</option>
             <option value="2024">Năm 2024</option>
@@ -756,8 +802,8 @@ export default function RecruitmentPage() {
 
       <p className="text-[14px] text-m3-on-surface-variant">
         {isBo
-          ? "Cấp Bộ tạo đợt, giao chỉ tiêu toàn quốc một lần. Tiến độ tính theo thanh niên đậu sức khỏe đã được quân khu duyệt gọi."
-          : "Theo dõi đợt khám tuyển toàn quốc. Chỉ cấp Bộ được tạo / sửa / xóa đợt và giao chỉ tiêu."}
+          ? "Cấp Bộ tạo đợt và giao chỉ tiêu. AI danh sách mẫu nên chạy tại tài khoản xã/tỉnh (chỉ tổng hợp đúng địa phương). Hồ sơ tạm hoãn năm trước sẽ được đưa vào dự kiến gọi đợt mới."
+          : "Theo dõi đợt khám tuyển. AI danh sách mẫu chỉ tổng hợp hồ sơ đúng địa phương đăng nhập; tạm hoãn đợt trước → dự kiến gọi (cập nhật sau). Chỉ cấp Bộ được tạo / sửa / xóa đợt."}
       </p>
 
       {campaignError && !campaignFormOpen && (
@@ -842,7 +888,7 @@ export default function RecruitmentPage() {
           <AdminTHead>
             <th className={ADMIN_TH_CLS}>Tên đợt khám</th>
             <th className={ADMIN_TH_CLS}>Thời gian</th>
-            <th className={ADMIN_TH_CLS}>Chỉ tiêu / Đã duyệt gọi</th>
+            <th className={ADMIN_TH_CLS}>Đã duyệt gọi / Chỉ tiêu</th>
             <th className={ADMIN_TH_CLS}>Đạt sức khỏe</th>
             <th className={ADMIN_TH_CLS}>Trạng thái</th>
             <th className={`${ADMIN_TH_CLS} text-center`}>Thao tác</th>
@@ -864,13 +910,11 @@ export default function RecruitmentPage() {
               filteredCampaigns.map((camp, idx) => {
                 const statusInfo = getStatusInfo(camp.status);
                 const quota = Math.max(0, camp.targetQuota || 0);
-                // registeredCount = đã duyệt gọi (thanh niên đậu + QK trả về)
                 const approved = Math.max(0, camp.registeredCount || 0);
                 const passed = Math.max(0, camp.passedCount || 0);
-                const fillPct =
-                  quota > 0 ? Math.round((approved / quota) * 100) : 0;
-                const passPct =
-                  quota > 0 ? Math.round((passed / quota) * 100) : 0;
+                const fill = formatProgressPct(approved, quota);
+                // Tỷ lệ đậu SK đã được duyệt gọi (không so đậu SK với chỉ tiêu)
+                const convert = formatProgressPct(approved, passed);
                 return (
                   <tr
                     key={camp.id}
@@ -888,33 +932,37 @@ export default function RecruitmentPage() {
                       {new Date(camp.endDate).toLocaleDateString("vi-VN")}
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      <div className="font-semibold">
-                        {quota.toLocaleString("vi-VN")} / {approved.toLocaleString("vi-VN")}
+                      <div className="font-semibold tabular-nums">
+                        {approved.toLocaleString("vi-VN")} /{" "}
+                        {quota.toLocaleString("vi-VN")}
                       </div>
                       <div className="mt-0.5 text-[11px] text-m3-on-surface-variant">
-                        Duyệt gọi {quota > 0 ? `${Math.min(fillPct, 999)}% chỉ tiêu` : "—"}
+                        {quota > 0
+                          ? `Đạt ${fill.label} chỉ tiêu`
+                          : "Chưa giao chỉ tiêu"}
                       </div>
-                      <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
+                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-m3-surface-highest">
                         <div
-                          className="bg-m3-primary-container h-1.5 rounded-full"
-                          style={{ width: `${Math.min(fillPct, 100)}%` }}
+                          className="h-1.5 rounded-full bg-m3-primary"
+                          style={{ width: `${Math.min(fill.bar, 100)}%` }}
                         />
                       </div>
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      <div className="font-semibold">
+                      <div className="font-semibold tabular-nums">
                         {passed.toLocaleString("vi-VN")}
-                        {quota > 0 ? ` (${Math.min(passPct, 999)}%)` : ""}
                       </div>
                       <div className="mt-0.5 text-[11px] text-m3-on-surface-variant">
                         {passed > 0
-                          ? `${approved.toLocaleString("vi-VN")} duyệt / ${passed.toLocaleString("vi-VN")} đậu SK`
+                          ? `${approved.toLocaleString("vi-VN")} duyệt gọi (${convert.label} đậu SK)`
                           : "Chưa có thanh niên đậu SK"}
                       </div>
-                      <div className="w-full bg-m3-surface-highest rounded-full h-1.5 mt-1.5">
+                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-m3-surface-highest">
                         <div
-                          className="bg-m3-success-container h-1.5 rounded-full"
-                          style={{ width: `${Math.min(passPct, 100)}%` }}
+                          className="h-1.5 rounded-full bg-m3-success-container"
+                          style={{
+                            width: `${passed > 0 ? Math.min(convert.bar, 100) : 0}%`,
+                          }}
                         />
                       </div>
                     </td>
@@ -931,6 +979,13 @@ export default function RecruitmentPage() {
                           onClick={() => setSelectedCamp(camp)}
                         >
                           <Eye size={15} />
+                        </AdminIconBtn>
+                        <AdminIconBtn
+                          title="AI danh sách mẫu"
+                          tone="blue"
+                          onClick={() => setAiSampleCamp(camp)}
+                        >
+                          <Sparkles size={15} />
                         </AdminIconBtn>
                         {isBo && (
                           <>
@@ -1069,6 +1124,22 @@ export default function RecruitmentPage() {
                 </select>
               </label>
             </div>
+            {!editingCampaign && (
+              <label className="mt-4 flex items-start gap-2 rounded-xl border border-m3-primary/20 bg-m3-primary-container/25 px-3 py-2.5 text-[13px] text-m3-on-surface">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={runAiAfterCreate}
+                  onChange={(e) => setRunAiAfterCreate(e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold">Sau khi tạo, AI phân tích danh sách mẫu</span>
+                  <span className="mt-0.5 block text-[12px] text-m3-on-surface-variant">
+                    Thanh niên còn trong tuổi → dự kiến gọi / dự bị / không gọi / tạm hoãn (rà soát trước khi áp dụng).
+                  </span>
+                </span>
+              </label>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -1087,6 +1158,17 @@ export default function RecruitmentPage() {
           </form>
         </div>
       )}
+
+      <CampaignAiSampleModal
+        open={Boolean(aiSampleCamp)}
+        campaignId={aiSampleCamp?.id || ""}
+        campaignName={aiSampleCamp?.name || ""}
+        campaignYear={aiSampleCamp?.year || new Date().getFullYear()}
+        onClose={() => setAiSampleCamp(null)}
+        onApplied={() => {
+          void fetchCampaigns();
+        }}
+      />
 
       <M3ConfirmDialog
         open={Boolean(deleteTarget)}

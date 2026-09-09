@@ -32,6 +32,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const session = await getSession();
   if (!session) redirect("/login");
   if (session.hierarchyLevel === "donvi") redirect("/admin/receiving");
+  if (session.functionalRole === "y_te") redirect("/admin/health");
 
   const params = await searchParams;
   const viewUnit = resolveViewUnit(

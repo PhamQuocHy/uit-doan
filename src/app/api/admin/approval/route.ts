@@ -7,15 +7,19 @@ import {
   ensureCitizenApprovalCommentColumn,
   ensureCitizenCallIntentDuBi,
   ensureProposalPendingMigration,
+  ensureCitizenPipelineColumns,
 } from "@/lib/citizens-db";
 import {
   resolveApprovalAction,
   resolveProposalDecision,
   toApprovalUiStatus,
   detectApprovalKind,
+  healthGradeFitnessLabel,
+  RETURN_TAM_HOAN_MARKER,
   type ApprovalKind,
   type ApprovalRow,
   type CallIntent,
+  type PipelineStatus,
 } from "@/lib/enlistment-approval";
 import type { RowDataPacket } from "mysql2";
 import { toDateOnlyString } from "@/lib/date-vn";
@@ -34,6 +38,16 @@ function scopeWhere(
   unitCode: string,
   requestedUnit?: string,
 ): { sql: string; params: string[] } {
+  if (level === "xa") {
+    return { sql: "c.unit_code = ?", params: [unitCode] };
+  }
+  if (level === "tinh") {
+    const selectedUnit = requestedUnit || unitCode;
+    return {
+      sql: "(c.unit_code = ? OR c.unit_code LIKE CONCAT(?, '-%'))",
+      params: [selectedUnit, selectedUnit],
+    };
+  }
   if (level === "donvi" && isQuanKhuOrBtl(unitCode)) {
     if (!requestedUnit) return citizenScopeForQuanKhu(unitCode);
     const provinces = getProvincesForMilitaryRegion(unitCode);
@@ -100,6 +114,14 @@ function kindWhereSql(kind: KindFilter): string | null {
   return `(c.military_status = 'tamhoan')`;
 }
 
+/** Lọc loại hồ sơ ở bước xã/tỉnh (chưa có quyết định QK). */
+function localKindWhereSql(kind: KindFilter): string | null {
+  if (!kind || kind === "all") return null;
+  if (kind === "goi") return `(c.call_intent = 'du_kien_goi')`;
+  if (kind === "khong_goi") return `(c.call_intent = 'de_xuat_khong_goi')`;
+  return `(c.military_status = 'tamhoan')`;
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -112,6 +134,7 @@ export async function GET(request: NextRequest) {
   const requestedUnit = searchParams.get("unitCode") || "";
   const search = (searchParams.get("search") || "").trim();
   const kind = parseKind(searchParams.get("kind"));
+  const pipelineFilter = (searchParams.get("pipeline") || "").trim();
 
   const dbOk = await pingDb();
   if (!dbOk) {
@@ -121,15 +144,25 @@ export async function GET(request: NextRequest) {
         pending: 0,
         approved: 0,
         rejected: 0,
+        khongDongY: 0,
+        khongDuyetTamHoan: 0,
+        khongGoi: 0,
         pendingGoi: 0,
         pendingKhongGoi: 0,
         pendingTamHoan: 0,
+        localReady: 0,
+        provincePending: 0,
+        provinceOk: 0,
+        provinceReturned: 0,
+        qkPending: 0,
       },
+      role: session.hierarchyLevel,
     });
   }
 
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenPipelineColumns();
   await ensureProposalPendingMigration();
   await ensureCitizenReceivingColumns();
 
@@ -139,20 +172,32 @@ export async function GET(request: NextRequest) {
     requestedUnit || undefined,
   );
 
-  // Hồ sơ thuộc luồng xét duyệt QK
-  const baseWhere: string[] = [
-    scope.sql,
-    `(
+  const isLocalPipeline =
+    session.hierarchyLevel === "xa" || session.hierarchyLevel === "tinh";
+
+  const baseWhere: string[] = [scope.sql];
+  if (isLocalPipeline) {
+    baseWhere.push(
+      `IFNULL(c.pipeline_status,'none') IN ('local_ready','province_pending','province_ok','province_returned','qk_pending')`,
+    );
+  } else {
+    // QK/Bộ: chỉ hồ sơ đã gửi QK
+    baseWhere.push(`IFNULL(c.pipeline_status,'none') = 'qk_pending'`);
+    baseWhere.push(`(
       (c.call_intent = 'du_kien_goi' AND c.approval_status IN ('pending','approved','rejected'))
       OR (c.call_intent = 'de_xuat_khong_goi' AND c.approval_status = 'pending')
       OR (c.call_intent = 'khong_goi' AND c.approval_status IN ('approved','rejected'))
       OR (c.military_status = 'tamhoan' AND c.approval_status IN ('pending','approved'))
-    )`,
-  ];
+      OR (
+        IFNULL(c.approval_status,'none') = 'none'
+        AND IFNULL(c.military_status_locked,0) = 1
+        AND IFNULL(c.approval_comment,'') <> ''
+      )
+    )`);
+  }
   const baseParams = [...scope.params];
   if (campaignId) {
-    // Đề xuất/tạm hoãn cũ có thể chưa gắn đợt — vẫn hiện khi lọc theo campaign
-    baseWhere.push("(c.campaign_id = ? OR c.campaign_id IS NULL)");
+    baseWhere.push("c.campaign_id = ?");
     baseParams.push(campaignId);
   }
   if (search) {
@@ -161,37 +206,123 @@ export async function GET(request: NextRequest) {
     baseParams.push(s, s);
   }
 
-  const kindSql = kindWhereSql(kind);
+  const kindSql = isLocalPipeline
+    ? localKindWhereSql(kind)
+    : kindWhereSql(kind);
   const listWhere = kindSql ? [...baseWhere, kindSql] : [...baseWhere];
   const listParams = [...baseParams];
 
-  // Đếm theo loại pending
-  const countKindRows = await queryRows<
-    (RowDataPacket & {
-      call_intent: string | null;
-      military_status: string;
-      approval_status: string;
-      n: number;
-    })[]
-  >(
-    `SELECT c.call_intent, c.military_status, c.approval_status, COUNT(*) AS n
-     FROM citizens c
-     WHERE ${baseWhere.join(" AND ")}
-     GROUP BY c.call_intent, c.military_status, c.approval_status`,
-    baseParams,
-  );
+  if (
+    isLocalPipeline &&
+    pipelineFilter &&
+    [
+      "local_ready",
+      "province_pending",
+      "province_ok",
+      "province_returned",
+      "qk_pending",
+    ].includes(pipelineFilter)
+  ) {
+    listWhere.push("c.pipeline_status = ?");
+    listParams.push(pipelineFilter);
+  }
 
   const counts = {
     pending: 0,
     approved: 0,
     rejected: 0,
+    khongDongY: 0,
+    khongDuyetTamHoan: 0,
+    khongGoi: 0,
     pendingGoi: 0,
     pendingKhongGoi: 0,
     pendingTamHoan: 0,
+    localReady: 0,
+    provincePending: 0,
+    provinceOk: 0,
+    provinceReturned: 0,
+    qkPending: 0,
   };
+
+  if (isLocalPipeline) {
+    const pipeRows = await queryRows<
+      (RowDataPacket & { pipeline_status: string; n: number })[]
+    >(
+      `SELECT IFNULL(c.pipeline_status,'none') AS pipeline_status, COUNT(*) AS n
+       FROM citizens c
+       WHERE ${baseWhere.join(" AND ")}
+       GROUP BY IFNULL(c.pipeline_status,'none')`,
+      baseParams,
+    );
+    for (const r of pipeRows) {
+      const n = Number(r.n) || 0;
+      if (r.pipeline_status === "local_ready") counts.localReady += n;
+      else if (r.pipeline_status === "province_pending") counts.provincePending += n;
+      else if (r.pipeline_status === "province_ok") counts.provinceOk += n;
+      else if (r.pipeline_status === "province_returned") counts.provinceReturned += n;
+      else if (r.pipeline_status === "qk_pending") counts.qkPending += n;
+    }
+    counts.pending =
+      counts.localReady +
+      counts.provincePending +
+      counts.provinceOk +
+      counts.provinceReturned;
+
+    // Đếm theo loại đề xuất trong hàng chờ cấp hiện tại (xã: local_ready, tỉnh: province_pending)
+    const pendingPipe =
+      session.hierarchyLevel === "tinh" ? "province_pending" : "local_ready";
+    const kindCountRows = await queryRows<
+      (RowDataPacket & {
+        call_intent: string | null;
+        military_status: string;
+        n: number;
+      })[]
+    >(
+      `SELECT c.call_intent, c.military_status, COUNT(*) AS n
+       FROM citizens c
+       WHERE ${baseWhere.join(" AND ")}
+         AND c.pipeline_status = ?
+       GROUP BY c.call_intent, c.military_status`,
+      [...baseParams, pendingPipe],
+    );
+    for (const r of kindCountRows) {
+      const n = Number(r.n) || 0;
+      if (r.military_status === "tamhoan") {
+        counts.pendingTamHoan += n;
+      } else if (r.call_intent === "de_xuat_khong_goi") {
+        counts.pendingKhongGoi += n;
+      } else if (r.call_intent === "du_kien_goi") {
+        counts.pendingGoi += n;
+      }
+    }
+  } else {
+  // Đếm theo loại pending QK
+  const countKindRows = await queryRows<
+    (RowDataPacket & {
+      call_intent: string | null;
+      military_status: string;
+      approval_status: string;
+      military_status_locked: number | null;
+      military_status_reason: string | null;
+      has_comment: number;
+      n: number;
+    })[]
+  >(
+    `SELECT c.call_intent, c.military_status, c.approval_status,
+            c.military_status_locked, c.military_status_reason,
+            CASE WHEN IFNULL(c.approval_comment,'') <> '' THEN 1 ELSE 0 END AS has_comment,
+            COUNT(*) AS n
+     FROM citizens c
+     WHERE ${baseWhere.join(" AND ")}
+     GROUP BY c.call_intent, c.military_status, c.approval_status,
+              c.military_status_locked, c.military_status_reason,
+              CASE WHEN IFNULL(c.approval_comment,'') <> '' THEN 1 ELSE 0 END`,
+    baseParams,
+  );
 
   for (const r of countKindRows) {
     const n = Number(r.n) || 0;
+    const statusNone = !r.approval_status || r.approval_status === "none";
     if (r.military_status === "tamhoan" && r.approval_status === "pending") {
       counts.pendingTamHoan += n;
       counts.pending += n;
@@ -204,13 +335,45 @@ export async function GET(request: NextRequest) {
     } else if (r.approval_status === "approved") {
       counts.approved += n;
     } else if (r.approval_status === "rejected") {
+      counts.khongGoi += n;
       counts.rejected += n;
+    } else if (
+      statusNone &&
+      Number(r.military_status_locked) === 1 &&
+      Number(r.has_comment) === 1
+    ) {
+      if (r.military_status_reason === RETURN_TAM_HOAN_MARKER) {
+        counts.khongDuyetTamHoan += n;
+      } else {
+        counts.khongDongY += n;
+      }
     }
   }
+  }
 
-  if (statusFilter === "pending" || statusFilter === "approved" || statusFilter === "rejected") {
+  if (!isLocalPipeline) {
+  if (statusFilter === "pending" || statusFilter === "approved") {
     listWhere.push("c.approval_status = ?");
     listParams.push(statusFilter);
+  } else if (statusFilter === "rejected" || statusFilter === "khong_goi") {
+    listWhere.push("c.approval_status = 'rejected'");
+  } else if (statusFilter === "khong_dong_y") {
+    listWhere.push(
+      `IFNULL(c.approval_status,'none') = 'none'
+       AND IFNULL(c.military_status_locked,0) = 1
+       AND IFNULL(c.approval_comment,'') <> ''
+       AND IFNULL(c.military_status_reason,'') <> ?`,
+    );
+    listParams.push(RETURN_TAM_HOAN_MARKER);
+  } else if (statusFilter === "khong_duyet_tam_hoan") {
+    listWhere.push(
+      `IFNULL(c.approval_status,'none') = 'none'
+       AND IFNULL(c.military_status_locked,0) = 1
+       AND IFNULL(c.approval_comment,'') <> ''
+       AND c.military_status_reason = ?`,
+    );
+    listParams.push(RETURN_TAM_HOAN_MARKER);
+  }
   }
 
   const rows = await queryRows<
@@ -227,14 +390,20 @@ export async function GET(request: NextRequest) {
       approval_comment: string | null;
       call_intent: string | null;
       military_status: string;
+      military_status_locked: number | null;
+      pipeline_status: string | null;
+      province_comment: string | null;
     })[]
   >(
     `SELECT c.id, c.full_name, c.cccd, c.date_of_birth, c.unit_code,
           c.health_grade, c.approval_status, c.campaign_id,
-          c.military_status_reason, c.approval_comment, c.call_intent, c.military_status
+          c.military_status_reason, c.approval_comment, c.call_intent,
+          c.military_status, c.military_status_locked,
+          c.pipeline_status, c.province_comment
      FROM citizens c
      WHERE ${listWhere.join(" AND ")}
      ORDER BY
+       FIELD(c.pipeline_status, 'local_ready','province_returned','province_pending','province_ok','qk_pending','none'),
        FIELD(c.approval_status, 'pending', 'approved', 'rejected', 'none'),
        c.updated_at DESC
      LIMIT 5000`,
@@ -249,6 +418,8 @@ export async function GET(request: NextRequest) {
       | "pending"
       | "approved"
       | "rejected";
+    const pipelineStatus = (r.pipeline_status ||
+      "none") as PipelineStatus;
     const kindDetected = detectApprovalKind({
       callIntent,
       militaryStatus,
@@ -262,21 +433,46 @@ export async function GET(request: NextRequest) {
       unitName: unitName(r.unit_code),
       unitCode: r.unit_code || undefined,
       healthResult: r.health_grade != null ? `Loại ${r.health_grade}` : "—",
-      politicalResult: "Đạt",
-      status: toApprovalUiStatus(approvalStatus),
+      politicalResult: healthGradeFitnessLabel(
+        r.health_grade != null ? Number(r.health_grade) : null,
+      ),
+      status: toApprovalUiStatus(approvalStatus, {
+        militaryStatusLocked: Number(r.military_status_locked) === 1,
+        approvalComment: r.approval_comment,
+        militaryStatusReason: r.military_status_reason,
+      }),
       kind: kindDetected,
       callIntent,
       militaryStatus,
       campaignId: r.campaign_id || undefined,
-      note: r.military_status_reason || undefined,
+      note:
+        r.military_status_reason === RETURN_TAM_HOAN_MARKER
+          ? undefined
+          : r.military_status_reason || undefined,
       approvalComment: r.approval_comment || undefined,
+      pipelineStatus,
+      provinceComment: r.province_comment || undefined,
     };
   });
 
-  const total =
-    counts.pending + counts.approved + counts.rejected;
+  const total = isLocalPipeline
+    ? counts.localReady +
+      counts.provincePending +
+      counts.provinceOk +
+      counts.provinceReturned +
+      counts.qkPending
+    : counts.pending +
+      counts.approved +
+      counts.khongGoi +
+      counts.khongDongY +
+      counts.khongDuyetTamHoan;
 
-  return NextResponse.json({ data, counts, total });
+  return NextResponse.json({
+    data,
+    counts,
+    total,
+    role: session.hierarchyLevel,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -348,6 +544,7 @@ export async function POST(request: NextRequest) {
 
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
+  await ensureCitizenPipelineColumns();
   await ensureCitizenReceivingColumns();
 
   const scope = scopeWhere(
@@ -358,11 +555,11 @@ export async function POST(request: NextRequest) {
 
   let pendingFilter = "";
   if (kind === "goi") {
-    pendingFilter = `c.call_intent = 'du_kien_goi' AND c.approval_status = 'pending'`;
+    pendingFilter = `c.call_intent = 'du_kien_goi' AND c.approval_status = 'pending' AND IFNULL(c.pipeline_status,'none') = 'qk_pending'`;
   } else if (kind === "khong_goi") {
-    pendingFilter = `c.call_intent = 'de_xuat_khong_goi' AND c.approval_status = 'pending'`;
+    pendingFilter = `c.call_intent = 'de_xuat_khong_goi' AND c.approval_status = 'pending' AND IFNULL(c.pipeline_status,'none') = 'qk_pending'`;
   } else {
-    pendingFilter = `c.military_status = 'tamhoan' AND c.approval_status = 'pending'`;
+    pendingFilter = `c.military_status = 'tamhoan' AND c.approval_status = 'pending' AND IFNULL(c.pipeline_status,'none') = 'qk_pending'`;
   }
 
   let targetIds = idsFromBody;
@@ -417,9 +614,14 @@ export async function POST(request: NextRequest) {
 
   // Minh chứng bắt buộc khi đồng tình không gọi / tạm hoãn
   if (action === "approve" && (kind === "khong_goi" || kind === "tam_hoan")) {
-    const purpose = kind === "khong_goi" ? "khong_goi" : "tam_hoan";
+    const purpose = kind === "khong_goi" ? "giay_kham_suc_khoe" : "giay_tam_hoan";
     for (const c of beforeRows) {
-      const files = await listCitizenNvqsAttachments(c.id, purpose);
+      const files = await listCitizenNvqsAttachments(
+        c.id,
+        purpose === "giay_tam_hoan"
+          ? ["giay_tam_hoan", "tam_hoan"]
+          : ["giay_kham_suc_khoe", "khong_goi"],
+      );
       if (files.length < 1) {
         return NextResponse.json(
           {
@@ -445,6 +647,13 @@ export async function POST(request: NextRequest) {
     kind !== "goi" && action === "reject"
       ? note
       : kind !== "goi" && action === "approve"
+        ? null
+        : undefined;
+  // Phân biệt tab Không duyệt tạm hoãn vs Không duyệt không gọi
+  const militaryStatusReasonValue =
+    kind === "tam_hoan" && action === "reject"
+      ? RETURN_TAM_HOAN_MARKER
+      : kind === "khong_goi" && action === "reject"
         ? null
         : undefined;
 
@@ -473,6 +682,9 @@ export async function POST(request: NextRequest) {
   if (reasonForGoiReject !== undefined) {
     setParts.push("military_status_reason = ?");
     setParams.push(reasonForGoiReject);
+  } else if (militaryStatusReasonValue !== undefined) {
+    setParts.push("military_status_reason = ?");
+    setParams.push(militaryStatusReasonValue);
   }
   if (approvalCommentValue !== undefined) {
     setParts.push("approval_comment = ?");
@@ -524,7 +736,7 @@ export async function POST(request: NextRequest) {
             type: "citizen_rejected",
             title: "Không duyệt gọi nhập ngũ",
             message: `${c.full_name} (CCCD ${c.cccd}) tại ${locality}: ${note}`,
-            relatedHref: "/admin/citizens",
+            relatedHref: "/admin/citizens?callIntent=khong_goi",
           });
         }
       }
@@ -540,7 +752,10 @@ export async function POST(request: NextRequest) {
               ? "Quân khu đồng tình đề xuất không gọi"
               : "Quân khu duyệt tạm hoãn",
           message: `${c.full_name} (CCCD ${c.cccd}) đã được Quân khu chấp thuận.`,
-          relatedHref: "/admin/citizens",
+          relatedHref:
+            kind === "khong_goi"
+              ? "/admin/citizens?callIntent=khong_goi"
+              : "/admin/citizens",
         });
       }
     }
@@ -554,10 +769,13 @@ export async function POST(request: NextRequest) {
           type: "citizen_proposal_returned",
           title:
             kind === "khong_goi"
-              ? "QK không đồng tình đề xuất không gọi — cần bổ sung"
-              : "QK hủy tạm hoãn — cần kiểm tra lại",
-          message: `${c.full_name} (CCCD ${c.cccd}) tại ${locality} đã chuyển về Chưa xác định và bị khóa. Nhận xét QK: ${note}. Vui lòng kiểm tra minh chứng / ghi chú rồi gửi duyệt lại.`,
-          relatedHref: `/admin/citizens`,
+              ? "Không duyệt không gọi — trả về"
+              : "Không duyệt tạm hoãn — trả về",
+          message: `${c.full_name} (CCCD ${c.cccd}) tại ${locality} đã chuyển về Hồ sơ mới và bị khóa. Nhận xét QK: ${note}. Vui lòng kiểm tra minh chứng / ghi chú rồi gửi duyệt lại.`,
+          relatedHref:
+            kind === "khong_goi"
+              ? "/admin/citizens?callIntent=khong_duyet_khong_goi"
+              : "/admin/citizens?callIntent=khong_duyet_tam_hoan",
         });
       }
     }

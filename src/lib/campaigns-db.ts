@@ -51,9 +51,8 @@ function mapCampaign(row: CampaignRow): RecruitmentCampaign {
 
 /**
  * Thống kê đợt (toàn quốc):
- * - registered_count = đã duyệt gọi (QK/Bộ trả về) + đậu SK (loại 1–3)
- *   → dùng làm tiến độ đủ chỉ tiêu, không đếm mọi hồ sơ gắn đợt
- * - passed_count = thanh niên đạt sức khỏe (loại 1–3) trong đợt
+ * - registered_count = đã duyệt gọi / nhập ngũ trong đợt (tiến độ chỉ tiêu)
+ * - passed_count = đạt sức khỏe loại 1–3 trong đợt
  */
 const STATS_SELECT = `
   c.id, c.name, c.year, c.start_date, c.end_date, c.status, c.target_quota,
@@ -62,13 +61,13 @@ const STATS_SELECT = `
      WHERE ci.campaign_id = c.id
        AND ci.archived_at IS NULL
        AND (ci.approval_status = 'approved' OR ci.military_status = 'nhapngu')
-       AND ci.health_grade IS NOT NULL
-       AND ci.health_grade BETWEEN 1 AND 3) AS registered_count,
+  ) AS registered_count,
   (SELECT COUNT(*) FROM citizens ci
      WHERE ci.campaign_id = c.id
        AND ci.archived_at IS NULL
        AND ci.health_grade IS NOT NULL
-       AND ci.health_grade BETWEEN 1 AND 3) AS passed_count
+       AND ci.health_grade BETWEEN 1 AND 3
+  ) AS passed_count
 `;
 
 export async function findCampaignsFromDb(query?: {
@@ -262,6 +261,14 @@ export async function deleteCampaignInDb(id: string): Promise<boolean> {
       `UPDATE citizens SET campaign_id = NULL WHERE campaign_id = ?`,
       [id],
     );
+
+    try {
+      await queryExecute(`DELETE FROM citizen_campaigns WHERE campaign_id = ?`, [
+        id,
+      ]);
+    } catch {
+      // bảng lịch sử có thể chưa có
+    }
 
     for (const sql of [
       `DELETE FROM quotas WHERE campaign_id = ?`,
