@@ -108,6 +108,12 @@ function looksLikeVnId(value: string): boolean {
   return /^\d{12}$/.test(s) || /^\d{9}$/.test(s);
 }
 
+function normalizeCccd(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  // JSON numeric fields lose a leading zero; Vietnamese CCCD is always 12 digits.
+  return digits.length === 11 ? digits.padStart(12, "0") : digits;
+}
+
 /**
  * MRZ CCCD VN (TD1): dòng 1 thường có số định danh sau VNM.
  * Ví dụ: IDVNM079098012345<<<<<<<<<<<<<<<
@@ -465,7 +471,7 @@ function extractEmbeddedJpeg(bytes: Uint8Array): Uint8Array | null {
 
 function valueToBase64Candidate(value: unknown): string {
   if (typeof value === "string") {
-    let s = value.trim();
+    const s = value.trim();
     if (!s) return "";
     const dataMatch = s.match(/^data:image\/[\w+.-]+;base64,(.+)$/i);
     if (dataMatch) return dataMatch[1]!.replace(/\s+/g, "");
@@ -638,7 +644,8 @@ export function normalizeHn212Payload(raw: unknown): Hn212CitizenScan | null {
       "PID",
       "pid",
     ]) || treeHit.cccd
-  ).replace(/\s+/g, "");
+  );
+  cccd = normalizeCccd(cccd);
 
   let fullName =
     pickString(obj, [
@@ -749,7 +756,7 @@ export function normalizeHn212Payload(raw: unknown): Hn212CitizenScan | null {
 
   // Nếu chưa có CCCD 12 số nhưng có CMND 9 số → dùng để tìm/điền tạm
   if (!cccd && oldIdNumber && looksLikeVnId(oldIdNumber)) {
-    cccd = oldIdNumber.replace(/\s+/g, "");
+    cccd = normalizeCccd(oldIdNumber);
   }
 
   const fatherName =
