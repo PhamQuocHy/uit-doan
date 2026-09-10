@@ -17,6 +17,7 @@
     "db:seed-users": "tsx scripts/seed-users.ts",
     "db:seed-military": "tsx scripts/seed-military-regions.ts",
     "db:seed-demo": "tsx scripts/seed-demo-light.ts",
+    "db:seed-nationwide": "tsx scripts/seed-citizens-nationwide.ts",
     "db:refresh-features": "tsx scripts/refresh-features.ts",
     "db:hash-passwords": "tsx scripts/hash-legacy-passwords.ts",
     "db:reset-passwords": "tsx scripts/reset-passwords.ts",
