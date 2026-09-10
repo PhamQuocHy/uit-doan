@@ -89,7 +89,6 @@ export default function LoginForm() {
   const [xaCode, setXaCode] = useState("");
   const [receivingParentCode, setReceivingParentCode] = useState("");
   const [donviCode, setDonviCode] = useState("");
-  const [restoredHint, setRestoredHint] = useState("");
 
   const [units, setUnits] = useState<any[]>([]);
 
@@ -122,16 +121,11 @@ export default function LoginForm() {
     setReceivingParentCode(remembered.receivingParentCode || "");
     setDonviCode(remembered.donviCode || "");
     setStep(remembered.step);
-    const portalLabel =
-      LOGIN_PORTAL_OPTIONS.find((o) => o.value === remembered.loginPortal)?.label ||
-      remembered.loginPortal;
-    setRestoredHint(`Đã nhớ lựa chọn: ${portalLabel} (trong 24 giờ)`);
   }, []);
 
   const handlePortalStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
-    setRestoredHint("");
     if (!loginPortal) {
       setError("Vui lòng chọn loại đăng nhập");
       return;
@@ -169,7 +163,6 @@ export default function LoginForm() {
   const handleUnitStep = (e: FormEvent) => {
     e.preventDefault();
     setError("");
-    setRestoredHint("");
     if (!loginPortal) return;
 
     if (loginPortal === "quan_khu" && !donviCode) {
@@ -274,7 +267,7 @@ export default function LoginForm() {
         : "Đăng nhập tài khoản của bạn";
 
   const cardMaxWidth =
-    step === 1 ? "max-w-[920px]" : "max-w-[500px]";
+    step === 1 ? "max-w-[1280px]" : "max-w-[500px]";
 
   return (
     <M3ThemeProvider
@@ -341,7 +334,7 @@ export default function LoginForm() {
             </p>
           </div>
 
-          <div className="px-8 pb-8">
+          <div className="px-8 pb-8 md:px-12">
             {error && (
               <div
                 className="mb-6 flex items-center gap-3 text-sm px-4 py-3 rounded-xl"
@@ -366,24 +359,12 @@ export default function LoginForm() {
               </div>
             )}
 
-            {!error && restoredHint && (
-              <div
-                className="mb-4 text-center text-sm px-3 py-2 rounded-xl"
-                style={{
-                  background: "color-mix(in srgb, var(--m3-primary, #1a73e8) 8%, transparent)",
-                  color: "var(--m3-primary, #1a73e8)",
-                }}
-              >
-                {restoredHint}
-              </div>
-            )}
-
             {step === 1 ? (
               <form
                 onSubmit={handlePortalStep}
                 className="animate-in fade-in duration-300"
               >
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4 lg:gap-6">
                   {LOGIN_PORTAL_OPTIONS.map((opt) => {
                     const selected = loginPortal === opt.value;
                     const Icon = PORTAL_ICONS[opt.value];
@@ -392,7 +373,7 @@ export default function LoginForm() {
                         key={opt.value}
                         type="button"
                         onClick={() => setLoginPortal(opt.value)}
-                        className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border px-2.5 py-5 text-center transition-all sm:min-h-[220px] sm:px-3.5"
+                        className="flex min-h-[168px] flex-col items-center justify-center rounded-2xl border px-3.5 py-5 text-center transition-all sm:min-h-[200px] sm:px-5 lg:min-h-[220px] lg:px-6"
                         style={{
                           borderColor: selected ? "var(--m3-primary, #1a73e8)" : "var(--m3-outline-variant, #e3e8ee)",
                           background: selected
@@ -404,7 +385,7 @@ export default function LoginForm() {
                         }}
                       >
                         <div
-                          className="mb-3 flex h-12 w-12 items-center justify-center rounded-full sm:mb-3.5 sm:h-14 sm:w-14"
+                          className="mb-3 flex h-12 w-12 items-center justify-center rounded-full sm:mb-4 sm:h-14 sm:w-14"
                           style={{
                             background: selected
                               ? "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)"

@@ -121,9 +121,50 @@ function placeholders(n: number) {
 }
 
 let archivedColumnReady: boolean | null = null;
+let avatarColumnReady: boolean | null = null;
+let callIntentReady: boolean | null = null;
+let approvalCommentReady: boolean | null = null;
+let pipelineColumnsReady: boolean | null = null;
+let pipelineBackfillDone: boolean | null = null;
+let listIndexesReady: boolean | null = null;
+
+/** Index phục vụ list theo unit_code / education (chạy 1 lần / process). */
+async function ensureCitizenListIndexes(): Promise<void> {
+  if (listIndexesReady === true) return;
+  if (!(await pingDb())) {
+    listIndexesReady = false;
+    return;
+  }
+  try {
+    const db = process.env.DB_NAME || "quan_ly_nvqs";
+    const hasIndex = async (table: string, name: string) => {
+      const rows = await queryRows<(RowDataPacket & { c: number })[]>(
+        `SELECT COUNT(*) AS c FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+        [db, table, name],
+      );
+      return Number(rows[0]?.c || 0) > 0;
+    };
+    if (!(await hasIndex("citizen_education", "idx_edu_citizen"))) {
+      await queryExecute(
+        `CREATE INDEX idx_edu_citizen ON citizen_education (citizen_id)`,
+      );
+    }
+    if (!(await hasIndex("citizens", "idx_citizens_unit_arch_upd"))) {
+      await queryExecute(
+        `CREATE INDEX idx_citizens_unit_arch_upd ON citizens (unit_code, archived_at, updated_at)`,
+      );
+    }
+    listIndexesReady = true;
+  } catch (e) {
+    console.warn("ensureCitizenListIndexes:", e);
+    listIndexesReady = false;
+  }
+}
 
 /** Đảm bảo avatar_url đủ chỗ lưu ảnh chip (base64). */
 export async function ensureCitizenAvatarColumn(): Promise<void> {
+  if (avatarColumnReady === true) return;
   if (!(await pingDb())) return;
   try {
     const cols = await queryRows<RowDataPacket[]>(
@@ -139,6 +180,7 @@ export async function ensureCitizenAvatarColumn(): Promise<void> {
       await queryExecute(
         `ALTER TABLE citizen_identities ADD COLUMN avatar_url MEDIUMTEXT NULL`,
       );
+      avatarColumnReady = true;
       return;
     }
     if (String(col.DATA_TYPE).toLowerCase() === "text") {
@@ -146,12 +188,14 @@ export async function ensureCitizenAvatarColumn(): Promise<void> {
         `ALTER TABLE citizen_identities MODIFY COLUMN avatar_url MEDIUMTEXT NULL`,
       );
     }
+    avatarColumnReady = true;
   } catch (e) {
     console.warn("ensureCitizenAvatarColumn:", e);
   }
 }
 
 export async function ensureCitizenCallIntentDuBi(): Promise<void> {
+  if (callIntentReady === true) return;
   if (!(await pingDb())) return;
   try {
     const cols = await queryRows<(RowDataPacket & { COLUMN_TYPE?: string })[]>(
@@ -177,12 +221,14 @@ export async function ensureCitizenCallIntentDuBi(): Promise<void> {
          COMMENT 'Dự kiến tuyển gọi / đề xuất không gọi / dự bị'`,
       );
     }
+    callIntentReady = true;
   } catch (e) {
     console.warn("ensureCitizenCallIntentDuBi:", e);
   }
 }
 
 export async function ensureCitizenApprovalCommentColumn(): Promise<void> {
+  if (approvalCommentReady === true) return;
   if (!(await pingDb())) return;
   try {
     const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
@@ -199,49 +245,57 @@ export async function ensureCitizenApprovalCommentColumn(): Promise<void> {
          AFTER military_status_reason`,
       );
     }
+    approvalCommentReady = true;
   } catch (e) {
     console.warn("ensureCitizenApprovalCommentColumn:", e);
   }
 }
 
-/** Cột pipeline xã→tỉnh→QK (+ backfill pending cũ → qk_pending). */
+/** Cột pipeline xã→tỉnh→QK (+ backfill pending cũ → qk_pending, chạy 1 lần). */
 export async function ensureCitizenPipelineColumns(): Promise<void> {
+  if (pipelineColumnsReady === true && pipelineBackfillDone === true) return;
   if (!(await pingDb())) return;
   try {
-    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'citizens'
-         AND COLUMN_NAME IN ('pipeline_status','province_comment','province_reviewed_at')`,
-    );
-    const have = new Set(cols.map((c) => c.COLUMN_NAME));
-    if (!have.has("pipeline_status")) {
-      await queryExecute(
-        `ALTER TABLE citizens
-         ADD COLUMN pipeline_status
-           ENUM('none','local_ready','province_pending','province_ok','province_returned','qk_pending')
-           NOT NULL DEFAULT 'none'
-           COMMENT 'Luồng chuyển hồ sơ xã→tỉnh→QK'
-           AFTER approval_status`,
+    if (pipelineColumnsReady !== true) {
+      const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'citizens'
+           AND COLUMN_NAME IN ('pipeline_status','province_comment','province_reviewed_at')`,
       );
+      const have = new Set(cols.map((c) => c.COLUMN_NAME));
+      if (!have.has("pipeline_status")) {
+        await queryExecute(
+          `ALTER TABLE citizens
+           ADD COLUMN pipeline_status
+             ENUM('none','local_ready','province_pending','province_ok','province_returned','qk_pending')
+             NOT NULL DEFAULT 'none'
+             COMMENT 'Luồng chuyển hồ sơ xã→tỉnh→QK'
+             AFTER approval_status`,
+        );
+      }
+      if (!have.has("province_comment")) {
+        await queryExecute(
+          `ALTER TABLE citizens
+           ADD COLUMN province_comment TEXT NULL
+           COMMENT 'Lý do tỉnh trả về bổ sung'
+           AFTER approval_comment`,
+        );
+      }
+      if (!have.has("province_reviewed_at")) {
+        await queryExecute(
+          `ALTER TABLE citizens
+           ADD COLUMN province_reviewed_at DATETIME NULL
+           COMMENT 'Thời điểm tỉnh đồng tình / trả về'
+           AFTER province_comment`,
+        );
+      }
+      pipelineColumnsReady = true;
     }
-    if (!have.has("province_comment")) {
-      await queryExecute(
-        `ALTER TABLE citizens
-         ADD COLUMN province_comment TEXT NULL
-         COMMENT 'Lý do tỉnh trả về bổ sung'
-         AFTER approval_comment`,
-      );
-    }
-    if (!have.has("province_reviewed_at")) {
-      await queryExecute(
-        `ALTER TABLE citizens
-         ADD COLUMN province_reviewed_at DATETIME NULL
-         COMMENT 'Thời điểm tỉnh đồng tình / trả về'
-         AFTER province_comment`,
-      );
-    }
-    // Hồ sơ còn pending cũ nhưng đang ở bước xã/tỉnh → không coi là hàng đợi QK
+
+    if (pipelineBackfillDone === true) return;
+
+    // Backfill legacy — chỉ chạy 1 lần / process (tránh UPDATE full table mỗi GET)
     await queryExecute(
       `UPDATE citizens
        SET approval_status = 'none'
@@ -263,8 +317,6 @@ export async function ensureCitizenPipelineColumns(): Promise<void> {
            )
          )`,
     );
-    // Dữ liệu cũ nhảy thẳng QK: kéo lại chờ xã gửi tỉnh (gọi / không gọi / tạm hoãn)
-    // Chỉ hồ sơ chưa từng qua tỉnh (province_reviewed_at NULL) và QK chưa quyết định.
     await queryExecute(
       `UPDATE citizens
        SET pipeline_status = 'local_ready',
@@ -278,6 +330,7 @@ export async function ensureCitizenPipelineColumns(): Promise<void> {
            OR call_intent = 'du_kien_goi'
          )`,
     );
+    pipelineBackfillDone = true;
   } catch (e) {
     console.warn("ensureCitizenPipelineColumns:", e);
   }
@@ -509,9 +562,9 @@ export async function findCitizensFromDb(query: {
   await ensureCitizenCallIntentDuBi();
   await ensureCitizenApprovalCommentColumn();
   await ensureCitizenPipelineColumns();
-  await ensureProposalPendingMigration();
   await ensureCitizenReceivingColumns();
   await ensureCitizenCampaignsTable();
+  await ensureCitizenListIndexes();
 
   const page = query.page || 1;
   const limit = query.limit || 10;
@@ -568,15 +621,12 @@ export async function findCitizensFromDb(query: {
   }
 
   const eduJoin = `
-       LEFT JOIN (
-         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
-         FROM citizen_education e1
-         INNER JOIN (
-           SELECT citizen_id, MAX(id) AS max_id
-           FROM citizen_education
-           GROUP BY citizen_id
-         ) latest ON latest.max_id = e1.id
-       ) edu ON edu.citizen_id = c.id`;
+       LEFT JOIN citizen_education edu ON edu.id = (
+         SELECT e2.id FROM citizen_education e2
+         WHERE e2.citizen_id = c.id
+         ORDER BY e2.id DESC
+         LIMIT 1
+       )`;
 
   if (query.educationLevel) {
     const levels = educationLevelMatchValues(query.educationLevel);
@@ -617,6 +667,22 @@ export async function findCitizensFromDb(query: {
     );
 
     const total = Number(countRow?.cnt || 0);
+
+    // Bước 1: lấy id trang hiện tại (không JOIN nặng / không kéo MEDIUMTEXT avatar)
+    const idRows = await queryRows<(RowDataPacket & { id: string })[]>(
+      `SELECT c.id
+       FROM citizens c${needsEduJoin ? eduJoin : ""}
+       WHERE ${whereSql}
+       ORDER BY c.created_at DESC, c.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+    );
+    const ids = idRows.map((r) => r.id);
+    if (ids.length === 0) {
+      return { data: [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+    }
+
+    // Bước 2: hydrate đủ field cho các id trang hiện tại (gồm avatar — chỉ ~20 dòng)
     const rows = await queryRows<CitizenRow[]>(
       `SELECT
          c.id, c.full_name, c.cccd, c.date_of_birth, c.gender,
@@ -629,29 +695,24 @@ export async function findCitizensFromDb(query: {
          edu.level AS education_level,
          edu.major AS job,
          edu.school_name AS school_name,
-         ci.identification_features,
+         NULL AS identification_features,
          ci.issue_date,
          ci.expiry_date,
          ci.old_id_number,
          ci.avatar_url,
-         fam.father_name,
-         fam.mother_name
+         NULL AS father_name,
+         NULL AS mother_name
        FROM citizens c
-       ${eduJoin}
+       LEFT JOIN citizen_education edu ON edu.id = (
+         SELECT e2.id FROM citizen_education e2
+         WHERE e2.citizen_id = c.id
+         ORDER BY e2.id DESC
+         LIMIT 1
+       )
        LEFT JOIN citizen_identities ci ON ci.citizen_id = c.id
-       LEFT JOIN (
-         SELECT
-           citizen_id,
-           MAX(CASE WHEN relationship = 'Cha' THEN rel_name END) AS father_name,
-           MAX(CASE WHEN relationship = 'Me' THEN rel_name END) AS mother_name
-         FROM citizen_family
-         WHERE relationship IN ('Cha', 'Me')
-         GROUP BY citizen_id
-       ) fam ON fam.citizen_id = c.id
-       WHERE ${whereSql}
-       ORDER BY c.updated_at DESC
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
+       WHERE c.id IN (${placeholders(ids.length)})
+       ORDER BY FIELD(c.id, ${placeholders(ids.length)})`,
+      [...ids, ...ids],
     );
 
     return {
@@ -687,8 +748,9 @@ export async function countCitizenStatusSummaryFromDb(query: {
   if (!ok) return null;
   await ensureCitizenArchivedAtColumn();
   await ensureCitizenCallIntentDuBi();
-  await ensureProposalPendingMigration();
+  await ensureCitizenPipelineColumns();
   await ensureCitizenCampaignsTable();
+  await ensureCitizenListIndexes();
 
   const where: string[] = ["1=1"];
   const params: unknown[] = [];
@@ -726,15 +788,12 @@ export async function countCitizenStatusSummaryFromDb(query: {
   }
 
   const eduJoin = `
-       LEFT JOIN (
-         SELECT e1.citizen_id, e1.level, e1.major, e1.school_name
-         FROM citizen_education e1
-         INNER JOIN (
-           SELECT citizen_id, MAX(id) AS max_id
-           FROM citizen_education
-           GROUP BY citizen_id
-         ) latest ON latest.max_id = e1.id
-       ) edu ON edu.citizen_id = c.id`;
+       LEFT JOIN citizen_education edu ON edu.id = (
+         SELECT e2.id FROM citizen_education e2
+         WHERE e2.citizen_id = c.id
+         ORDER BY e2.id DESC
+         LIMIT 1
+       )`;
 
   if (query.educationLevel) {
     const levels = educationLevelMatchValues(query.educationLevel);
@@ -945,7 +1004,7 @@ export async function findCitizensWithAvatarFromDb(query: {
     const rows = await queryRows<CitizenRow[]>(
       `${CITIZEN_SELECT_SQL}
        WHERE ${where.join(" AND ")}
-       ORDER BY c.updated_at DESC
+       ORDER BY c.created_at DESC, c.id DESC
        LIMIT ?`,
       [...params, limit],
     );

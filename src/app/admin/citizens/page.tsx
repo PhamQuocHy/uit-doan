@@ -525,7 +525,7 @@ export default function CitizensPage() {
     const unsub = subscribeCitizensChanged(() => refresh());
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
-    const timer = window.setInterval(refresh, 12_000);
+    const timer = window.setInterval(refresh, 45_000);
     return () => {
       unsub();
       window.removeEventListener("focus", onFocus);

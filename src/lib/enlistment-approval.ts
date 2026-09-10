@@ -125,11 +125,11 @@ export function getCallDisplayLabel(c: {
       bg: "var(--m3-error-container, #ffdad6)",
     };
   }
-  if (c.callIntent === "du_kien_goi" && c.approvalStatus === "pending") {
+  if (c.callIntent === "du_kien_goi") {
     return {
       label: "Dự kiến gọi",
-      color: "var(--color-m3-warning)",
-      bg: "var(--color-m3-warning-container)",
+      color: "var(--m3-primary, #1a73e8)",
+      bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)",
     };
   }
   // Không gọi đã chốt (QK duyệt đề xuất / không duyệt gọi) — khóa hồ sơ trong đợt
@@ -138,13 +138,6 @@ export function getCallDisplayLabel(c: {
       label: "Không gọi (khóa)",
       color: "var(--m3-error, #ba1a1a)",
       bg: "var(--m3-error-container, #ffdad6)",
-    };
-  }
-  if (c.callIntent === "du_kien_goi") {
-    return {
-      label: "Dự kiến gọi",
-      color: "var(--m3-primary, #1a73e8)",
-      bg: "color-mix(in srgb, var(--m3-primary, #1a73e8) 12%, transparent)",
     };
   }
   return {
