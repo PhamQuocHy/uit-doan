@@ -109,6 +109,7 @@ interface CitizenFormModalProps {
   defaultCampaignId?: string | null;
   onClose: () => void;
   onSaved: (result?: { mode: FormMode; citizen?: Citizen }) => void;
+  onScannedExisting?: (data: Hn212CitizenScan) => Promise<boolean>;
 }
 
 function applyScanToForm(
@@ -191,6 +192,7 @@ export default function CitizenFormModal({
   defaultCampaignId,
   onClose,
   onSaved,
+  onScannedExisting,
 }: CitizenFormModalProps) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -615,9 +617,12 @@ export default function CitizenFormModal({
   };
 
   const handleScanned = (data: Hn212CitizenScan) => {
-    setForm((prev) => applyScanToForm(prev, data));
-    setTab("identity");
-    setError(null);
+    void (async () => {
+      if (onScannedExisting && (await onScannedExisting(data))) return;
+      setForm((prev) => applyScanToForm(prev, data));
+      setTab("identity");
+      setError(null);
+    })();
   };
 
   const handleClose = () => {

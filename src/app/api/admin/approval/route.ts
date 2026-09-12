@@ -405,6 +405,7 @@ export async function GET(request: NextRequest) {
      ORDER BY
        FIELD(c.pipeline_status, 'local_ready','province_returned','province_pending','province_ok','qk_pending','none'),
        FIELD(c.approval_status, 'pending', 'approved', 'rejected', 'none'),
+       c.created_at DESC,
        c.updated_at DESC
      LIMIT 5000`,
     listParams,

@@ -626,6 +626,28 @@ export default function CitizensPage() {
     c.approvalStatus === "approved" &&
     (c.militaryStatusLocked || c.militaryStatus === "nhapngu");
 
+  const normalizeCccd = (value: unknown) => {
+    const digits = String(value ?? "").replace(/\D/g, "");
+    return digits.length === 11 ? digits.padStart(12, "0") : digits;
+  };
+
+  const handleNfcExistingCheck = async (data: Hn212CitizenScan) => {
+    const cccd = normalizeCccd(data.cccd);
+    if (!cccd) return false;
+    const list = await fetchCitizens({
+      search: cccd,
+      page: 1,
+      lookupCccd: true,
+    });
+    if (!list) return false;
+    const existing = list.find((c) => normalizeCccd(c.cccd) === cccd);
+    if (!existing) return false;
+    setFormOpen(false);
+    setFormPrefill(null);
+    setViewCitizen(existing);
+    return true;
+  };
+
   const handleNfcSearch = async (data: Hn212CitizenScan) => {
     if (!data.cccd?.trim()) {
       if (data.fullName?.trim()) {
@@ -637,9 +659,7 @@ export default function CitizensPage() {
       );
       return;
     }
-    const cccd = data.cccd.trim();
-    setSearch(cccd);
-    setPage(1);
+    const cccd = normalizeCccd(data.cccd);
     try {
       const list = await fetchCitizens({
         search: cccd,
@@ -650,7 +670,11 @@ export default function CitizensPage() {
         alert("Không tra cứu được CCCD. Thử lại hoặc tìm thủ công.");
         return;
       }
-      const exact = list.filter((c) => c.cccd === cccd);
+      setSearch(cccd);
+      setPage(1);
+      const exact = list.filter(
+        (c) => normalizeCccd(c.cccd) === cccd,
+      );
       if (exact.length === 1) {
         setViewCitizen(exact[0]!);
         return;
@@ -1385,6 +1409,9 @@ export default function CitizensPage() {
             : null
         }
         defaultCampaignId={formMode === "create" ? campaignId || null : null}
+        onScannedExisting={
+          formMode === "create" ? handleNfcExistingCheck : undefined
+        }
         onClose={() => {
           setFormOpen(false);
           setFormPrefill(null);
