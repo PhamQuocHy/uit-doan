@@ -1,3 +1,4 @@
+import { canEditGlobalRoles, manageableUnitCodes } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
@@ -33,17 +34,19 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     findRoleMembers(id),
   ]);
 
+  const allowedUnits = canEditGlobalRoles(session) ? null : new Set(manageableUnitCodes(session));
+
   return NextResponse.json({
     ...role,
     permissionIds: permissionIds || [],
-    members: members || [],
+    members: allowedUnits === null ? members || [] : (members || []).filter(m => m.unitCode && allowedUnits.has(m.unitCode)),
     meta: { source: "mysql" },
   });
 }
 
 export async function PUT(request: NextRequest, { params }: Ctx) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -91,7 +94,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

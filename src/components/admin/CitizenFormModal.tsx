@@ -275,7 +275,7 @@ export default function CitizenFormModal({
       );
       if (!res.ok) throw new Error("wards");
       const data = await res.json();
-      setWards(data.items || []);
+      setWards(((data.items || []) as HierarchyUnit[]).filter(unit => unit.level === "xa"));
     } catch {
       setWards([]);
     }
@@ -468,29 +468,31 @@ export default function CitizenFormModal({
       try {
         if (level === "bo") {
           let provItems: HierarchyUnit[] = [];
-          const provRes = await fetch("/api/admin/hierarchy/provinces");
+          const provRes = await fetch("/api/admin/hierarchy/children?parentCode=bo", { cache: "no-store" });
           if (provRes.ok) {
             const provData = await provRes.json();
-            provItems = (provData.items || []) as HierarchyUnit[];
+            provItems = ((provData.items || []) as HierarchyUnit[]).filter(unit => unit.level === "tinh");
             setProvinces(provItems);
           } else {
             setProvinces([]);
+            setError("Không tải được danh sách tỉnh/thành. Vui lòng mở lại hồ sơ để thử lại.");
           }
-          if (defaultUnitCode?.includes("-")) {
-            const parent = defaultUnitCode.split("-")[0];
+          const preferredUnitCode = nextForm.unitCode || defaultUnitCode || "";
+          if (preferredUnitCode.includes("-")) {
+            const parent = preferredUnitCode.split("-")[0];
             setFormTinh(parent);
             await loadWards(parent);
-            nextForm.unitCode = defaultUnitCode;
+            nextForm.unitCode = preferredUnitCode;
             setProvinceLabel(
               provItems.find((x) => x.code === parent)?.name || parent,
             );
-          } else if (defaultUnitCode) {
-            setFormTinh(defaultUnitCode);
-            await loadWards(defaultUnitCode);
+          } else if (preferredUnitCode) {
+            setFormTinh(preferredUnitCode);
+            await loadWards(preferredUnitCode);
             nextForm.unitCode = "";
             setProvinceLabel(
-              provItems.find((x) => x.code === defaultUnitCode)?.name ||
-                defaultUnitCode,
+              provItems.find((x) => x.code === preferredUnitCode)?.name ||
+                preferredUnitCode,
             );
           } else {
             setFormTinh("");

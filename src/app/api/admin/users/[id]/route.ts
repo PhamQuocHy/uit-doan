@@ -1,8 +1,10 @@
+import { canManageMembers, canManageUser, isAssignableRole } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
-import { db, getUnitDescendants } from "@/lib/data";
+import { db } from "@/lib/data";
 import { getSession } from "@/lib/auth";
 import { hashPassword, isHashed } from "@/lib/password";
 import {
+  findUserByIdFromDb,
   inferFunctionalRoleFromRoleCode,
   updateUserInDb,
 } from "@/lib/auth-users";
@@ -11,22 +13,10 @@ import { persistUnitEditPin } from "@/lib/unit-pin";
 import { getUnitByCode } from "@/lib/hierarchy";
 import { ensureMedicalOfficerRole, findRoleById } from "@/lib/roles-db";
 import type { FunctionalRole } from "@/lib/functional-roles";
-import { ALL_MILITARY_UNITS } from "@/lib/military-regions";
+import { ALL_MILITARY_UNITS, isQuanKhuOrBtl } from "@/lib/military-regions";
 
 function isMilitaryDonvi(unitCode: string): boolean {
   return ALL_MILITARY_UNITS.some((u) => u.code === unitCode);
-}
-
-function canManageMembers(session: {
-  role: string;
-  hierarchyLevel: string;
-  functionalRole?: string;
-} | null): boolean {
-  if (!session) return false;
-  if (session.role === "admin") return true;
-  if (!["bo", "tinh", "xa"].includes(session.hierarchyLevel)) return false;
-  if (session.functionalRole === "nhan_quan") return false;
-  return true;
 }
 
 export async function GET(
@@ -36,9 +26,12 @@ export async function GET(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const user = db.users.findById(id);
+  const user = await findUserByIdFromDb(id) || db.users.findById(id);
   if (!user) return NextResponse.json({ error: "Không tìm thấy" }, { status: 404 });
-  return NextResponse.json(user);
+  if (!canManageUser(session, user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const safeUser = { ...user } as Record<string, unknown>;
+  delete safeUser.password;
+  return NextResponse.json(safeUser);
 }
 
 export async function PUT(
@@ -46,7 +39,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  if (!canManageMembers(session)) {
+  if (!session || !canManageMembers(session)) {
     return NextResponse.json(
       { error: "Không có quyền cập nhật thành viên" },
       { status: 403 },
@@ -57,10 +50,10 @@ export async function PUT(
   const body = await request.json();
 
   const existingMemory = db.users.findById(id);
-  const usernameHint =
-    typeof body.username === "string"
-      ? body.username
-      : existingMemory?.username;
+  const existing = await findUserByIdFromDb(id) || existingMemory;
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!canManageUser(session!, existing)) return NextResponse.json({ error: "Forbidden: target must be a subordinate within your scope" }, { status: 403 });
+  const usernameHint = existing.username;
 
   const {
     password,
@@ -74,9 +67,6 @@ export async function PUT(
     unitCode: bodyUnitCode,
     roleId: bodyRoleId,
     functionalRole: bodyFunctionalRole,
-    username: _username,
-    id: _id,
-    ...rest
   } = body;
 
   let passwordHash: string | undefined;
@@ -90,9 +80,9 @@ export async function PUT(
     passwordHash = isHashed(password) ? password : hashPassword(password);
   }
 
-  let unitCode =
+  const unitCode =
     typeof bodyUnitCode === "string" ? bodyUnitCode.trim() : undefined;
-  let roleId =
+  const roleId =
     bodyRoleId != null && bodyRoleId !== ""
       ? Number(bodyRoleId)
       : undefined;
@@ -108,42 +98,6 @@ export async function PUT(
     if (!unit) {
       return NextResponse.json({ error: "Đơn vị không hợp lệ" }, { status: 400 });
     }
-    if (session.hierarchyLevel === "bo") {
-      const okTinh = unit.level === "tinh";
-      const okMilitary = unit.level === "donvi" && isMilitaryDonvi(unitCode);
-      if (!okTinh && !okMilitary) {
-        return NextResponse.json(
-          {
-            error:
-              "Cấp Bộ chỉ được gán tài khoản cấp tỉnh/TP, quân khu/BTL hoặc đơn vị nhận quân",
-          },
-          { status: 400 },
-        );
-      }
-    } else if (session.hierarchyLevel === "tinh") {
-      const allowed = new Set(getUnitDescendants(session.unitCode));
-      if (unit.level !== "xa" || !allowed.has(unitCode)) {
-        return NextResponse.json(
-          { error: "Cấp tỉnh chỉ được gán tài khoản xã / phường thuộc tỉnh mình" },
-          { status: 400 },
-        );
-      }
-    } else if (session.hierarchyLevel === "xa") {
-      if (unitCode !== session.unitCode) {
-        return NextResponse.json(
-          { error: "Cấp xã chỉ được gán tài khoản trong xã của bạn" },
-          { status: 403 },
-        );
-      }
-    } else {
-      const allowed = new Set(getUnitDescendants(session.unitCode));
-      if (!allowed.has(unitCode)) {
-        return NextResponse.json(
-          { error: "Không được gán ngoài phạm vi đơn vị của bạn" },
-          { status: 403 },
-        );
-      }
-    }
   }
 
   if (roleId != null) {
@@ -155,17 +109,24 @@ export async function PUT(
     if (!roleRow) {
       return NextResponse.json({ error: "Vai trò không tồn tại" }, { status: 400 });
     }
+    if (!isAssignableRole(roleRow.code)) return NextResponse.json({ error: "Forbidden role" }, { status: 403 });
+    if (isQuanKhuOrBtl(unitCode || existing.unitCode) && roleRow.code !== "UNIT_OFFICER") return NextResponse.json({ error: "Military region requires UNIT_OFFICER" }, { status: 403 });
     if (!functionalRole) {
       functionalRole = inferFunctionalRoleFromRoleCode(roleRow.code, roleRow.name);
     }
   }
 
   if (unitCode && isMilitaryDonvi(unitCode)) {
-    functionalRole = "nhan_quan";
+    functionalRole = isQuanKhuOrBtl(unitCode) ? "tuyen_quan" : "nhan_quan";
+  }
+
+  const destination = getUnitByCode(unitCode || existing.unitCode);
+  if (!destination || !canManageUser(session!, { ...existing, unitCode: destination.code, hierarchyLevel: destination.level, functionalRole: functionalRole || existing.functionalRole })) {
+    return NextResponse.json({ error: "Forbidden destination" }, { status: 403 });
   }
 
   const dbOk = await updateUserInDb(
-    { id, username: usernameHint },
+    { id },
     {
       passwordHash,
       name: typeof name === "string" ? name : undefined,
@@ -192,16 +153,16 @@ export async function PUT(
   }
 
   const pinUnit =
-    unitCode || existingMemory?.unitCode || undefined;
+    unitCode || existing.unitCode || undefined;
   if (typeof editPin === "string" && editPin.trim() && pinUnit) {
     await persistUnitEditPin(pinUnit, editPin.trim());
   }
 
-  const memoryPatch: Record<string, unknown> = { ...rest };
+  const memoryPatch: Record<string, unknown> = {};
   if (name !== undefined) memoryPatch.name = name;
   if (email !== undefined) memoryPatch.email = email;
   if (phone !== undefined) memoryPatch.phone = phone;
-  if (role !== undefined) memoryPatch.role = role;
+  if (roleId != null) memoryPatch.role = "user";
   if (department !== undefined) memoryPatch.department = department;
   if (status !== undefined) memoryPatch.status = status;
   if (passwordHash) memoryPatch.password = passwordHash;
@@ -281,7 +242,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  if (!canManageMembers(session)) {
+  if (!session || !canManageMembers(session)) {
     return NextResponse.json(
       { error: "Không có quyền xóa thành viên" },
       { status: 403 },
@@ -294,6 +255,10 @@ export async function DELETE(
       { status: 400 },
     );
   }
+
+  const existing = await findUserByIdFromDb(id) || db.users.findById(id);
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!canManageUser(session!, existing)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Soft-delete on MySQL if present
   const { pingDb, queryExecute } = await import("@/lib/db");
