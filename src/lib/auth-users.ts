@@ -3,6 +3,7 @@ import { pingDb, queryRows, queryExecute } from "@/lib/db";
 import { hashPassword, isHashed, verifyPassword } from "@/lib/password";
 import type { HierarchyLevel } from "@/lib/data";
 import type { FunctionalRole } from "@/lib/functional-roles";
+import { MILITARY_REGIONS } from "@/lib/military-regions";
 
 export type AuthUser = {
   id: string;
@@ -99,6 +100,15 @@ export async function findUserByUsernameFromDb(
 
   if (!rows.length) return null;
   return rowToAuthUser(rows[0]);
+}
+
+export async function findUserByIdFromDb(id: string): Promise<AuthUser | null> {
+  if (!(await pingDb())) return null;
+  const rows = await queryRows<DbUserRow[]>(
+    `SELECT u.*, hu.level AS unit_level, r.role_name
+     FROM users u LEFT JOIN hierarchy_units hu ON hu.code = u.unit_code
+     LEFT JOIN roles r ON r.id = u.role_id WHERE u.id = ? LIMIT 1`, [id]);
+  return rows[0] ? rowToAuthUser(rows[0]) : null;
 }
 
 export { isHashed, verifyPassword };
@@ -228,6 +238,7 @@ export async function findUsersFromDb(query?: {
   unitCodes?: string[];
   /** Lọc theo cấp đơn vị: tinh | xa | bo | donvi */
   levelFilter?: string;
+  managedOnly?: boolean;
   page?: number;
   limit?: number;
 }): Promise<{
@@ -245,6 +256,10 @@ export async function findUsersFromDb(query?: {
   const where: string[] = ["1=1"];
   const params: unknown[] = [];
 
+  if (query?.managedOnly) {
+    where.push("(r.role_name IS NULL OR (LOWER(r.role_name) NOT LIKE '%admin%' AND LOWER(r.role_name) NOT LIKE '%quản trị%' AND LOWER(r.role_name) NOT LIKE '%quan tri%'))");
+    where.push("(hu.level = 'donvi' OR (COALESCE(u.functional_role, '') <> 'nhan_quan' AND COALESCE(r.role_name, '') <> 'RECEIVING_UNIT'))");
+  }
   if (query?.search?.trim()) {
     const s = `%${query.search.trim()}%`;
     where.push(
@@ -279,16 +294,18 @@ export async function findUsersFromDb(query?: {
         OR IFNULL(r.display_name,'') LIKE '%nhận quân%'
         OR hu.level = 'donvi')`,
     );
+    where.push(`u.unit_code NOT IN (${placeholders(MILITARY_REGIONS.length)})`);
+    params.push(...MILITARY_REGIONS.map(region => region.code));
+  } else if (query?.role === "quan_khu") {
+    where.push(`u.unit_code IN (${placeholders(MILITARY_REGIONS.length)})`);
+    params.push(...MILITARY_REGIONS.map(region => region.code));
   }
 
-  if (query?.unitCodes && query.unitCodes.length > 0) {
-    if (query.unitCodes.length <= 500) {
+  if (query?.unitCodes) {
+    if (!query.unitCodes.length) where.push("1=0");
+    else {
       where.push(`u.unit_code IN (${placeholders(query.unitCodes.length)})`);
       params.push(...query.unitCodes);
-    } else {
-      const root = query.unitCodes[0]?.split("-")[0] || query.unitCodes[0];
-      where.push("(u.unit_code = ? OR u.unit_code LIKE CONCAT(?, '-%'))");
-      params.push(root, root);
     }
   }
 

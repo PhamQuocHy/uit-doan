@@ -38,6 +38,7 @@ import {
 } from "@/lib/nvqs-lifecycle";
 import DateVnInput from "@/components/admin/DateVnInput";
 import { formatVnDate } from "@/lib/date-vn";
+import CitizenHealthPrintPreview from "@/components/admin/CitizenHealthPrintPreview";
 
 type TabId =
   | "identity"
@@ -276,6 +277,7 @@ export default function CitizenDetailModal({
   const [detailLoading, setDetailLoading] = useState(false);
   const [tab, setTab] = useState<TabId>(initialTab);
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
+  const [printCitizenId, setPrintCitizenId] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthYear, setHealthYear] = useState<number | null>(null);
   const [expandedHealthId, setExpandedHealthId] = useState<string | null>(null);
@@ -3332,7 +3334,8 @@ export default function CitizenDetailModal({
             <>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => setPrintCitizenId(citizen.id)}
+                disabled={detailLoading || healthLoading || educationLoading || residenceLoading}
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
               >
                 <Printer size={18} />
@@ -3384,7 +3387,8 @@ export default function CitizenDetailModal({
             <>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => setPrintCitizenId(citizen.id)}
+                disabled={detailLoading || healthLoading || educationLoading || residenceLoading}
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-[12px] px-4 text-[14px] font-semibold text-m3-on-surface-variant hover:bg-black/[0.05]"
               >
                 <Printer size={18} />
@@ -3420,6 +3424,20 @@ export default function CitizenDetailModal({
           )}
         </div>
       </aside>
+
+      {printCitizenId === citizen.id && (
+        <CitizenHealthPrintPreview
+          key={citizen.id}
+          citizen={citizen}
+          records={healthRecords}
+          education={educationRecords}
+          residence={residenceRecords}
+          selectedRecordId={expandedHealthId || healthRecords
+            .filter(record => record.citizenId === citizen.id && record.year === healthYear)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.id}
+          onClose={() => setPrintCitizenId(null)}
+        />
+      )}
 
       {minhChungPickerOpen && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4">

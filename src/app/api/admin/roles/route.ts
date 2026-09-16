@@ -1,3 +1,4 @@
+import { canEditGlobalRoles } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createRoleInDb, ensureMedicalOfficerRole, findRolesFromDb } from "@/lib/roles-db";
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     data: roles,
+    canEdit: canEditGlobalRoles(session),
     total: roles.length,
     meta: { source: "mysql" },
   });
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

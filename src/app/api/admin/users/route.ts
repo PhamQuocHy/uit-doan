@@ -1,5 +1,6 @@
+import { canManageMembers, canManageUser, manageableUnitCodes, isAssignableRole } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
-import { db, getUnitDescendants } from "@/lib/data";
+import { db, hierarchyUnits } from "@/lib/data";
 import { getSession } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { getUnitByCode } from "@/lib/hierarchy";
@@ -15,7 +16,6 @@ import type { FunctionalRole } from "@/lib/functional-roles";
 import {
   ALL_MILITARY_UNITS,
   isQuanKhuOrBtl,
-  MILITARY_REGIONS,
 } from "@/lib/military-regions";
 
 function isMilitaryDonvi(unitCode: string): boolean {
@@ -23,19 +23,6 @@ function isMilitaryDonvi(unitCode: string): boolean {
 }
 
 /** Ai được quản lý thành viên trong phạm vi đơn vị (không chỉ SUPER_ADMIN). */
-function canManageMembers(session: {
-  role: string;
-  hierarchyLevel: string;
-  functionalRole?: string;
-} | null): boolean {
-  if (!session) return false;
-  if (session.role === "admin") return true;
-  if (!["bo", "tinh", "xa"].includes(session.hierarchyLevel)) return false;
-  // Đơn vị nhận quân (kể cả quân khu) không quản lý thành viên hành chính địa phương
-  if (session.functionalRole === "nhan_quan") return false;
-  return true;
-}
-
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,27 +34,8 @@ export async function GET(request: NextRequest) {
   const role = searchParams.get("role") || undefined;
   const status = searchParams.get("status") || undefined;
 
-  let unitCodes: string[] | undefined;
-  let levelFilter: string | undefined;
-  if (session.hierarchyLevel === "bo") {
-    if (role === "quan_khu") {
-      levelFilter = "donvi";
-      unitCodes = MILITARY_REGIONS.map((r) => r.code);
-    } else if (role === "nhan_quan") {
-      levelFilter = "donvi";
-    } else {
-      levelFilter = "tinh";
-    }
-  } else if (session.hierarchyLevel === "tinh") {
-    // Tỉnh: tài khoản xã thuộc tỉnh (kể cả xã tự thêm)
-    unitCodes = getUnitDescendants(session.unitCode);
-    levelFilter = "xa";
-  } else if (session.hierarchyLevel === "xa") {
-    unitCodes = [session.unitCode];
-  } else if (session.hierarchyLevel !== "bo") {
-    unitCodes = getUnitDescendants(session.unitCode);
-  }
-
+  const unitCodes = manageableUnitCodes(session);
+  const levelFilter = undefined;
   await ensureMedicalOfficerRole();
 
   const fromDb = await findUsersFromDb({
@@ -76,22 +44,24 @@ export async function GET(request: NextRequest) {
     status,
     unitCodes,
     levelFilter,
+    managedOnly: true,
     page,
     limit,
   });
   if (fromDb) {
-    return NextResponse.json({ ...fromDb, meta: { source: "mysql" } });
+    return NextResponse.json({ ...fromDb, canManage: canManageMembers(session), units: hierarchyUnits.filter(u => unitCodes.includes(u.code)), meta: { source: "mysql" } });
   }
 
   const result = db.users.findAll({
     search,
     role,
     status,
-    page,
-    limit,
+    page: 1,
+    limit: Number.MAX_SAFE_INTEGER,
     unitCodes,
   });
-  return NextResponse.json({ ...result, meta: { source: "memory" } });
+  const visible = result.data.filter(user => canManageUser(session, user));
+  return NextResponse.json({ data: visible.slice((page - 1) * limit, page * limit), total: visible.length, page, limit, totalPages: Math.ceil(visible.length / limit), canManage: canManageMembers(session), units: hierarchyUnits.filter(u => unitCodes.includes(u.code)), meta: { source: "memory" } });
 }
 
 export async function POST(request: NextRequest) {
@@ -156,51 +126,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Phân quyền tạo: Bộ→tỉnh hoặc đơn vị quân sự; Tỉnh→xã; Xã→chỉ xã mình
-    if (session!.hierarchyLevel === "bo") {
-      const okTinh = unit.level === "tinh";
-      const okMilitary = unit.level === "donvi" && isMilitaryDonvi(unitCode);
-      if (!okTinh && !okMilitary) {
-        return NextResponse.json(
-          {
-            error:
-              "Cấp Bộ chỉ được tạo tài khoản cấp tỉnh/TP, quân khu/BTL hoặc đơn vị nhận quân",
-          },
-          { status: 400 },
-        );
-      }
-    } else if (session!.hierarchyLevel === "tinh") {
-      const allowed = new Set(getUnitDescendants(session!.unitCode));
-      if (unit.level !== "xa" || !allowed.has(unitCode)) {
-        return NextResponse.json(
-          {
-            error:
-              "Cấp tỉnh chỉ được tạo tài khoản xã / phường thuộc tỉnh mình",
-          },
-          { status: 400 },
-        );
-      }
-    } else if (session!.hierarchyLevel === "xa") {
-      if (unitCode !== session!.unitCode) {
-        return NextResponse.json(
-          { error: "Cấp xã chỉ được tạo tài khoản trong xã của bạn" },
-          { status: 403 },
-        );
-      }
-    } else {
-      const allowed = new Set(getUnitDescendants(session!.unitCode));
-      if (!allowed.has(unitCode)) {
-        return NextResponse.json(
-          { error: "Không được tạo tài khoản ngoài phạm vi đơn vị của bạn" },
-          { status: 403 },
-        );
-      }
-    }
-
     await ensureMedicalOfficerRole();
     const role = await findRoleById(roleId);
     if (!role) {
       return NextResponse.json({ error: "Vai trò không tồn tại" }, { status: 400 });
     }
+
+    if (isQuanKhuOrBtl(unitCode) && role.code !== "UNIT_OFFICER") return NextResponse.json({ error: "Military region requires UNIT_OFFICER" }, { status: 403 });
 
     let functionalRole: FunctionalRole =
       (body.functionalRole as FunctionalRole) ||
@@ -208,7 +140,11 @@ export async function POST(request: NextRequest) {
 
     // Đơn vị quân sự (QK / sư đoàn…) luôn là nhận quân — không gắn tỉnh
     if (unit.level === "donvi" && isMilitaryDonvi(unitCode)) {
-      functionalRole = "nhan_quan";
+      functionalRole = isQuanKhuOrBtl(unitCode) ? "tuyen_quan" : "nhan_quan";
+    }
+
+    if (!isAssignableRole(role.code) || !canManageUser(session!, { unitCode, hierarchyLevel: unit.level, functionalRole })) {
+      return NextResponse.json({ error: "Forbidden: target must be a subordinate within your scope" }, { status: 403 });
     }
 
     const created = await createUserInDb({

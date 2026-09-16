@@ -14,6 +14,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { M3ConfirmDialog } from "@/components/m3";
 
 type RoleRow = {
   id: number;
@@ -60,6 +61,7 @@ const DOT_COLORS = [
 type TabId = "permissions" | "members";
 
 export default function RolesPage() {
+  const [canEdit, setCanEdit] = useState(false);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tab, setTab] = useState<TabId>("permissions");
@@ -79,6 +81,8 @@ export default function RolesPage() {
   const [createDesc, setCreateDesc] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<RoleRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const keyToId = useMemo(() => {
     const map = new Map<string, number>();
@@ -108,6 +112,7 @@ export default function RolesPage() {
       }
       const list: RoleRow[] = Array.isArray(data.data) ? data.data : [];
       setRoles(list);
+      setCanEdit(data.canEdit === true);
       setSelectedId((prev) => {
         if (preferId && list.some((r) => r.id === preferId)) return preferId;
         if (prev && list.some((r) => r.id === prev)) return prev;
@@ -134,11 +139,16 @@ export default function RolesPage() {
     }
   }, []);
 
-  const fetchRoleDetail = useCallback(async (roleId: number) => {
+  const fetchRoleDetail = useCallback(async (roleId: number, signal?: AbortSignal) => {
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/admin/roles/${roleId}`, { cache: "no-store" });
+      const timeout = AbortSignal.timeout(20_000);
+      const res = await fetch(`/api/admin/roles/${roleId}`, {
+        cache: "no-store",
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
       const data = await res.json();
+      if (signal?.aborted) return;
       if (!res.ok) {
         setToast(data.error || "Không tải chi tiết vai trò");
         return;
@@ -165,9 +175,9 @@ export default function RolesPage() {
         ),
       );
     } catch {
-      setToast("Không tải chi tiết vai trò");
+      if (!signal?.aborted) setToast("Không tải được chi tiết vai trò. Vui lòng thử lại.");
     } finally {
-      setLoadingDetail(false);
+      if (!signal?.aborted) setLoadingDetail(false);
     }
   }, []);
 
@@ -178,8 +188,10 @@ export default function RolesPage() {
 
   useEffect(() => {
     if (selectedId == null) return;
+    const controller = new AbortController();
     setTab("permissions");
-    fetchRoleDetail(selectedId);
+    fetchRoleDetail(selectedId, controller.signal);
+    return () => controller.abort();
   }, [selectedId, fetchRoleDetail]);
 
   useEffect(() => {
@@ -189,7 +201,7 @@ export default function RolesPage() {
   }, [toast]);
 
   const togglePermKey = (key: string | undefined, checked: boolean) => {
-    if (!key) return;
+    if (!canEdit || !key) return;
     const id = keyToId.get(key);
     if (id == null) return;
     setSelectedPermIds((prev) => {
@@ -272,15 +284,14 @@ export default function RolesPage() {
       setToast("Không thể xóa vai trò SUPER_ADMIN");
       return;
     }
-    if (
-      !window.confirm(
-        `Xóa vai trò “${selectedRole.name}”? Thao tác không thể hoàn tác.`,
-      )
-    ) {
-      return;
-    }
+    setRoleToDelete(selectedRole);
+  };
+
+  const confirmDelete = async () => {
+    if (!roleToDelete) return;
+    setDeleteLoading(true);
     try {
-      const res = await fetch(`/api/admin/roles/${selectedId}`, {
+      const res = await fetch(`/api/admin/roles/${roleToDelete.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -289,9 +300,12 @@ export default function RolesPage() {
         return;
       }
       setToast("Đã xóa vai trò");
+      setRoleToDelete(null);
       await fetchRoles();
     } catch {
       setToast("Không kết nối được máy chủ");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -328,9 +342,10 @@ export default function RolesPage() {
             <p className="text-[15px] font-bold text-m3-on-surface">Vai trò</p>
             <button
               type="button"
+              disabled={!canEdit}
               onClick={() => {
                 setCreateError(null);
-                setCreateOpen(true);
+                if (canEdit) setCreateOpen(true);
               }}
               className="rounded-lg p-1.5 text-m3-primary transition hover:bg-m3-primary-container"
               title="Thêm vai trò"
@@ -442,7 +457,7 @@ export default function RolesPage() {
                       variant="primary"
                       size="sm"
                       icon={<Save size={14} />}
-                      disabled={!dirty || saving || loadingDetail}
+                      disabled={!canEdit || !dirty || saving || loadingDetail}
                       onClick={savePermissions}
                     >
                       {saving ? "Đang lưu..." : "Lưu quyền"}
@@ -451,7 +466,7 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={handleDelete}
-                    disabled={selectedId === 1}
+                    disabled={!canEdit || selectedId === 1}
                     className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[13px] font-semibold text-m3-error transition hover:bg-m3-error-container disabled:opacity-40"
                     title="Xóa vai trò"
                   >
@@ -510,6 +525,11 @@ export default function RolesPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {!canEdit && (
+                      <p className="px-5 py-3 text-sm text-m3-on-surface-variant">
+                        Quyền của nhóm vai trò dùng chung cho mọi cấp. Chỉ quản trị cấp Bộ được sửa; quản lý tài khoản cấp dưới tại mục Người dùng.
+                      </p>
+                    )}
                     <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="sticky top-0 z-10 bg-m3-surface-lowest text-[12px] font-bold uppercase tracking-wide text-m3-on-surface-variant">
                         <tr className="border-b border-m3-outline-variant">
@@ -537,6 +557,7 @@ export default function RolesPage() {
                                   {available ? (
                                     <input
                                       type="checkbox"
+                                      disabled={!canEdit}
                                       className="h-4 w-4 cursor-pointer accent-[var(--m3-primary,#1a73e8)]"
                                       checked={hasKey(key)}
                                       onChange={(e) =>
@@ -564,6 +585,7 @@ export default function RolesPage() {
                                       >
                                         <input
                                           type="checkbox"
+                                      disabled={!canEdit}
                                           className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--m3-primary,#1a73e8)]"
                                           checked={hasKey(opt.key)}
                                           onChange={(e) =>
@@ -630,6 +652,24 @@ export default function RolesPage() {
           </div>
         </div>
       </Modal>
+
+      <M3ConfirmDialog
+        open={roleToDelete !== null}
+        title="Xóa vai trò?"
+        description={
+          roleToDelete
+            ? `Bạn có chắc muốn xóa “${roleToDelete.name}”? Thao tác này không thể hoàn tác.`
+            : undefined
+        }
+        confirmLabel="Xóa vai trò"
+        cancelLabel="Hủy"
+        tone="danger"
+        busy={deleteLoading}
+        onCancel={() => {
+          if (!deleteLoading) setRoleToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

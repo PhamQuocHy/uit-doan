@@ -1,3 +1,4 @@
+import { MILITARY_REGIONS } from "@/lib/military-regions";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
 
@@ -365,7 +366,7 @@ export async function ensureMedicalOfficerRole(): Promise<number | null> {
       [MEDICAL_ROLE_CODE, MEDICAL_ROLE_NAME, MEDICAL_ROLE_DESC],
     );
 
-    let rows = await queryRows<(RowDataPacket & { id: number })[]>(
+    const rows = await queryRows<(RowDataPacket & { id: number })[]>(
       `SELECT id FROM roles
        WHERE role_name = ?
           OR display_name = ?
@@ -413,6 +414,15 @@ export async function ensureMedicalOfficerRole(): Promise<number | null> {
     await queryExecute(
       `UPDATE users SET role_id = ? WHERE functional_role = 'y_te' AND (role_id IS NULL OR role_id <> ?)`,
       [roleId, roleId],
+    );
+
+    // Region commands are operational officers, never receiving-unit accounts.
+    await queryExecute(
+      `UPDATE users u JOIN roles r ON r.role_name = 'UNIT_OFFICER'
+       SET u.role_id = r.id, u.functional_role = 'tuyen_quan'
+       WHERE u.unit_code IN (${MILITARY_REGIONS.map(() => "?").join(",")})
+         AND (u.role_id <> r.id OR u.role_id IS NULL OR COALESCE(u.functional_role, '') <> 'tuyen_quan')`,
+      MILITARY_REGIONS.map(region => region.code),
     );
 
     return roleId;

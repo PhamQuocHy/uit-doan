@@ -240,6 +240,8 @@ export default function UsersClient() {
   const [sessionUnitCode, setSessionUnitCode] = useState<string | null>(null);
   const [sessionUnitName, setSessionUnitName] = useState<string>("");
 
+  const [canManage, setCanManage] = useState(false);
+  const [managedUnits, setManagedUnits] = useState<HierarchyUnit[]>([]);
   const [systemRoles, setSystemRoles] = useState<SystemRole[]>([]);
   const [unitOptions, setUnitOptions] = useState<HierarchyUnit[]>([]);
 
@@ -265,7 +267,7 @@ export default function UsersClient() {
         : "Đơn vị";
 
   const boUnitOptions = useMemo((): HierarchyUnit[] => {
-    if (sessionLevel !== "bo") return unitOptions;
+    if (sessionLevel !== "bo") return managedUnits;
     if (form.unitKind === "quan_khu") {
       return MILITARY_REGIONS.map((r) => ({
         code: r.code,
@@ -275,7 +277,7 @@ export default function UsersClient() {
       }));
     }
     if (form.unitKind === "don_vi_nhan") {
-      return MILITARY_SUB_UNITS.map((r) => ({
+      return MILITARY_SUB_UNITS.filter(r => managedUnits.some(u => u.code === r.code)).map((r) => ({
         code: r.code,
         name: r.name,
         level: "donvi" as HierarchyLevel,
@@ -283,7 +285,7 @@ export default function UsersClient() {
       }));
     }
     return unitOptions;
-  }, [sessionLevel, form.unitKind, unitOptions]);
+  }, [sessionLevel, form.unitKind, unitOptions, managedUnits]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -298,6 +300,8 @@ export default function UsersClient() {
       const res = await fetch(`/api/admin/users?${params}`);
       const data = await res.json();
       setUsers(data.data || []);
+      setCanManage(data.canManage === true);
+      setManagedUnits(data.units || []);
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
     } finally {
@@ -487,7 +491,7 @@ export default function UsersClient() {
             status: form.status,
             unitCode,
             roleId: Number(form.roleId),
-            ...(form.unitKind !== "tinh" && { functionalRole: "nhan_quan" }),
+            ...(form.unitKind !== "tinh" && { functionalRole: form.unitKind === "quan_khu" ? "tuyen_quan" : "nhan_quan" }),
             ...(form.password.trim() && { password: form.password.trim() }),
             ...(form.editPin.trim() &&
               form.unitKind === "tinh" && { editPin: form.editPin.trim() }),
@@ -501,7 +505,7 @@ export default function UsersClient() {
             status: form.status,
             unitCode,
             roleId: Number(form.roleId),
-            ...(form.unitKind !== "tinh" && { functionalRole: "nhan_quan" }),
+            ...(form.unitKind !== "tinh" && { functionalRole: form.unitKind === "quan_khu" ? "tuyen_quan" : "nhan_quan" }),
             ...(form.editPin.trim() &&
               form.unitKind === "tinh" && { editPin: form.editPin.trim() }),
           };
@@ -566,7 +570,7 @@ export default function UsersClient() {
           </select>
         }
         actions={
-          <AdminPrimaryBtn onClick={openCreate}>
+          <AdminPrimaryBtn onClick={openCreate} disabled={!canManage}>
             <Plus size={16} />
             Thêm thành viên
           </AdminPrimaryBtn>
@@ -834,9 +838,6 @@ export default function UsersClient() {
                     >
                       <option value="tinh">Tỉnh / Thành phố</option>
                       <option value="quan_khu">Quân khu / BTL</option>
-                      <option value="don_vi_nhan">
-                        Đơn vị nhận quân (sư đoàn / trung đoàn)
-                      </option>
                     </select>
                     {form.unitKind === "quan_khu" && (
                       <p className="mt-2 text-[12px] leading-snug text-m3-on-surface-variant">
@@ -898,7 +899,7 @@ export default function UsersClient() {
               }
             >
               <option value="">— Chọn vai trò —</option>
-              {systemRoles.map((r) => (
+              {systemRoles.filter(r => ["UNIT_OFFICER", "COMMUNE_OFFICER", "LOCAL_OFFICER", "RECEIVING_UNIT", "MEDICAL_OFFICER"].includes(r.code)).map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>

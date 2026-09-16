@@ -181,7 +181,7 @@ export default function Hn212ScanButton({
             <div className="space-y-4 px-5 py-5">
               <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-m3-on-surface-variant">
                 <li>
-                  Mở <strong>ComQ ID Reader</strong> và để hiện mã HANEL-…
+                  Mở <strong>Thiết bị quét CCCD</strong> 
                 </li>
                 <li>
                   <strong>Cắm CCCD vào khe trước</strong> (không chỉ đặt gần),
@@ -189,11 +189,9 @@ export default function Hn212ScanButton({
                 </li>
                 <li>
                   Bấm <strong>Bắt đầu quét</strong> — chờ OCR + chip (có thể
-                  tới ~90 giây). Trên ComQ phải thấy đang đọc thẻ.
+                  tới ~90 giây).
                 </li>
-                <li className="text-[12px]">
-                  WebSocket: <code>ws://127.0.0.1:8000</code>
-                </li>
+                
               </ol>
 
               {statusHint && status === "reading" && (
@@ -226,7 +224,7 @@ export default function Hn212ScanButton({
                 className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-m3-on-surface-variant hover:text-m3-primary"
               >
                 <Settings2 size={14} />
-                {showSettings ? "Ẩn cấu hình WebSocket" : "Cấu hình WebSocket"}
+                {showSettings ? "Ẩn cấu hình" : "Cấu hình Thiết bị"}
               </button>
 
               {showSettings && (

@@ -35,6 +35,7 @@
     "@capacitor/status-bar": "^7.0.2",
     "@types/pdfkit": "^0.17.6",
     "cccd-native": "file:plugins/cccd-native",
+    "docx": "^9.7.1",
     "jose": "^6.1.3",
     "lucide-react": "^0.576.0",
     "mysql2": "^3.23.1",

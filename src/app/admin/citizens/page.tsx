@@ -867,9 +867,7 @@ export default function CitizensPage() {
               <p className="text-[15px] font-bold text-red-700">
                 Có {pendingCount.toLocaleString("vi-VN")} hồ sơ hết tuổi cần duyệt lưu trữ
               </p>
-              <p className="mt-0.5 text-[13px] text-red-700/80">
-                Tuổi = năm hiện tại − năm sinh &gt; {NVQS_AGE_MAX}. Bấm để xem danh sách chờ duyệt.
-              </p>
+             
             </div>
             <span className="text-[13px] font-semibold text-red-700">
               {pendingOpen ? "Thu gọn" : "Xem danh sách"}

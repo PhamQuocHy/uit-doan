@@ -664,7 +664,7 @@ export default function LoginForm() {
           className="text-center text-[16px] mt-6 font-normal"
           style={{ color: "var(--m3-on-surface-variant, #475569)" }}
         >
-          Coppyright © 2026 Ban Chỉ huy Quân sự
+          Coppyright © 2026 Hệ thống Quản lý Nghĩa vụ Quân sự. Bản quyền thuộc về Phạm Quốc Hy
         </p>
       </div>
     </M3ThemeProvider>
