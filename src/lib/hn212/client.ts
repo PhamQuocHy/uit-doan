@@ -94,20 +94,20 @@ function parseCameraListParam(param1: unknown): ComqCameraInfo[] {
   try {
     const parsed = JSON.parse(param1) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((row) => {
-        const r = asRec(row);
-        if (!r) return null;
-        const Id = String(r.Id || "");
-        const Name = String(r.Name || "");
-        if (!Id && !Name) return null;
-        return {
-          Id,
-          Name,
-          Index: typeof r.Index === "number" ? r.Index : undefined,
-        };
-      })
-      .filter((x): x is ComqCameraInfo => !!x);
+    const cameras: ComqCameraInfo[] = [];
+    for (const row of parsed) {
+      const r = asRec(row);
+      if (!r) continue;
+      const Id = String(r.Id || "");
+      const Name = String(r.Name || "");
+      if (!Id && !Name) continue;
+      cameras.push({
+        Id,
+        Name,
+        ...(typeof r.Index === "number" ? { Index: r.Index } : {}),
+      });
+    }
+    return cameras;
   } catch {
     return [];
   }

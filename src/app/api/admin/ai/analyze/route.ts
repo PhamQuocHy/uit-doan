@@ -78,6 +78,6 @@ export async function GET() {
   return NextResponse.json({
     endpoint: "/api/admin/ai/analyze",
     configured: isGeminiConfigured(),
-    model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+    model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
   });
 }

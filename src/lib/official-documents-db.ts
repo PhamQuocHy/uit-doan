@@ -126,23 +126,14 @@ export async function findOfficialDocumentsFromDb(args: {
 }): Promise<MilitaryDocument[] | null> {
   if (!(await pingDb())) return null;
   try {
-    let rows: DocRow[];
-    if (args.hierarchyLevel === "bo") {
-      rows = await queryRows<DocRow[]>(
-        `SELECT * FROM official_documents
-         ORDER BY doc_date DESC, created_at DESC
-         LIMIT 500`,
-      );
-    } else {
-      rows = await queryRows<DocRow[]>(
-        `SELECT * FROM official_documents
-         WHERE from_unit = ?
-            OR JSON_CONTAINS(to_units_json, JSON_QUOTE(?), '$')
-         ORDER BY doc_date DESC, created_at DESC
-         LIMIT 500`,
-        [args.unitCode, args.unitCode],
-      );
-    }
+    const rows = await queryRows<DocRow[]>(
+      `SELECT * FROM official_documents
+       WHERE from_unit = ?
+          OR JSON_CONTAINS(to_units_json, JSON_QUOTE(?), '$')
+       ORDER BY doc_date DESC, created_at DESC
+       LIMIT 500`,
+      [args.unitCode, args.unitCode],
+    );
     const attMap = await loadAttachments(rows.map((r) => r.id));
     return rows.map((r) => mapDoc(r, attMap.get(r.id) || []));
   } catch (e) {
@@ -207,7 +198,7 @@ export async function createOfficialDocumentInDb(data: {
     await queryExecute(
       `INSERT INTO official_documents
         (id, code, title, content, type, from_unit, to_units_json, doc_date, status, urgent, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.code,
@@ -259,7 +250,7 @@ export async function createOfficialDocumentInDb(data: {
     };
   } catch (e) {
     console.error("createOfficialDocumentInDb:", e);
-    return null;
+    throw e;
   }
 }
 

@@ -6,7 +6,6 @@ import {
   AI_APPROVAL_SUGGEST_BATCH_MAX,
   loadCitizenSuggestSnapshot,
   suggestApprovalBatch,
-  suggestApprovalForCitizen,
   suggestMeta,
   type SuggestMode,
 } from "@/lib/ai-approval-suggest";
@@ -114,19 +113,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowedIds: string[] = [];
-  for (const id of ids) {
-    const snap = await loadCitizenSuggestSnapshot(id);
-    if (!snap) continue;
-    if (
-      !unitInScope(snap.unitCode, session.hierarchyLevel, session.unitCode)
-    ) {
-      continue;
-    }
-    allowedIds.push(id);
-  }
+  const snapshots = await Promise.all(ids.map(loadCitizenSuggestSnapshot));
+  const allowedSnapshots = snapshots.filter(
+    (snap): snap is NonNullable<typeof snap> =>
+      snap !== null &&
+      unitInScope(snap.unitCode, session.hierarchyLevel, session.unitCode),
+  );
 
-  if (allowedIds.length === 0) {
+  if (allowedSnapshots.length === 0) {
     return NextResponse.json(
       { error: "Không có hồ sơ hợp lệ trong phạm vi quản lý" },
       { status: 404 },
@@ -134,23 +128,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const items: Awaited<ReturnType<typeof suggestApprovalBatch>> = [];
-    if (allowedIds.length === 1) {
-      const one = await suggestApprovalForCitizen({
-        citizenId: allowedIds[0],
-        mode,
-        kind,
-      });
-      if (one) items.push(one);
-    } else {
-      items.push(
-        ...(await suggestApprovalBatch({
-          citizenIds: allowedIds,
-          mode,
-          kind,
-        })),
-      );
-    }
+    const items = await suggestApprovalBatch({
+      snapshots: allowedSnapshots,
+      mode,
+      kind,
+    });
 
     return NextResponse.json({
       items,
