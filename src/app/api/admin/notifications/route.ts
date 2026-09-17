@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, hierarchyUnits } from "@/lib/data";
@@ -304,7 +305,7 @@ function findMemoryNotifications(unitCode: string): NotiItem[] {
   }));
 }
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -334,7 +335,7 @@ export async function GET() {
   return NextResponse.json({ data, unread });
 }
 
-export async function PATCH(request: NextRequest) {
+async function PATCHHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -360,3 +361,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ error: "Thiếu tham số" }, { status: 400 });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PATCH = withApiGuard(PATCHHandler);

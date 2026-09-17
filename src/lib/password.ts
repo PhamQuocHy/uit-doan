@@ -21,9 +21,10 @@ export function isHashed(stored: string): boolean {
  *   route đăng nhập sẽ tự nâng cấp lên hash sau khi khớp.
  */
 export function verifyPassword(plain: string, stored: string): boolean {
+  if (typeof plain !== "string" || plain.length > 256 || typeof stored !== "string") return false;
   if (isHashed(stored)) {
     const [, salt, hash] = stored.split("$");
-    if (!salt || !hash) return false;
+    if (!/^[a-f0-9]{32}$/.test(salt || "") || !/^[a-f0-9]{128}$/.test(hash || "") || stored.split("$").length !== 3) return false;
     const derived = scryptSync(plain, salt, KEYLEN).toString("hex");
     const a = Buffer.from(hash, "hex");
     const b = Buffer.from(derived, "hex");

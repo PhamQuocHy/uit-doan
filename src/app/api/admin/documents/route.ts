@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { db, getChildUnits, hierarchyUnits, type HierarchyUnit } from "@/lib/data";
 import { getSession } from "@/lib/auth";
@@ -189,7 +190,7 @@ async function parseBody(request: NextRequest): Promise<{
   };
 }
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -236,7 +237,7 @@ export async function GET() {
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -325,3 +326,6 @@ export async function POST(request: NextRequest) {
     { status: 201 },
   );
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

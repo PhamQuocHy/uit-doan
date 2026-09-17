@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
 import { hierarchyUnits } from "@/lib/data";
@@ -11,12 +12,12 @@ function unitName(code: string | null | undefined): string {
 }
 
 /** Tra cứu công khai danh sách đã công bố — không cần đăng nhập */
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const cccd = String(searchParams.get("cccd") || "").replace(/\D/g, "");
+  const cccd = String(searchParams.get("cccd") || "").trim();
   const fullName = String(searchParams.get("fullName") || "").trim();
 
-  if (cccd.length < 9 || fullName.length < 2) {
+  if (!/^(?:\d{9}|\d{12})$/.test(cccd) || fullName.length < 2 || fullName.length > 150) {
     return NextResponse.json(
       { error: "Nhập đủ số CCCD và họ tên để tra cứu" },
       { status: 400 },
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     found: true,
     data: {
       fullName: row.full_name,
-      cccd: row.cccd,
+      cccd: "*".repeat(row.cccd.length - 4) + row.cccd.slice(-4),
       dateOfBirth: toDateOnlyString(row.date_of_birth) || "",
       receivingUnitName: unitName(row.receiving_unit_code),
       managingUnitName: unitName(row.unit_code),
@@ -72,3 +73,5 @@ export async function GET(request: NextRequest) {
     },
   });
 }
+
+export const GET = withApiGuard(GETHandler);

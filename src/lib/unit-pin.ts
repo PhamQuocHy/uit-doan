@@ -1,3 +1,4 @@
+import { consumeLimit, opaqueKey, securityEvent } from "@/lib/security/controls";
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
 import {
@@ -6,16 +7,19 @@ import {
   verifyUnitEditPin,
 } from "@/lib/data";
 
-/** Xác thực PIN: memory trước, sau đó hierarchy_units.edit_pin trên MySQL. */
+/** Xác thực PIN từ MySQL; memory chỉ dành cho demo được bật rõ ràng. */
 export async function verifyEditPinAsync(
   unitCode: string,
   pin: string,
 ): Promise<boolean> {
   const trimmed = pin.trim();
   if (!trimmed || !unitCode) return false;
-  if (verifyUnitEditPin(unitCode, trimmed)) return true;
-
-  if (!(await pingDb())) return false;
+  if (trimmed.length > 128) return false;
+  if (consumeLimit(`pin:${opaqueKey(unitCode)}`, 10, 15 * 60 * 1000)) {
+    securityEvent('pin_rate_limited', { status: 429 });
+    return false;
+  }
+  if (!(await pingDb())) return process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEMO_AUTH === 'true' && verifyUnitEditPin(unitCode, trimmed);
   try {
     const rows = await queryRows<(RowDataPacket & { edit_pin: string | null })[]>(
       `SELECT edit_pin FROM hierarchy_units WHERE code = ? LIMIT 1`,

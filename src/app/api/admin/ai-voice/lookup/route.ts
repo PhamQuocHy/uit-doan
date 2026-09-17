@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { findCitizenByCccdFromDb } from "@/lib/citizens-db";
@@ -55,7 +56,7 @@ async function respondWithCccd(args: {
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -114,16 +115,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Không xử lý được lời nói.",
+          "Không xử lý được lời nói.",
       },
       { status: 500 },
     );
   }
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai-voice/lookup",
     methods: ["POST"],
@@ -135,3 +134,6 @@ export async function GET() {
     geminiReady: isGeminiConfigured(),
   });
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const GET = withApiGuard(GETHandler);

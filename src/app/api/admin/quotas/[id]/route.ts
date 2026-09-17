@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/data";
@@ -24,7 +25,7 @@ function canManageQuota(
   return false;
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -78,7 +79,7 @@ export async function PATCH(
   return NextResponse.json({ data: updated });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -121,3 +122,6 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApiGuard(PATCHHandler);
+export const DELETE = withApiGuard(DELETEHandler);

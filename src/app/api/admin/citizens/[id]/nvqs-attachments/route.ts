@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { findCitizenByIdFromDb } from "@/lib/citizens-db";
@@ -11,7 +12,7 @@ import {
   type MinhChungLoai,
 } from "@/lib/citizen-nvqs-attachments-db";
 
-export async function GET(
+async function GETHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -33,7 +34,7 @@ export async function GET(
   return NextResponse.json({ data });
 }
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -96,7 +97,7 @@ export async function POST(
   }
 }
 
-export async function DELETE(
+async function DELETEHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -115,3 +116,7 @@ export async function DELETE(
   }
   return NextResponse.json({ ok: true });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);
+export const DELETE = withApiGuard(DELETEHandler);

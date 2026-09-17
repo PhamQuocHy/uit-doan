@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { pingDb } from "@/lib/db";
@@ -11,7 +12,7 @@ import { ensureMilitaryUnitsInMemory } from "@/lib/military-regions";
 
 ensureMilitaryUnitsInMemory();
 
-export async function GET(
+async function GETHandler(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -26,7 +27,7 @@ export async function GET(
   });
 }
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -151,3 +152,6 @@ export async function POST(
     );
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

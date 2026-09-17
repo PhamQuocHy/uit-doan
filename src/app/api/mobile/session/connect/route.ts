@@ -1,15 +1,17 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { connectSession } from "@/lib/mobile/sessions";
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   try {
     const body = (await req.json()) as {
       connectionCode?: string;
       code?: string;
       device?: { platform?: string };
     };
-    const code = (body.connectionCode || body.code || "").trim().toUpperCase();
-    if (code.length < 4) {
+    const rawCode = body.connectionCode || body.code;
+    const code = typeof rawCode === "string" ? rawCode.trim().toUpperCase() : "";
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code)) {
       return NextResponse.json({ error: "Mã kết nối không hợp lệ" }, { status: 400 });
     }
 
@@ -28,8 +30,10 @@ export async function POST(req: Request) {
       expiresAt: result.session.expiresAt,
       sessionToken: result.sessionToken,
     });
-  } catch (error) {
-    console.error("[mobile/session/connect]", error instanceof Error ? error.message : "failed");
+  } catch {
+    console.error("[mobile/session/connect]", "failed");
     return NextResponse.json({ error: "Không kết nối được phiên" }, { status: 500 });
   }
 }
+
+export const POST = withApiGuard(POSTHandler);

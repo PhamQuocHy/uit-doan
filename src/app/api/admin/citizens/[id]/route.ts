@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, hierarchyNeedsEditPin } from "@/lib/data";
@@ -18,7 +19,7 @@ import {
   upsertCitizenCampaignHistory,
 } from "@/lib/citizen-campaigns-db";
 
-export async function GET(
+async function GETHandler(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -36,7 +37,7 @@ export async function GET(
   return NextResponse.json(citizen);
 }
 
-export async function PUT(
+async function PUTHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -257,7 +258,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -310,3 +311,7 @@ export async function DELETE(
   }
   return NextResponse.json({ success: true });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PUT = withApiGuard(PUTHandler);
+export const DELETE = withApiGuard(DELETEHandler);

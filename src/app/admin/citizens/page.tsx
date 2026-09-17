@@ -22,6 +22,9 @@ import {
 } from "@/lib/citizens-realtime";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { resolveCitizenAvatarSrc } from "@/lib/citizen-avatar";
+import ExcelExportButton from "@/components/admin/ExcelExportButton";
+import { fetchExportRows } from "@/lib/excel-export";
+import { STATUS_LABELS } from "@/lib/analytics/types";
 
 const CALL_FILTER_OPTIONS = [
   { value: "", label: "Tất cả dự kiến" },
@@ -250,6 +253,7 @@ export default function CitizensPage() {
 
   /** Tăng mỗi lần fetch — bỏ qua response cũ (tránh race / poll stale đổ “Tất cả”). */
   const fetchSeqRef = useRef(0);
+  const exportQueryRef = useRef("");
 
   const fetchCitizens = useCallback(async (opts?: {
     silent?: boolean;
@@ -318,6 +322,7 @@ export default function CitizensPage() {
       const data = await res.json();
       if (seq !== fetchSeqRef.current) return null;
       const list: Citizen[] = Array.isArray(data.data) ? data.data : [];
+      exportQueryRef.current = query.toString();
       setCitizens(list);
       setTotalPages(data.totalPages);
       setTotalCount(data.total ?? 0);
@@ -810,6 +815,14 @@ export default function CitizensPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <ExcelExportButton filename={isArchive ? "ho-so-luu-tru" : "ho-so-cong-dan"}
+            disabled={loading || requiresUnitSelection || !totalCount}
+            getSheets={async (onProgress) => {
+              const rows = await fetchExportRows<Citizen>(`/api/admin/citizens?${exportQueryRef.current}`, onProgress);
+              return [{ name: "Hồ sơ công dân", headers: ["STT", "Họ và tên", "CCCD", "Ngày sinh", "Giới tính", "Địa chỉ", "Mã địa phương", "Điện thoại", "Trình độ", "Nghề nghiệp", "Sức khỏe", "Trạng thái NVQS", "Dự kiến gọi", "Mã đợt"],
+                rows: rows.map((c, i) => [i + 1, c.fullName, c.cccd, c.dateOfBirth, c.gender === "male" ? "Nam" : "Nữ", c.address, c.unitCode, c.phone, c.educationLevel, c.job, c.healthStatus, STATUS_LABELS[c.militaryStatus] || c.militaryStatus, getCallDisplayLabel(c).label, c.campaignId]),
+              }];
+            }} />
           {!isArchive && (
             <>
               <button

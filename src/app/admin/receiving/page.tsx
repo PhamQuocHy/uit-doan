@@ -30,6 +30,7 @@ import {
 } from "@/components/m3";
 import type { HierarchyUnit } from "@/lib/data";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import ReceivingExcelButton from "@/components/admin/ReceivingExcelButton";
 
 const SELECT_CLS =
   "h-9 min-w-[200px] rounded-full border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium outline-none";
@@ -304,6 +305,7 @@ function BoView({ session }: { session: Session }) {
         }
         actions={
           <>
+            {tab === "final" && <ReceivingExcelButton campaignId={campaignId} status={statusFilter} quanKhuCode={quanKhuCode} />}
             <AdminPrimaryBtn
               tone="green"
               disabled={busy || !campaignId}
@@ -747,10 +749,13 @@ function QuanKhuView({ session }: { session: Session }) {
         filters={localityFilters}
         actions={
           tab === "assign" ? (
+            <>
+            <ReceivingExcelButton campaignId={campaignId} status={statusFilter} unitCode={localityFilter} />
             <AdminPrimaryBtn tone="blue" onClick={() => setConfirmOpen(true)}>
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               Chốt danh sách & gửi Bộ ({counts.da_phan_quan})
             </AdminPrimaryBtn>
+            </>
           ) : undefined
         }
       />
@@ -1068,6 +1073,7 @@ function ReceivingOpsView({ session }: { session: Session }) {
     <div className="space-y-4 pb-6">
       <AdminListHeader
         title="Quân số được phân · Xác nhận nhận quân"
+        actions={<ReceivingExcelButton campaignId={campaignId} status={tab} />}
         countLabel={session.name}
         filters={
           <CampaignSelect
@@ -1249,6 +1255,7 @@ function TinhView({ session }: { session: Session }) {
     <div className="space-y-4 pb-6">
       <AdminListHeader
         title="Vị trí nhận quân công dân"
+        actions={<ReceivingExcelButton campaignId={campaignId} status={statusFilter} />}
         countLabel={session.name}
         filters={
           <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
