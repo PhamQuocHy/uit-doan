@@ -244,7 +244,7 @@ function profileFor(slot: Slot, i: number) {
     };
   }
   return {
-    military_status: "trungtuyen",
+    military_status: "truottuyen",
     military_status_reason: "Không đủ tiêu chuẩn sức khỏe / đề xuất không gọi",
     call_intent: "de_xuat_khong_goi",
     approval_status: "pending",
