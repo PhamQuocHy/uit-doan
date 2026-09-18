@@ -271,14 +271,15 @@ export default function Topbar({
   }, []);
 
   useEffect(() => {
-    loadNotifications();
+    const initial = window.setTimeout(loadNotifications, 0);
     const t = window.setInterval(loadNotifications, 15000);
-    return () => window.clearInterval(t);
+    window.addEventListener("human-check-updated", loadNotifications);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(t);
+      window.removeEventListener("human-check-updated", loadNotifications);
+    };
   }, [loadNotifications]);
-
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [searchQuery]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -304,6 +305,7 @@ export default function Topbar({
 
   const goFeature = (href: string) => {
     setSearchQuery("");
+    setActiveIdx(0);
     setSearchOpen(false);
     router.push(href);
   };
@@ -367,6 +369,7 @@ export default function Topbar({
   };
 
   const notiIcon = (type: string) => {
+    if (type === "human_check") return <AlertTriangle size={18} />;
     if (type === "quota_shortage") return <AlertTriangle size={18} />;
     if (type === "approval_pending") return <ClipboardCheck size={18} />;
     if (type === "archive_pending") return <Archive size={18} />;
@@ -415,6 +418,7 @@ export default function Topbar({
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
+                setActiveIdx(0);
                 setSearchOpen(true);
               }}
               onFocus={() => setSearchOpen(true)}

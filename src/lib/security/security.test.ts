@@ -18,6 +18,20 @@ test('CSRF: reject foreign/null origins and cross-site requests; allow same-orig
   assert.equal(isSameOrigin(new Request('http://localhost/api/test', { method: 'POST', headers: { Cookie: 'session=test' } })), false);
   assert.equal(isSameOrigin(new Request('http://localhost/api/test', { method: 'POST', headers: { 'Sec-Fetch-Site': 'cross-site' } })), false);
 });
+test('CSRF: use browser Host when Next binds to 0.0.0.0; reject foreign origins and forwarded spoofing', async () => {
+  for (const host of ['localhost:5305', '127.0.0.1:5305', '192.168.1.10:5305']) {
+    const request = new NextRequest('http://0.0.0.0:5305/api/auth/login', {
+      method: 'POST', headers: { host, origin: `http://${host}` },
+    });
+    assert.equal(isSameOrigin(request), true);
+    assert.equal((await proxy(request)).status, 200);
+    for (const origin of ['https://evil.example', 'null', 'http://localhost:9999']) {
+      assert.equal(isSameOrigin(new Request(request.url, { method: 'POST', headers: {
+        host, origin, 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https',
+      } })), false);
+    }
+  }
+});
 test('Rate limit: reject beyond budget, reset after window, isolate keys', () => {
   const key = crypto.randomUUID();
   assert.equal(consumeLimit(key, 2, 1000, 100), 0);

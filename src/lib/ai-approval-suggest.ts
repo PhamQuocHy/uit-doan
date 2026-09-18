@@ -21,6 +21,7 @@ import {
   isGeminiConfigured,
 } from "@/lib/gemini";
 import { getHealthConclusionMeaning } from "@/lib/data";
+import { reviewSignals } from "@/lib/human-check";
 
 export const AI_APPROVAL_SUGGEST_BATCH_MAX = 20;
 
@@ -36,6 +37,7 @@ export type LocalNvqsSuggestion =
 export type SuggestMode = "local" | "qk";
 
 export type ApprovalSuggestItem = {
+  needsHumanReview?: boolean;
   citizenId: string;
   fullName?: string;
   /** Địa phương: trạng thái NVQS gợi ý */
@@ -442,7 +444,7 @@ async function refineWithGemini(args: {
   const systemInstruction = `Bạn là trợ lý AI hỗ trợ cán bộ NVQS Việt Nam.
 Chỉ gợi ý trong tập nhãn cho phép. Không bịa số liệu ngoài JSON.
 Trả đúng một JSON, không markdown.
-Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
+Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn. Nếu thiếu dữ liệu hoặc chưa chắc chắn, trả thêm needsHumanReview: true và giải thích trong warnings. confidence phải là số từ 0 đến 1.`;
 
   const allowedLocal = [...LOCAL_ALLOWED];
   const prompt =
@@ -496,9 +498,6 @@ Trả JSON:
       const reasons = Array.isArray(obj.reasons)
         ? obj.reasons.map(String).filter(Boolean).slice(0, 6)
         : args.base.reasons;
-      const warnings = Array.isArray(obj.warnings)
-        ? obj.warnings.map(String).filter(Boolean).slice(0, 6)
-        : args.base.warnings;
       const draftNote =
         typeof obj.draftNote === "string" && obj.draftNote.trim()
           ? obj.draftNote.trim()
@@ -508,10 +507,10 @@ Trả JSON:
         suggestion: sug,
         confidence: clampConfidence(obj.confidence, args.base.confidence),
         reasons: reasons.length ? reasons : args.base.reasons,
-        warnings,
         draftNote,
         source: "rules+gemini",
         label: localLabel(sug),
+        ...reviewSignals(args.base, obj),
       };
     }
 
@@ -520,9 +519,6 @@ Trả JSON:
     const reasons = Array.isArray(obj.reasons)
       ? obj.reasons.map(String).filter(Boolean).slice(0, 6)
       : args.base.reasons;
-    const warnings = Array.isArray(obj.warnings)
-      ? obj.warnings.map(String).filter(Boolean).slice(0, 6)
-      : args.base.warnings;
     const draftNote =
       typeof obj.draftNote === "string" && obj.draftNote.trim()
         ? obj.draftNote.trim()
@@ -533,10 +529,10 @@ Trả JSON:
       kind: args.kind,
       confidence: clampConfidence(obj.confidence, args.base.confidence),
       reasons: reasons.length ? reasons : args.base.reasons,
-      warnings,
       draftNote,
       source: "rules+gemini",
       label: qkActionLabel(action, args.kind),
+      ...reviewSignals(args.base, obj),
     };
   } catch (e) {
     console.error("ai-approval-suggest Gemini:", e);
@@ -589,7 +585,7 @@ export async function suggestApprovalBatch(args: {
   const systemInstruction = `Bạn là trợ lý AI hỗ trợ cán bộ NVQS Việt Nam.
 Chỉ gợi ý trong tập nhãn cho phép. Không bịa số liệu ngoài JSON.
 Trả đúng một JSON, không markdown. Giữ nguyên citizenId của từng hồ sơ.
-Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
+Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn. Nếu thiếu dữ liệu hoặc chưa chắc chắn, trả thêm needsHumanReview: true và giải thích trong warnings. confidence phải là số từ 0 đến 1.`;
   const input = snapshots.map((snap, index) => ({
     citizenId: snap.citizenId,
     kind: args.kind || snap.kind,
@@ -625,9 +621,6 @@ Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
       const reasons = Array.isArray(row.reasons)
         ? row.reasons.map(String).filter(Boolean).slice(0, 6)
         : base.reasons;
-      const warnings = Array.isArray(row.warnings)
-        ? row.warnings.map(String).filter(Boolean).slice(0, 6)
-        : base.warnings;
       const draftNote =
         typeof row.draftNote === "string" && row.draftNote.trim()
           ? row.draftNote.trim()
@@ -641,10 +634,10 @@ Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
           suggestion,
           confidence: clampConfidence(row.confidence, base.confidence),
           reasons: reasons.length ? reasons : base.reasons,
-          warnings,
           draftNote,
           source: "rules+gemini" as const,
           label: localLabel(suggestion),
+          ...reviewSignals(base, row),
         };
       }
 
@@ -658,10 +651,10 @@ Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
         kind,
         confidence: clampConfidence(row.confidence, base.confidence),
         reasons: reasons.length ? reasons : base.reasons,
-        warnings,
         draftNote,
         source: "rules+gemini" as const,
         label: qkActionLabel(action, kind),
+        ...reviewSignals(base, row),
       };
     });
   } catch (error) {

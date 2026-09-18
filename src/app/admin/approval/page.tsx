@@ -6,6 +6,7 @@ import type { ApprovalKind, ApprovalRow } from "@/lib/enlistment-approval";
 import { RETURN_TAM_HOAN_MARKER } from "@/lib/enlistment-approval";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
+import HumanCheckNotice from "@/components/admin/HumanCheckNotice";
 import {
   AdminListHeader,
   AdminStatusTabs,
@@ -34,6 +35,7 @@ type CampaignOption = { id: string; name: string; year: number };
 const AI_SUGGEST_BATCH_MAX = 20;
 
 type AiSuggestRow = {
+  humanCheck?: import("@/lib/human-check").HumanCheck;
   citizenId: string;
   action: "approve" | "reject";
   kind?: ApprovalKind;
@@ -722,6 +724,7 @@ export default function ApprovalPage() {
       for (const item of data.items || []) {
         if (!item?.citizenId || !item?.action) continue;
         next[item.citizenId] = {
+          humanCheck: item.humanCheck,
           citizenId: item.citizenId,
           action: item.action === "reject" ? "reject" : "approve",
           kind: item.kind || kind,
@@ -736,9 +739,12 @@ export default function ApprovalPage() {
         };
       }
       setAiSuggestions(next);
+      window.dispatchEvent(new Event("human-check-updated"));
       setToast({
-        message: `Đã gợi ý AI cho ${(data.items || []).length} hồ sơ`,
-        tone: "success",
+        message: (data.items || []).some((item: { humanCheck?: { required: boolean } }) => item.humanCheck?.required)
+          ? "Có hồ sơ cần Human Check. Hãy xem cảnh báo và thông báo trước khi quyết định."
+          : `Đã gợi ý AI cho ${(data.items || []).length} hồ sơ`,
+        tone: (data.items || []).some((item: { humanCheck?: { required: boolean } }) => item.humanCheck?.required) ? "warning" : "success",
       });
     } catch (e) {
       setToast({
@@ -752,6 +758,8 @@ export default function ApprovalPage() {
 
   const applyAiSuggestSelected = async () => {
     const withSuggest = selectedPending.filter((r) => aiSuggestions[r.id]);
+    if (withSuggest.some(r => aiSuggestions[r.id].humanCheck?.required) &&
+      !window.confirm("Danh sách có hồ sơ cần Human Check. Bạn đã đối chiếu từng hồ sơ và minh chứng trước khi áp dụng gợi ý?")) return;
     if (withSuggest.length === 0) {
       setToast({
         message: "Chọn hồ sơ đã có gợi ý AI (bấm Gợi ý AI trước)",
@@ -1571,6 +1579,7 @@ export default function ApprovalPage() {
                               <Sparkles size={11} />
                               {ai.label} ({Math.round(ai.confidence * 100)}%)
                             </span>
+                            <HumanCheckNotice review={ai.humanCheck} />
                             {ai.reasons.length > 0 && (
                               <ul className="list-disc space-y-0.5 pl-3.5 text-[12px] leading-snug text-m3-on-surface">
                                 {ai.reasons.slice(0, 3).map((r) => (
