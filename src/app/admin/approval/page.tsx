@@ -7,6 +7,7 @@ import { RETURN_TAM_HOAN_MARKER } from "@/lib/enlistment-approval";
 import type { Citizen, HierarchyUnit } from "@/lib/data";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import HumanCheckNotice from "@/components/admin/HumanCheckNotice";
+import Modal from "@/components/ui/Modal";
 import {
   AdminListHeader,
   AdminStatusTabs,
@@ -33,6 +34,10 @@ import SearchableSelect from "@/components/ui/SearchableSelect";
 type CampaignOption = { id: string; name: string; year: number };
 
 const AI_SUGGEST_BATCH_MAX = 20;
+
+function readableAiText(text: string): string {
+  return text.replace(/\s*\([^)]*\b(?:healthGrade|healthMeaning|hasGiayKham)\b[^)]*\)/gi, "").trim();
+}
 
 type AiSuggestRow = {
   humanCheck?: import("@/lib/human-check").HumanCheck;
@@ -267,6 +272,14 @@ export default function ApprovalPage() {
   } | null>(null);
   const [provinceReturnReason, setProvinceReturnReason] = useState("");
   const [aiSuggestBusy, setAiSuggestBusy] = useState(false);
+  const [aiReviewList, setAiReviewList] = useState<{
+    fullName: string;
+    suggestion: AiSuggestRow;
+  }[]>([]);
+  const [aiDetail, setAiDetail] = useState<{
+    fullName: string;
+    suggestion: AiSuggestRow;
+  } | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<
     Record<string, AiSuggestRow>
   >({});
@@ -721,24 +734,36 @@ export default function ApprovalPage() {
         throw new Error(data.error || "Không tạo được gợi ý AI");
       }
       const next: Record<string, AiSuggestRow> = { ...aiSuggestions };
+      const reviewList: typeof aiReviewList = [];
       for (const item of data.items || []) {
         if (!item?.citizenId || !item?.action) continue;
         next[item.citizenId] = {
-          humanCheck: item.humanCheck,
+          humanCheck: item.humanCheck ? {
+            ...item.humanCheck,
+            reasons: (item.humanCheck.reasons || []).map((reason: string) => readableAiText(reason)),
+          } : undefined,
           citizenId: item.citizenId,
           action: item.action === "reject" ? "reject" : "approve",
           kind: item.kind || kind,
           confidence: Number(item.confidence) || 0,
           draftNote: String(item.draftNote || ""),
-          reasons: Array.isArray(item.reasons) ? item.reasons.map(String) : [],
+          reasons: Array.isArray(item.reasons) ? item.reasons.map((reason: unknown) => readableAiText(String(reason))) : [],
           warnings: Array.isArray(item.warnings)
-            ? item.warnings.map(String)
+            ? item.warnings.map((warning: unknown) => readableAiText(String(warning)))
             : [],
           label: String(item.label || item.action),
           source: String(item.source || "rules"),
         };
+        if (next[item.citizenId].humanCheck?.required) {
+          reviewList.push({
+            fullName: targets.find((row) => row.id === item.citizenId)?.fullName || "Hồ sơ cần kiểm tra",
+            suggestion: next[item.citizenId],
+          });
+        }
       }
       setAiSuggestions(next);
+      setAiReviewList(reviewList.length > 1 ? reviewList : []);
+      setAiDetail(reviewList.length === 1 ? reviewList[0] : null);
       window.dispatchEvent(new Event("human-check-updated"));
       setToast({
         message: (data.items || []).some((item: { humanCheck?: { required: boolean } }) => item.humanCheck?.required)
@@ -1579,25 +1604,19 @@ export default function ApprovalPage() {
                               <Sparkles size={11} />
                               {ai.label} ({Math.round(ai.confidence * 100)}%)
                             </span>
-                            <HumanCheckNotice review={ai.humanCheck} />
-                            {ai.reasons.length > 0 && (
-                              <ul className="list-disc space-y-0.5 pl-3.5 text-[12px] leading-snug text-m3-on-surface">
-                                {ai.reasons.slice(0, 3).map((r) => (
-                                  <li key={r}>{r}</li>
-                                ))}
-                              </ul>
-                            )}
-                            {ai.warnings.length > 0 && (
-                              <p
-                                className="text-[11px] leading-snug text-m3-warning"
-                                title={ai.warnings.join("\n")}
-                              >
-                                ⚠ {ai.warnings[0]}
-                                {ai.warnings.length > 1
-                                  ? ` (+${ai.warnings.length - 1})`
-                                  : ""}
-                              </p>
-                            )}
+                            <button
+                              type="button"
+                              aria-haspopup="dialog"
+                              aria-label={`Xem chi tiết gợi ý AI của ${row.fullName}`}
+                              onClick={() => {
+                                setAiReviewList([]);
+                                setAiDetail({ fullName: row.fullName, suggestion: ai });
+                              }}
+                              className="inline-flex w-fit items-center gap-1 rounded-md py-1 text-xs font-medium text-m3-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                            >
+                              <Eye size={14} />
+                              Xem chi tiết
+                            </button>
                           </div>
                         );
                       })()}
@@ -1667,6 +1686,72 @@ export default function ApprovalPage() {
           </tbody>
         </AdminTable>
       </AdminListShell>
+
+      {(aiDetail || aiReviewList.length > 0) && (
+        <Modal
+          isOpen
+          onClose={() => {
+            setAiDetail(null);
+            setAiReviewList([]);
+          }}
+          title={aiDetail ? "Chi tiết gợi ý AI" : "Danh sách hồ sơ cần kiểm tra"}
+          size="lg"
+        >
+          {aiDetail ? (
+          <div className="space-y-4 text-sm text-m3-on-surface">
+            {aiReviewList.length > 1 && (
+              <button type="button" onClick={() => setAiDetail(null)} className="font-medium text-m3-primary hover:underline">
+                ← Quay lại danh sách ({aiReviewList.length})
+              </button>
+            )}
+            <div>
+              <p className="font-semibold">{aiDetail.fullName}</p>
+              <p className="mt-1 text-m3-on-surface-variant">
+                {aiDetail.suggestion.label} · Độ tin cậy: {Math.round(aiDetail.suggestion.confidence * 100)}%
+              </p>
+            </div>
+            <HumanCheckNotice review={aiDetail.suggestion.humanCheck} />
+            {aiDetail.suggestion.reasons.length > 0 && (
+              <section>
+                <h3 className="font-semibold">Lý do gợi ý</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {aiDetail.suggestion.reasons.map((reason, index) => (
+                    <li key={index}>{reason}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {aiDetail.suggestion.warnings.length > 0 && (
+              <section>
+                <h3 className="font-semibold text-m3-warning">Cảnh báo</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {aiDetail.suggestion.warnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+          ) : (
+            <div className="space-y-3 text-sm text-m3-on-surface">
+              <p className="text-m3-on-surface-variant">Có {aiReviewList.length} hồ sơ cần đối chiếu trước khi quyết định. Chọn từng hồ sơ để xem chi tiết.</p>
+              <ul className="divide-y divide-m3-outline-variant">
+                {aiReviewList.map((entry) => (
+                  <li key={entry.suggestion.citizenId} className="flex items-center justify-between gap-4 py-3">
+                    <div>
+                      <p className="font-semibold">{entry.fullName}</p>
+                      <p className="mt-1 text-m3-on-surface-variant">{entry.suggestion.label} · Độ tin cậy: {Math.round(entry.suggestion.confidence * 100)}%</p>
+                    </div>
+                    <button type="button" onClick={() => setAiDetail(entry)} aria-label={`Xem chi tiết gợi ý AI của ${entry.fullName}`} className="shrink-0 rounded-md p-2 font-medium text-m3-primary hover:underline">
+                      Xem chi tiết
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Modal>
+      )}
 
       <CitizenDetailModal
         citizen={viewCitizen}
