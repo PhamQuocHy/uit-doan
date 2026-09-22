@@ -21,6 +21,7 @@ import {
   isGeminiConfigured,
 } from "@/lib/gemini";
 import { getHealthConclusionMeaning } from "@/lib/data";
+import { reviewSignals } from "@/lib/human-check";
 
 export const AI_APPROVAL_SUGGEST_BATCH_MAX = 20;
 
@@ -36,6 +37,7 @@ export type LocalNvqsSuggestion =
 export type SuggestMode = "local" | "qk";
 
 export type ApprovalSuggestItem = {
+  needsHumanReview?: boolean;
   citizenId: string;
   fullName?: string;
   /** Địa phương: trạng thái NVQS gợi ý */
@@ -442,7 +444,7 @@ async function refineWithGemini(args: {
   const systemInstruction = `Bạn là trợ lý AI hỗ trợ cán bộ NVQS Việt Nam.
 Chỉ gợi ý trong tập nhãn cho phép. Không bịa số liệu ngoài JSON.
 Trả đúng một JSON, không markdown.
-Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn.`;
+Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn. Nếu thiếu dữ liệu hoặc chưa chắc chắn, trả thêm needsHumanReview: true và giải thích trong warnings. confidence phải là số từ 0 đến 1.`;
 
   const allowedLocal = [...LOCAL_ALLOWED];
   const prompt =
@@ -496,9 +498,6 @@ Trả JSON:
       const reasons = Array.isArray(obj.reasons)
         ? obj.reasons.map(String).filter(Boolean).slice(0, 6)
         : args.base.reasons;
-      const warnings = Array.isArray(obj.warnings)
-        ? obj.warnings.map(String).filter(Boolean).slice(0, 6)
-        : args.base.warnings;
       const draftNote =
         typeof obj.draftNote === "string" && obj.draftNote.trim()
           ? obj.draftNote.trim()
@@ -508,10 +507,10 @@ Trả JSON:
         suggestion: sug,
         confidence: clampConfidence(obj.confidence, args.base.confidence),
         reasons: reasons.length ? reasons : args.base.reasons,
-        warnings,
         draftNote,
         source: "rules+gemini",
         label: localLabel(sug),
+        ...reviewSignals(args.base, obj),
       };
     }
 
@@ -520,9 +519,6 @@ Trả JSON:
     const reasons = Array.isArray(obj.reasons)
       ? obj.reasons.map(String).filter(Boolean).slice(0, 6)
       : args.base.reasons;
-    const warnings = Array.isArray(obj.warnings)
-      ? obj.warnings.map(String).filter(Boolean).slice(0, 6)
-      : args.base.warnings;
     const draftNote =
       typeof obj.draftNote === "string" && obj.draftNote.trim()
         ? obj.draftNote.trim()
@@ -533,10 +529,10 @@ Trả JSON:
       kind: args.kind,
       confidence: clampConfidence(obj.confidence, args.base.confidence),
       reasons: reasons.length ? reasons : args.base.reasons,
-      warnings,
       draftNote,
       source: "rules+gemini",
       label: qkActionLabel(action, args.kind),
+      ...reviewSignals(args.base, obj),
     };
   } catch (e) {
     console.error("ai-approval-suggest Gemini:", e);
@@ -565,24 +561,106 @@ export async function suggestApprovalForCitizen(args: {
 }
 
 export async function suggestApprovalBatch(args: {
-  citizenIds: string[];
+  snapshots: CitizenSuggestSnapshot[];
   mode: SuggestMode;
   kind?: ApprovalKind;
 }): Promise<ApprovalSuggestItem[]> {
-  const ids = [...new Set(args.citizenIds.map(String).filter(Boolean))].slice(
-    0,
-    AI_APPROVAL_SUGGEST_BATCH_MAX,
-  );
-  const out: ApprovalSuggestItem[] = [];
-  for (const id of ids) {
-    const item = await suggestApprovalForCitizen({
-      citizenId: id,
-      mode: args.mode,
-      kind: args.kind,
+  const seen = new Set<string>();
+  const snapshots = args.snapshots
+    .filter((snap) => {
+      if (!snap?.citizenId || seen.has(snap.citizenId)) return false;
+      seen.add(snap.citizenId);
+      return true;
+    })
+    .slice(0, AI_APPROVAL_SUGGEST_BATCH_MAX);
+
+  const bases = snapshots.map((snap) => {
+    const kind = args.kind || snap.kind;
+    return args.mode === "local"
+      ? ruleSuggestLocal(snap)
+      : ruleSuggestQk(snap, kind);
+  });
+  if (!isGeminiConfigured() || bases.length === 0) return bases;
+
+  const systemInstruction = `Bạn là trợ lý AI hỗ trợ cán bộ NVQS Việt Nam.
+Chỉ gợi ý trong tập nhãn cho phép. Không bịa số liệu ngoài JSON.
+Trả đúng một JSON, không markdown. Giữ nguyên citizenId của từng hồ sơ.
+Cán bộ vẫn phải xác nhận — bạn chỉ tư vấn. Nếu thiếu dữ liệu hoặc chưa chắc chắn, trả thêm needsHumanReview: true và giải thích trong warnings. confidence phải là số từ 0 đến 1.`;
+  const input = snapshots.map((snap, index) => ({
+    citizenId: snap.citizenId,
+    kind: args.kind || snap.kind,
+    ruleSuggestion: bases[index],
+    profile: snap,
+  }));
+  const outputShape =
+    args.mode === "local"
+      ? `{"items":[{"citizenId":"...","suggestion":"${[...LOCAL_ALLOWED].join("|")}","confidence":0.0,"reasons":["..."],"draftNote":"...","warnings":["..."]}]}`
+      : `{"items":[{"citizenId":"...","action":"approve|reject","confidence":0.0,"reasons":["..."],"draftNote":"...","warnings":["..."]}]}`;
+
+  try {
+    const raw = await generateGeminiText(
+      `Hãy tinh chỉnh gợi ý rule cho toàn bộ ${input.length} hồ sơ trong một lượt.\n` +
+        `Phải trả đủ đúng một kết quả cho mỗi citizenId.\n\n` +
+        `Dữ liệu:\n${JSON.stringify(input)}\n\nTrả JSON:\n${outputShape}`,
+      { systemInstruction, maxOutputTokens: 8192, timeoutMs: 20_000 },
+    );
+    const parsed = extractJsonObject(raw);
+    const rows = Array.isArray(parsed?.items) ? parsed.items : [];
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const record = row as Record<string, unknown>;
+      const citizenId = String(record.citizenId || "");
+      if (citizenId && seen.has(citizenId)) byId.set(citizenId, record);
+    }
+
+    return bases.map((base, index) => {
+      const snap = snapshots[index];
+      const row = byId.get(snap.citizenId);
+      if (!row) return base;
+      const reasons = Array.isArray(row.reasons)
+        ? row.reasons.map(String).filter(Boolean).slice(0, 6)
+        : base.reasons;
+      const draftNote =
+        typeof row.draftNote === "string" && row.draftNote.trim()
+          ? row.draftNote.trim()
+          : base.draftNote;
+
+      if (args.mode === "local") {
+        const suggestion = String(row.suggestion || "") as LocalNvqsSuggestion;
+        if (!LOCAL_ALLOWED.has(suggestion)) return base;
+        return {
+          ...base,
+          suggestion,
+          confidence: clampConfidence(row.confidence, base.confidence),
+          reasons: reasons.length ? reasons : base.reasons,
+          draftNote,
+          source: "rules+gemini" as const,
+          label: localLabel(suggestion),
+          ...reviewSignals(base, row),
+        };
+      }
+
+      const action =
+        row.action === "approve" || row.action === "reject" ? row.action : null;
+      const kind = args.kind || snap.kind;
+      if (!action) return base;
+      return {
+        ...base,
+        action,
+        kind,
+        confidence: clampConfidence(row.confidence, base.confidence),
+        reasons: reasons.length ? reasons : base.reasons,
+        draftNote,
+        source: "rules+gemini" as const,
+        label: qkActionLabel(action, kind),
+        ...reviewSignals(base, row),
+      };
     });
-    if (item) out.push(item);
+  } catch (error) {
+    console.error("ai-approval-suggest Gemini batch:", error);
+    return bases;
   }
-  return out;
 }
 
 export function suggestMeta() {

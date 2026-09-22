@@ -1,13 +1,22 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/data";
+import { db, getChildUnits, hierarchyUnits, type HierarchyUnit } from "@/lib/data";
 import { getSession } from "@/lib/auth";
 import {
   createOfficialDocumentInDb,
   findOfficialDocumentsFromDb,
   nextOfficialDocCode,
-  saveOfficialDocFiles,
 } from "@/lib/official-documents-db";
-import type { MilitaryDocumentAttachment } from "@/lib/data";
+import type { MilitaryDocument } from "@/lib/data";
+import { pingDb } from "@/lib/db";
+import {
+  ensureMilitaryUnitsInMemory,
+  getProvincesForMilitaryRegion,
+  isQuanKhuOrBtl,
+  MILITARY_REGIONS,
+} from "@/lib/military-regions";
+
+ensureMilitaryUnitsInMemory();
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 const MAX_FILES = 8;
@@ -32,6 +41,64 @@ function isAllowedFile(file: File): boolean {
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot) : "";
   return ALLOWED_EXT.has(ext);
+}
+
+type RecipientUnit = Pick<HierarchyUnit, "code" | "name" | "level">;
+
+function uniqueUnits(units: HierarchyUnit[]): RecipientUnit[] {
+  const seen = new Set<string>();
+  return units
+    .filter((unit) => {
+      if (seen.has(unit.code)) return false;
+      seen.add(unit.code);
+      return true;
+    })
+    .map(({ code, name, level }) => ({ code, name, level }))
+    .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+}
+
+function unitByCode(code: string): HierarchyUnit | undefined {
+  return hierarchyUnits.find((unit) => unit.code === code);
+}
+
+function recipientUnitsFor(unitCode: string, level: string): {
+  outgoing: RecipientUnit[];
+  incoming: RecipientUnit[];
+} {
+  if (level === "bo" || unitCode === "bo") {
+    return { outgoing: uniqueUnits(getChildUnits("bo")), incoming: [] };
+  }
+
+  if (level === "donvi" && isQuanKhuOrBtl(unitCode)) {
+    const provinces = getProvincesForMilitaryRegion(unitCode)
+      .map(unitByCode)
+      .filter((unit): unit is HierarchyUnit => Boolean(unit));
+    return {
+      outgoing: uniqueUnits([...provinces, ...getChildUnits(unitCode)]),
+      incoming: [{ code: "bo", name: "Bộ Quốc phòng", level: "bo" }],
+    };
+  }
+
+  const current = unitByCode(unitCode);
+  const directChildren = getChildUnits(unitCode);
+  const administrativeParent = current?.parentCode
+    ? unitByCode(current.parentCode)
+    : undefined;
+  const militaryRegion =
+    level === "tinh"
+      ? MILITARY_REGIONS.find((region) =>
+          region.provinceCodes?.includes(unitCode),
+        )
+      : undefined;
+  const parents = [
+    administrativeParent,
+    militaryRegion ? unitByCode(militaryRegion.code) : undefined,
+  ].filter((unit): unit is HierarchyUnit => Boolean(unit));
+
+  return {
+    outgoing: uniqueUnits(directChildren),
+    incoming: uniqueUnits(parents),
+  };
 }
 
 async function parseBody(request: NextRequest): Promise<{
@@ -123,7 +190,7 @@ async function parseBody(request: NextRequest): Promise<{
   };
 }
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -133,21 +200,53 @@ export async function GET() {
     unitCode: session.unitCode,
     hierarchyLevel: session.hierarchyLevel,
   });
+  const recipients = recipientUnitsFor(
+    session.unitCode,
+    session.hierarchyLevel,
+  );
+  const forViewer = (documents: MilitaryDocument[]) =>
+    documents.map((document) => ({
+      ...document,
+      type: document.fromUnit === session.unitCode ? "outgoing" : "incoming",
+    }));
   if (fromDb) {
-    return NextResponse.json({ data: fromDb, meta: { source: "mysql" } });
+    const memoryDocs = db.documents.findForUnit(
+      session.unitCode,
+      session.hierarchyLevel,
+    );
+    const persistedIds = new Set(fromDb.map((document) => document.id));
+    const merged = [
+      ...fromDb,
+      ...memoryDocs.filter((document) => !persistedIds.has(document.id)),
+    ];
+    return NextResponse.json({
+      data: forViewer(merged),
+      recipientUnits: recipients,
+      meta: { source: "mysql" },
+    });
   }
 
   const docs = db.documents.findForUnit(
     session.unitCode,
     session.hierarchyLevel,
   );
-  return NextResponse.json({ data: docs, meta: { source: "memory" } });
+  return NextResponse.json({
+    data: forViewer(docs),
+    recipientUnits: recipients,
+    meta: { source: "memory" },
+  });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await pingDb())) {
+    return NextResponse.json(
+      { error: "Không kết nối được cơ sở dữ liệu. Công văn chưa được gửi." },
+      { status: 503 },
+    );
   }
 
   const parsed = await parseBody(request);
@@ -163,73 +262,46 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const now = new Date().toISOString().slice(0, 10);
-  const code = await nextOfficialDocCode(type);
-
-  const fromDb = await createOfficialDocumentInDb({
-    code,
-    title,
-    content: content || "",
-    type,
-    fromUnit: session.unitCode,
-    toUnits,
-    date: now,
-    status: "sent",
-    urgent,
-    createdBy: session.userId,
-    files,
-  });
-  if (fromDb) {
-    for (const unit of toUnits) {
-      if (unit === session.unitCode) continue;
-      db.notifications.create({
-        toUnit: unit,
-        type: "document_incoming",
-        title: urgent ? "Công văn đến (khẩn)" : "Công văn đến",
-        message: `${session.name} gửi: ${title}`,
-        relatedHref: "/admin/documents",
-      });
-    }
-    db.notifications.create({
-      toUnit: session.unitCode,
-      type: "document_outgoing",
-      title: urgent ? "Công văn đi (khẩn)" : "Công văn đi",
-      message: `Đã gửi “${title}” tới ${toUnits.length} đơn vị.`,
-      relatedHref: "/admin/documents",
-    });
+  const recipientOptions = recipientUnitsFor(
+    session.unitCode,
+    session.hierarchyLevel,
+  );
+  const allowedRecipients = new Set(recipientOptions[type].map((unit) => unit.code));
+  const invalidRecipients = toUnits.filter((unit) => !allowedRecipients.has(unit));
+  if (invalidRecipients.length > 0) {
     return NextResponse.json(
-      { data: fromDb, meta: { source: "mysql" } },
-      { status: 201 },
+      { error: "Đơn vị nhận không hợp lệ hoặc không thuộc phạm vi gửi công văn" },
+      { status: 403 },
     );
   }
 
-  // Fallback memory + vẫn lưu file lên disk
-  const tempId = `mem_${Date.now().toString(36)}`;
-  let attachments: MilitaryDocumentAttachment[] = [];
-  if (files.length) {
-    const saved = await saveOfficialDocFiles(tempId, files);
-    attachments = saved.map((f) => ({
-      id: f.id,
-      fileName: f.fileName,
-      url: `/${f.relativePath}`,
-      mimeType: f.mimeType,
-      sizeBytes: f.sizeBytes,
-    }));
-  }
+  const now = new Date().toISOString().slice(0, 10);
+  const code = await nextOfficialDocCode(type);
 
-  const doc = db.documents.create({
-    code,
-    title,
-    content: content || "",
-    type,
-    fromUnit: session.unitCode,
-    toUnits,
-    date: now,
-    status: "sent",
-    urgent,
-    createdBy: session.userId,
-    attachments,
-  });
+  let doc: MilitaryDocument;
+  try {
+    const saved = await createOfficialDocumentInDb({
+      code,
+      title,
+      content: content || "",
+      type,
+      fromUnit: session.unitCode,
+      toUnits,
+      date: now,
+      status: "sent",
+      urgent,
+      createdBy: session.userId,
+      files,
+    });
+    if (!saved) throw new Error("Database unavailable");
+    doc = saved;
+  } catch (error) {
+    console.error("POST /api/admin/documents:", error);
+    return NextResponse.json(
+      { error: "Không lưu được công văn vào cơ sở dữ liệu. Vui lòng thử lại." },
+      { status: 500 },
+    );
+  }
 
   for (const unit of toUnits) {
     if (unit === session.unitCode) continue;
@@ -250,7 +322,10 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json(
-    { data: doc, meta: { source: "memory" } },
+    { data: doc, meta: { source: "mysql" } },
     { status: 201 },
   );
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

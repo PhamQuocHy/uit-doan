@@ -1,8 +1,9 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { canManageMembers, canManageUser, isAssignableRole } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/data";
 import { getSession } from "@/lib/auth";
-import { hashPassword, isHashed } from "@/lib/password";
+import { hashPassword } from "@/lib/password";
 import {
   findUserByIdFromDb,
   inferFunctionalRoleFromRoleCode,
@@ -19,7 +20,7 @@ function isMilitaryDonvi(unitCode: string): boolean {
   return ALL_MILITARY_UNITS.some((u) => u.code === unitCode);
 }
 
-export async function GET(
+async function GETHandler(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -34,7 +35,7 @@ export async function GET(
   return NextResponse.json(safeUser);
 }
 
-export async function PUT(
+async function PUTHandler(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -71,13 +72,13 @@ export async function PUT(
 
   let passwordHash: string | undefined;
   if (typeof password === "string" && password.trim()) {
-    if (password.trim().length < 6) {
+    if (password.trim().length < 12 || password.length > 256) {
       return NextResponse.json(
-        { error: "Mật khẩu mới phải có ít nhất 6 ký tự" },
+        { error: "Mật khẩu mới phải có từ 12 đến 256 ký tự" },
         { status: 400 },
       );
     }
-    passwordHash = isHashed(password) ? password : hashPassword(password);
+    passwordHash = hashPassword(password);
   }
 
   const unitCode =
@@ -237,7 +238,7 @@ export async function PUT(
   return NextResponse.json(updated);
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -277,3 +278,7 @@ export async function DELETE(
   }
   return NextResponse.json({ success: true });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PUT = withApiGuard(PUTHandler);
+export const DELETE = withApiGuard(DELETEHandler);

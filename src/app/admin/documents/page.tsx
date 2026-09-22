@@ -56,6 +56,7 @@ interface Doc {
 interface ChildUnit {
   code: string;
   name: string;
+  level?: string;
 }
 
 interface Session {
@@ -112,7 +113,10 @@ function formatBytes(n: number): string {
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<Doc[]>([]);
-  const [childUnits, setChildUnits] = useState<ChildUnit[]>([]);
+  const [recipientUnits, setRecipientUnits] = useState<{
+    outgoing: ChildUnit[];
+    incoming: ChildUnit[];
+  }>({ outgoing: [], incoming: [] });
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -135,10 +139,13 @@ export default function DocumentsPage() {
     selectedUnits: [] as string[],
   });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const childUnits = recipientUnits[form.type];
 
   const unitNameMap = useMemo(() => {
     const map: Record<string, string> = { ...unitNamesFallback };
-    for (const u of childUnits) map[u.code] = u.name;
+    for (const u of [...recipientUnits.outgoing, ...recipientUnits.incoming]) {
+      map[u.code] = u.name;
+    }
     if (session?.unitCode) {
       map[session.unitCode] =
         map[session.unitCode] ||
@@ -146,7 +153,7 @@ export default function DocumentsPage() {
         session.unitCode;
     }
     return map;
-  }, [childUnits, session]);
+  }, [recipientUnits, session]);
 
   const resolveUnit = (code: string) => unitNameMap[code] || code;
 
@@ -163,12 +170,14 @@ export default function DocumentsPage() {
     if (docsRes.ok) {
       const d = await docsRes.json();
       setDocs(d.data || []);
-
-      const quotasRes = await fetch("/api/admin/quotas");
-      if (quotasRes.ok) {
-        const q = await quotasRes.json();
-        setChildUnits(q.childUnits || []);
-      }
+      setRecipientUnits({
+        outgoing: Array.isArray(d.recipientUnits?.outgoing)
+          ? d.recipientUnits.outgoing
+          : [],
+        incoming: Array.isArray(d.recipientUnits?.incoming)
+          ? d.recipientUnits.incoming
+          : [],
+      });
     }
     setLoading(false);
   }, []);
@@ -182,11 +191,14 @@ export default function DocumentsPage() {
   }, [search, typeFilter]);
 
   const resetCompose = () => {
+    const defaultType = recipientUnits.outgoing.length
+      ? "outgoing"
+      : "incoming";
     setForm({
       title: "",
       content: "",
       urgent: false,
-      type: "outgoing",
+      type: defaultType,
       selectedUnits: [],
     });
     setPendingFiles([]);
@@ -254,8 +266,17 @@ export default function DocumentsPage() {
         );
         return;
       }
+      if (data.data?.id) {
+        const created = { ...data.data, type: "outgoing" } as Doc;
+        setDocs((current) => [
+          created,
+          ...current.filter((document) => document.id !== created.id),
+        ]);
+      }
       closeCompose();
-      await fetchData();
+      setTypeFilter("outgoing");
+      setSearch("");
+      setPage(1);
     } catch {
       setSubmitError("Lỗi kết nối khi gửi công văn");
     } finally {
@@ -303,7 +324,7 @@ export default function DocumentsPage() {
     <div className="space-y-4 pb-6">
       <AdminListHeader
         title="Công văn đến / đi"
-        countLabel={`${filtered.length.toLocaleString("vi-VN")} công văn`}
+        countLabel={`${docs.length.toLocaleString("vi-VN")} công văn`}
         actions={
           <AdminPrimaryBtn onClick={openCompose}>
             <Plus size={16} />
@@ -548,13 +569,20 @@ export default function DocumentsPage() {
                           setForm({
                             ...form,
                             type: e.target.value as "outgoing" | "incoming",
+                            selectedUnits: [],
                           })
                         }
                       >
-                        <option value="outgoing">
+                        <option
+                          value="outgoing"
+                          disabled={recipientUnits.outgoing.length === 0}
+                        >
                           Công văn đi — gửi cấp dưới
                         </option>
-                        <option value="incoming">
+                        <option
+                          value="incoming"
+                          disabled={recipientUnits.incoming.length === 0}
+                        >
                           Báo cáo lên — gửi cấp trên
                         </option>
                       </select>
@@ -602,7 +630,9 @@ export default function DocumentsPage() {
                           placeholder={
                             childUnits.length
                               ? "Gõ để tìm đơn vị nhận..."
-                              : "Không có đơn vị cấp dưới"
+                              : form.type === "outgoing"
+                                ? "Không có đơn vị cấp dưới"
+                                : "Không có đơn vị cấp trên"
                           }
                           className="w-full border-0 bg-transparent py-1 text-[14px] outline-none placeholder:text-m3-on-surface-variant/70"
                           disabled={!childUnits.length}

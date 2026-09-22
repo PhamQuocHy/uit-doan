@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { findCitizenByIdFromDb } from "@/lib/citizens-db";
@@ -18,7 +19,7 @@ function pickUploadFile(form: FormData): File | null {
 }
 
 /** POST multipart: citizenId + file — tránh lỗi Nest route [id]/avatar với Turbopack. */
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+async function DELETEHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -88,3 +89,6 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const DELETE = withApiGuard(DELETEHandler);

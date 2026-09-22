@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { listHumanCheckNotifications, readHumanCheckNotifications } from "@/lib/human-check-notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, hierarchyUnits } from "@/lib/data";
@@ -304,7 +306,7 @@ function findMemoryNotifications(unitCode: string): NotiItem[] {
   }));
 }
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -315,9 +317,10 @@ export async function GET() {
     session.unitCode,
   );
   const memory = findMemoryNotifications(session.unitCode);
+  const humanChecks = await listHumanCheckNotifications(session);
 
   const seen = new Set<string>();
-  const data = [...memory, ...system]
+  const data = [...humanChecks, ...memory, ...system]
     .sort((a, b) => {
       const tb = Date.parse(b.createdAt) || 0;
       const ta = Date.parse(a.createdAt) || 0;
@@ -334,7 +337,7 @@ export async function GET() {
   return NextResponse.json({ data, unread });
 }
 
-export async function PATCH(request: NextRequest) {
+async function PATCHHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -342,12 +345,18 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   if (body.all === true) {
+    await readHumanCheckNotifications(session);
     db.notifications.markAllRead(session.unitCode);
     return NextResponse.json({ ok: true });
   }
 
   if (body.id) {
     const id = String(body.id);
+    if (id.startsWith("hc-")) {
+      if (!/^hc-[a-f0-9]{64}$/.test(id)) return NextResponse.json({ error: "Thông báo không hợp lệ" }, { status: 400 });
+      const updated = await readHumanCheckNotifications(session, id);
+      return NextResponse.json(updated ? { ok: true } : { error: "Không tìm thấy thông báo" }, { status: updated ? 200 : 404 });
+    }
     if (id.startsWith("sys-")) {
       return NextResponse.json({ ok: true, data: { id, read: true } });
     }
@@ -360,3 +369,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ error: "Thiếu tham số" }, { status: 400 });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PATCH = withApiGuard(PATCHHandler);

@@ -1,9 +1,10 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { buildAnalyticsDashboard } from "@/lib/analytics";
 import { pingDb } from "@/lib/db";
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -49,11 +50,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Lỗi aggregation analytics. Chạy npm run db:migrate && npm run db:seed-analytics",
+          "Lỗi aggregation analytics. Chạy npm run db:migrate && npm run db:seed-analytics",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = withApiGuard(GETHandler);

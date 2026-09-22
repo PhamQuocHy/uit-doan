@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { buildChatKnowledgeContext, buildDirectCitizenStatsReply } from "@/lib/analytics/chat-context";
@@ -25,7 +26,7 @@ Tuyệt đối KHÔNG viết tiếng Việt không dấu.
 
 Chỉ dùng dữ liệu ngữ cảnh. Không bịa số. Nếu ngữ cảnh đã liệt kê tỉnh đó, PHẢI trả lời đúng con số đó.`;
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -126,17 +127,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Không trả lời được câu hỏi",
+          "Không trả lời được câu hỏi",
       },
       { status: 500 },
     );
   }
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai/chat",
     configured: isGeminiConfigured(),
-    model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+    model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
   });
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const GET = withApiGuard(GETHandler);

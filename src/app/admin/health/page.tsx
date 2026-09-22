@@ -406,7 +406,7 @@ export default function HealthQueuePage() {
       {totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-center gap-1">
           {pageItems.map((item, i) =>
-            item === "…" ? (
+            item === "ellipsis" ? (
               <span key={`e-${i}`} className="px-2 text-m3-on-surface-variant">
                 …
               </span>

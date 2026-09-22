@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { pingDb } from "@/lib/db";
@@ -59,7 +60,7 @@ function unitInScope(
   );
 }
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -210,3 +211,5 @@ export async function POST(
     },
   });
 }
+
+export const POST = withApiGuard(POSTHandler);

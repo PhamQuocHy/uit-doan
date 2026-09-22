@@ -54,3 +54,8 @@ npx cap open ios
 Trong Xcode: bật capability **Near Field Communication Tag Reading**, chọn team signing, gắn `App.entitlements`, đặt app icon từ `resources/icon.png`.
 
 Luồng: PC **Nhận dạng AI** tạo mã → iPhone `/mobile/connect` nhập mã → quét NFC (CAN/PACE) + chụp CCCD → đối chiếu → PC nhận SSE không cần F5.
+
+## Bảo mật và kiểm thử OWASP
+
+Xem [10 lớp bảo mật, vị trí mã nguồn và hướng dẫn test](docs/security/OWASP-SECURITY.md).
+Chạy `npm run test:security` và `npm run security:audit`; kiểm tra HTTP trên ứng dụng đang chạy bằng `npm run test:security:http` (mặc định cổng 5316).

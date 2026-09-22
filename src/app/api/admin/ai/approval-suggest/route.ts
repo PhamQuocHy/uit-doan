@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { notifyHumanChecks } from "@/lib/human-check-notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getUnitDescendants } from "@/lib/data";
@@ -6,7 +8,6 @@ import {
   AI_APPROVAL_SUGGEST_BATCH_MAX,
   loadCitizenSuggestSnapshot,
   suggestApprovalBatch,
-  suggestApprovalForCitizen,
   suggestMeta,
   type SuggestMode,
 } from "@/lib/ai-approval-suggest";
@@ -54,14 +55,14 @@ function unitInScope(
   return allowed.has(code) || code === sessionUnit || code.startsWith(`${sessionUnit}-`);
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai/approval-suggest",
     ...suggestMeta(),
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -114,19 +115,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowedIds: string[] = [];
-  for (const id of ids) {
-    const snap = await loadCitizenSuggestSnapshot(id);
-    if (!snap) continue;
-    if (
-      !unitInScope(snap.unitCode, session.hierarchyLevel, session.unitCode)
-    ) {
-      continue;
-    }
-    allowedIds.push(id);
-  }
+  const snapshots = await Promise.all(ids.map(loadCitizenSuggestSnapshot));
+  const allowedSnapshots = snapshots.filter(
+    (snap): snap is NonNullable<typeof snap> =>
+      snap !== null &&
+      unitInScope(snap.unitCode, session.hierarchyLevel, session.unitCode),
+  );
 
-  if (allowedIds.length === 0) {
+  if (allowedSnapshots.length === 0) {
     return NextResponse.json(
       { error: "Không có hồ sơ hợp lệ trong phạm vi quản lý" },
       { status: 404 },
@@ -134,26 +130,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const items: Awaited<ReturnType<typeof suggestApprovalBatch>> = [];
-    if (allowedIds.length === 1) {
-      const one = await suggestApprovalForCitizen({
-        citizenId: allowedIds[0],
-        mode,
-        kind,
-      });
-      if (one) items.push(one);
-    } else {
-      items.push(
-        ...(await suggestApprovalBatch({
-          citizenIds: allowedIds,
-          mode,
-          kind,
-        })),
-      );
-    }
+    const items = await suggestApprovalBatch({
+      snapshots: allowedSnapshots,
+      mode,
+      kind,
+    });
 
+    const reviewedItems = await notifyHumanChecks(session, items, `approval:${mode}:${kind || "auto"}`,
+      mode === "qk" ? "/admin/approval" : "/admin/citizens", true);
     return NextResponse.json({
-      items,
+      items: reviewedItems,
       meta: {
         ...suggestMeta(),
         requested: ids.length,
@@ -167,9 +153,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          e instanceof Error ? e.message : "Không tạo được gợi ý AI",
+          "Không tạo được gợi ý AI hoặc lưu thông báo Human Check. Vui lòng thử lại.",
       },
       { status: 500 },
     );
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { validatePdf } from "@/lib/security/controls";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { listLegalDocuments } from "@/lib/legal-docs";
@@ -6,7 +8,7 @@ import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +18,7 @@ export async function GET() {
   return NextResponse.json({ data, source, total: data.length });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -34,9 +36,8 @@ export async function POST(request: NextRequest) {
   if (!code || !title || !issuer || !(file instanceof File)) {
     return NextResponse.json({ error: "Vui lòng nhập đủ thông tin và chọn file PDF" }, { status: 400 });
   }
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json({ error: "Chỉ chấp nhận file PDF" }, { status: 400 });
-  }
+  const pdfError = await validatePdf(file);
+  if (pdfError) return NextResponse.json({ error: pdfError }, { status: 400 });
 
   const id = `custom-${randomUUID()}`;
   const fileName = `${id}.pdf`;
@@ -54,3 +55,6 @@ export async function POST(request: NextRequest) {
   );
   return NextResponse.json({ data: { id, code, title } }, { status: 201 });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

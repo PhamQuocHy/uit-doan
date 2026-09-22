@@ -1619,9 +1619,8 @@ export const db = {
   // ── Documents ────────────────────────────────────────────────────────────
   documents: {
     findForUnit: (unitCode: string, hierarchyLevel: string) => {
-      // 'bo' level can see all documents
-      if (hierarchyLevel === 'bo') return [...militaryDocuments];
-      // Others see docs where their unitCode is in toUnits OR they are the sender
+      void hierarchyLevel;
+      // Chỉ xem công văn gửi đến đơn vị hoặc do chính đơn vị phát hành.
       return militaryDocuments.filter(
         (d) => d.toUnits.includes(unitCode) || d.fromUnit === unitCode
       );

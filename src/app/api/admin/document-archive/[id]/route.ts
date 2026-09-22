@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { validatePdf, safePdfName } from "@/lib/security/controls";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getLegalDocument } from "@/lib/legal-docs";
@@ -5,7 +7,7 @@ import { queryExecute } from "@/lib/db";
 import fs from "fs/promises";
 import path from "path";
 
-export async function GET(
+async function GETHandler(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -23,7 +25,7 @@ export async function GET(
   return NextResponse.json({ data: doc });
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -43,8 +45,9 @@ export async function PATCH(
   if (!code || !title || !issuer) {
     return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
   }
-  if (file instanceof File && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json({ error: "Chỉ chấp nhận file PDF" }, { status: 400 });
+  if (file instanceof File && file.size > 0) {
+    const pdfError = await validatePdf(file);
+    if (pdfError) return NextResponse.json({ error: pdfError }, { status: 400 });
   }
   const result = await queryExecute(
     `UPDATE legal_documents
@@ -57,7 +60,7 @@ export async function PATCH(
   if (!result.affectedRows) return NextResponse.json({ error: "Không tìm thấy văn bản ở cấp của bạn" }, { status: 404 });
   if (file instanceof File && file.size > 0) {
     const current = await getLegalDocument(id, session.hierarchyLevel);
-    if (current) {
+    if (current && safePdfName(current.file_name)) {
       const publicDir = path.join(process.cwd(), "public", "documents", "nvqs");
       await fs.writeFile(path.join(publicDir, current.file_name), Buffer.from(await file.arrayBuffer()));
     }
@@ -65,7 +68,7 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -78,8 +81,12 @@ export async function DELETE(
     "UPDATE legal_documents SET is_active = 0 WHERE id = ? AND hierarchy_level = ?",
     [id, session.hierarchyLevel],
   );
-  if (result.affectedRows && doc.file_name.startsWith("custom-")) {
+  if (result.affectedRows && doc.file_name.startsWith("custom-") && safePdfName(doc.file_name)) {
     await fs.rm(path.join(process.cwd(), "public", "documents", "nvqs", doc.file_name), { force: true });
   }
   return NextResponse.json({ ok: true });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PATCH = withApiGuard(PATCHHandler);
+export const DELETE = withApiGuard(DELETEHandler);

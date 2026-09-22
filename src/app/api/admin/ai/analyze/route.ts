@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { buildAnalyticsDashboard } from "@/lib/analytics";
@@ -7,7 +8,7 @@ import { resolveScopeUnit } from "@/lib/analytics/scope";
 import { isGeminiConfigured } from "@/lib/gemini";
 import { pingDb } from "@/lib/db";
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -67,17 +68,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Không tạo được phân tích AI",
+          "Không tạo được phân tích AI",
       },
       { status: 500 },
     );
   }
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai/analyze",
     configured: isGeminiConfigured(),
-    model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+    model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
   });
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const GET = withApiGuard(GETHandler);

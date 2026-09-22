@@ -1,8 +1,9 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/data';
 import { getSession } from '@/lib/auth';
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(result);
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== 'admin')
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -38,3 +39,6 @@ export async function POST(request: NextRequest) {
   });
   return NextResponse.json(dept, { status: 201 });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

@@ -6,7 +6,7 @@ export type GeminiChatMessage = {
 };
 
 export function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL || "gemini-3-flash-preview";
+  return process.env.GEMINI_MODEL || "gemini-3.5-flash";
 }
 
 export function isGeminiConfigured(): boolean {
@@ -18,7 +18,10 @@ type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
 };
 
-async function callGemini(body: Record<string, unknown>): Promise<string> {
+async function callGemini(
+  body: Record<string, unknown>,
+  timeoutMs?: number,
+): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(
@@ -29,14 +32,29 @@ async function callGemini(body: Record<string, unknown>): Promise<string> {
   const model = getGeminiModel();
   const url = `${GEMINI_BASE}/models/${model}:generateContent`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(body),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (error) {
+    if (controller?.signal.aborted && timeoutMs) {
+      throw new Error(`Gemini phản hồi quá ${Math.ceil(timeoutMs / 1000)} giây.`);
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 
   const data = (await res.json()) as GeminiResponse;
 
@@ -133,18 +151,25 @@ export async function generateGeminiJsonFromImages(args: {
 
 export async function generateGeminiText(
   prompt: string,
-  options?: { systemInstruction?: string },
+  options?: {
+    systemInstruction?: string;
+    maxOutputTokens?: number;
+    timeoutMs?: number;
+  },
 ): Promise<string> {
-  return callGemini({
-    systemInstruction: options?.systemInstruction
-      ? { parts: [{ text: options.systemInstruction }] }
-      : undefined,
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.35,
-      maxOutputTokens: 2048,
+  return callGemini(
+    {
+      systemInstruction: options?.systemInstruction
+        ? { parts: [{ text: options.systemInstruction }] }
+        : undefined,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.35,
+        maxOutputTokens: options?.maxOutputTokens ?? 2048,
+      },
     },
-  });
+    options?.timeoutMs,
+  );
 }
 
 /** Nhận dạng / trích xuất từ file âm thanh (webm, mp3, wav, …) */

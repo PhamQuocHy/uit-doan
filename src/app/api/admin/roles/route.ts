@@ -1,10 +1,11 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { canEditGlobalRoles } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createRoleInDb, ensureMedicalOfficerRole, findRolesFromDb } from "@/lib/roles-db";
 import { writeAuditLog } from "@/lib/audit-log";
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -66,3 +67,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);
