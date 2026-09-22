@@ -55,7 +55,7 @@ async function main() {
     }
   }
 
-  const migDir = path.join(process.cwd(), "dacta", "migrations");
+  const migDir = path.join(process.cwd(), "migrations");
   const files = fs
     .readdirSync(migDir)
     .filter((f) => f.endsWith(".sql"))

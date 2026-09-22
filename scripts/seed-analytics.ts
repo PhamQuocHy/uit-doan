@@ -198,7 +198,7 @@ export async function main() {
   });
 
   const migration = fs.readFileSync(
-    path.join(process.cwd(), "dacta", "migrations", "001_analytics_ready.sql"),
+    path.join(process.cwd(), "migrations", "001_analytics_ready.sql"),
     "utf8"
   );
   await conn.query(migration);

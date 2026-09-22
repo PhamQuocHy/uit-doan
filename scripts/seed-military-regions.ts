@@ -1,11 +1,9 @@
 /**
  * Đồng bộ quân khu / quân đoàn / sư đoàn / trung đoàn + TK demo vào MySQL.
- * Đặt mật khẩu toàn hệ thống = admin123 và ghi file tài khoản.
+ * Đặt mật khẩu toàn hệ thống = admin123.
  *
  * Chạy: npx tsx scripts/seed-military-regions.ts
  */
-import fs from "fs";
-import path from "path";
 import mysql, { RowDataPacket } from "mysql2/promise";
 import { loadEnv } from "./load-env";
 import { hashPassword } from "../src/lib/password";
@@ -175,84 +173,9 @@ async function main() {
     passHash,
   ]);
 
-  const [allUsers] = await conn.query<RowDataPacket[]>(
-    `SELECT u.username, u.full_name, u.unit_code, u.functional_role, hu.name AS unit_name, hu.level AS unit_level
-     FROM users u
-     LEFT JOIN hierarchy_units hu ON hu.code = u.unit_code
-     WHERE u.status = 'active'
-     ORDER BY
-       FIELD(IFNULL(hu.level,'z'), 'bo','donvi','tinh','xa'),
-       u.username`,
-  );
-
-  const outPath = path.join(process.cwd(), "docs", "TAI-KHOAN-DEMO.md");
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-
-  const lines: string[] = [
-    "# Tài khoản demo hệ thống NVQS",
-    "",
-    `Cập nhật: ${new Date().toISOString().slice(0, 10)}`,
-    "",
-    `**Mật khẩu thống nhất tạm thời:** \`${DEMO_PASSWORD}\` (đổi sau khi bàn giao).`,
-    "",
-    "## Cách đăng nhập",
-    "",
-    "| Portal | Ghi chú |",
-    "|---|---|",
-    "| Cấp bộ | Không chọn đơn vị |",
-    "| Quân khu | Chọn Quân khu / BTL |",
-    "| Địa phương | Chọn tỉnh / xã |",
-    "| Đơn vị nhận quân | Chọn sư đoàn / quân đoàn / trung đoàn |",
-    "| Cán bộ y tế | Chọn tỉnh / xã |",
-    "",
-    "## Toàn bộ tài khoản active",
-    "",
-    "| Username | Mật khẩu | Họ tên | Đơn vị | Cấp | Vai trò chức năng |",
-    "|---|---|---|---|---|---|",
-  ];
-
-  for (const u of allUsers) {
-    lines.push(
-      `| \`${u.username}\` | \`${DEMO_PASSWORD}\` | ${u.full_name || ""} | ${u.unit_name || u.unit_code || ""} (\`${u.unit_code || ""}\`) | ${u.unit_level || ""} | ${u.functional_role || ""} |`,
-    );
-  }
-
-  lines.push(
-    "",
-    "## Đơn vị quân sự đã seed (nhận quân)",
-    "",
-    `Tổng: **${ALL_MILITARY_UNITS.length}** đơn vị (${MILITARY_REGIONS.length} quân khu/BTL + ${MILITARY_SUB_UNITS.length} quân đoàn/sư đoàn/trung đoàn).`,
-    "",
-    "### Quân khu / BTL",
-    "",
-  );
-  for (const r of MILITARY_REGIONS) {
-    lines.push(
-      `- \`${usernameForUnit(r)}\` — ${r.name} (\`${r.code}\`) · tỉnh: ${(r.provinceCodes || []).join(", ")}`,
-    );
-  }
-  lines.push("", "### Quân đoàn / Sư đoàn / Trung đoàn", "");
-  for (const u of MILITARY_SUB_UNITS) {
-    lines.push(
-      `- \`${usernameForUnit(u)}\` — ${u.name} (\`${u.code}\`) · parent \`${u.parentCode}\` · ${u.kind}`,
-    );
-  }
-  lines.push(
-    "",
-    "## Ghi chú nguồn dữ liệu",
-    "",
-    "- Sư đoàn bộ binh theo danh sách công khai Wikipedia (QĐND VN), gồm QK1–5,7,9, BTL Thủ đô (SD 301), Quân đoàn 12 & 34.",
-    "- Mỗi sư đoàn gắn 03 trung đoàn bộ binh theo biên chế chuẩn (TD 1/2/3) vì số hiệu trung đoàn nội bộ không công bố đầy đủ.",
-    "- Thêm Trung đoàn 152 độc lập (Quân khu 9) theo nguồn công khai.",
-    "",
-  );
-
-  fs.writeFileSync(outPath, lines.join("\n"), "utf8");
-
   console.log(`Seeded ${ALL_MILITARY_UNITS.length} military units.`);
   console.log(`Military accounts: ${accountRows.length}`);
   console.log(`All active users password → ${DEMO_PASSWORD}`);
-  console.log(`Accounts file: ${outPath}`);
   await conn.end();
 }
 

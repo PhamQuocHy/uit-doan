@@ -9,7 +9,6 @@ import mysql from "mysql2/promise";
 async function main() {
   const sqlPath = path.join(
     process.cwd(),
-    "dacta",
     "migrations",
     "014_official_documents.sql",
   );
