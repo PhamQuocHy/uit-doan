@@ -1,5 +1,5 @@
 /**
- * Run SQL migrations in dacta/migrations against configured MySQL.
+ * Run SQL migrations in migrations against configured MySQL.
  * Usage: npx tsx scripts/run-migration.ts
  */
 import fs from "fs";
@@ -10,7 +10,7 @@ import { loadEnv } from "./load-env";
 loadEnv();
 
 async function main() {
-  const dir = path.join(process.cwd(), "dacta", "migrations");
+  const dir = path.join(process.cwd(), "migrations");
   const files = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))

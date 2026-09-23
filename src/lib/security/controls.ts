@@ -46,7 +46,21 @@ export function validLogin(body: Record<string, unknown>): boolean {
 export function isSameOrigin(request: Request): boolean {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
   const origin = request.headers.get('origin');
-  if (origin) return origin === new URL(request.url).origin;
+  if (origin) {
+    const target = new URL(request.url);
+    // Next.js can construct request.url with the bind address (0.0.0.0).
+    // Host preserves the authority the browser actually requested. Do not trust
+    // forwarded headers supplied by clients to override this CSRF boundary.
+    const host = request.headers.get('host');
+    if (host) {
+      try {
+        const external = new URL(`${target.protocol}//${host}`);
+        if (external.host !== host.toLowerCase() || external.username || external.password) return false;
+        return origin === external.origin;
+      } catch { return false; }
+    }
+    return origin === target.origin;
+  }
   // Non-browser clients do not send Origin; cross-site browser requests still fail.
   const site = request.headers.get('sec-fetch-site');
   if (site === 'cross-site' || site === 'same-site') return false;

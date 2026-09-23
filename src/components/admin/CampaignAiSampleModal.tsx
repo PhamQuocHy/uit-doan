@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sparkles, X, Loader2, CheckCircle2 } from "lucide-react";
+import HumanCheckNotice from "@/components/admin/HumanCheckNotice";
 import {
   AdminPrimaryBtn,
   AdminGhostBtn,
@@ -11,6 +12,7 @@ import {
 } from "@/components/admin/list-ui";
 
 export type AiSampleRow = {
+  humanCheck?: import("@/lib/human-check").HumanCheck;
   citizenId: string;
   fullName: string;
   cccd: string;
@@ -88,14 +90,15 @@ export default function CampaignAiSampleModal({
       if (!res.ok) throw new Error(json.error || "Không phân tích được");
       const rows = (json.items || []) as AiSampleRow[];
       setItems(rows);
+      window.dispatchEvent(new Event("human-check-updated"));
       setSummary(json.summary || null);
       const next: Record<string, boolean> = {};
       for (const row of rows) {
         // Chọn sẵn: dự kiến gọi / tạm hoãn độ tin cậy cao + mọi hồ sơ tạm hoãn đợt trước
         next[row.citizenId] =
-          Boolean(row.fromPreviousDeferral) ||
+          !row.humanCheck?.required && (Boolean(row.fromPreviousDeferral) ||
           ((row.suggestion === "du_kien_goi" || row.suggestion === "tamhoan") &&
-            row.confidence >= 0.7);
+            row.confidence >= 0.7));
       }
       setSelected(next);
       const firstWithData = TABS.find(
@@ -146,6 +149,8 @@ export default function CampaignAiSampleModal({
   };
 
   const applySelected = async () => {
+    if (items.some(item => selected[item.citizenId] && item.humanCheck?.required) &&
+      !window.confirm("Danh sách có hồ sơ cần Human Check. Bạn đã kiểm tra hồ sơ và minh chứng trước khi áp dụng?")) return;
     const payload = items
       .filter((i) => selected[i.citizenId])
       .map((i) => ({
@@ -354,6 +359,7 @@ export default function CampaignAiSampleModal({
                           </td>
                           <td className={`${ADMIN_TD_CLS} text-xs`}>
                             <div className="font-semibold">{row.label}</div>
+                            <HumanCheckNotice review={row.humanCheck} />
                             <div className="text-m3-on-surface-variant italic">
                               {row.draftNote}
                             </div>

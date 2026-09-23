@@ -1,4 +1,5 @@
 import { withApiGuard } from "@/lib/security/api-guard";
+import { listHumanCheckNotifications, readHumanCheckNotifications } from "@/lib/human-check-notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, hierarchyUnits } from "@/lib/data";
@@ -316,9 +317,10 @@ async function GETHandler() {
     session.unitCode,
   );
   const memory = findMemoryNotifications(session.unitCode);
+  const humanChecks = await listHumanCheckNotifications(session);
 
   const seen = new Set<string>();
-  const data = [...memory, ...system]
+  const data = [...humanChecks, ...memory, ...system]
     .sort((a, b) => {
       const tb = Date.parse(b.createdAt) || 0;
       const ta = Date.parse(a.createdAt) || 0;
@@ -343,12 +345,18 @@ async function PATCHHandler(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   if (body.all === true) {
+    await readHumanCheckNotifications(session);
     db.notifications.markAllRead(session.unitCode);
     return NextResponse.json({ ok: true });
   }
 
   if (body.id) {
     const id = String(body.id);
+    if (id.startsWith("hc-")) {
+      if (!/^hc-[a-f0-9]{64}$/.test(id)) return NextResponse.json({ error: "Thông báo không hợp lệ" }, { status: 400 });
+      const updated = await readHumanCheckNotifications(session, id);
+      return NextResponse.json(updated ? { ok: true } : { error: "Không tìm thấy thông báo" }, { status: updated ? 200 : 404 });
+    }
     if (id.startsWith("sys-")) {
       return NextResponse.json({ ok: true, data: { id, read: true } });
     }

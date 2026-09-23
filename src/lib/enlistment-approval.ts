@@ -344,7 +344,7 @@ export function resolveCallIntentUpdate(
       approvalStatus: "none",
       pipelineStatus: "local_ready",
       militaryStatus:
-        militaryStatus === "nhapngu" ? "nhapngu" : ("trungtuyen" as const),
+        militaryStatus === "nhapngu" ? "nhapngu" : ("truottuyen" as const),
       clearApprovalComment: true,
     };
   }

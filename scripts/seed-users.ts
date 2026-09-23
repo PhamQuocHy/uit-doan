@@ -18,7 +18,6 @@ async function main() {
 
   const sqlPath = path.join(
     process.cwd(),
-    "dacta",
     "migrations",
     "004_seed_users_hierarchy.sql",
   );
