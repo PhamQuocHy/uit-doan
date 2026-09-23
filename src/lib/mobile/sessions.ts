@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from "crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import type { RowDataPacket } from "mysql2";
 import { queryExecute, queryRows } from "@/lib/db";
 import type {
@@ -39,6 +39,7 @@ function toIso(d: string | Date): string {
 
 type SessionRow = RowDataPacket & {
   id: string;
+  created_by_user_id: string | null;
   connection_code: string;
   status: MobileSessionStatus;
   session_token_hash: string;
@@ -158,25 +159,28 @@ export async function connectSession(code: string, platform?: string): Promise<{
   }
 
   const sessionToken = generateToken();
-  await queryExecute(
+  const connected = await queryExecute(
     `UPDATE mobile_sessions
      SET status = 'CONNECTED',
          session_token_hash = ?,
          device_platform = ?,
          connected_at = UTC_TIMESTAMP(),
          last_error = NULL
-     WHERE id = ? AND status IN ('WAITING','CONNECTED')`,
+     WHERE id = ? AND status = 'WAITING' AND expires_at > UTC_TIMESTAMP()`,
     [hashSecret(sessionToken), platform ?? "ios", row.id],
   );
 
+  if (connected.affectedRows !== 1) return null;
   const updated = await getSessionById(row.id);
   if (!updated) return null;
   return { session: publicSession(updated), sessionToken };
 }
 
 export function assertSessionToken(row: SessionRow, token: string | null): boolean {
-  if (!token) return false;
-  return row.session_token_hash === hashSecret(token);
+  if (!token || token.length > 256 || ['EXPIRED', 'DISCONNECTED', 'ERROR'].includes(row.status) || new Date(toIso(row.expires_at)).getTime() <= Date.now()) return false;
+  const expected = Buffer.from(row.session_token_hash, 'hex');
+  const actual = Buffer.from(hashSecret(token), 'hex');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 export async function updateSessionStatus(

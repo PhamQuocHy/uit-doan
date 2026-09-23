@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { canManageMembers, canManageUser, manageableUnitCodes, isAssignableRole } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { db, hierarchyUnits } from "@/lib/data";
@@ -23,7 +24,7 @@ function isMilitaryDonvi(unitCode: string): boolean {
 }
 
 /** Ai được quản lý thành viên trong phạm vi đơn vị (không chỉ SUPER_ADMIN). */
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data: visible.slice((page - 1) * limit, page * limit), total: visible.length, page, limit, totalPages: Math.ceil(visible.length / limit), canManage: canManageMembers(session), units: hierarchyUnits.filter(u => unitCodes.includes(u.code)), meta: { source: "memory" } });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!canManageMembers(session)) {
     return NextResponse.json(
@@ -95,9 +96,9 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (password.length < 6) {
+    if (password.length < 12 || password.length > 256) {
       return NextResponse.json(
-        { error: "Mật khẩu phải có ít nhất 6 ký tự" },
+        { error: "Mật khẩu phải có từ 12 đến 256 ký tự" },
         { status: 400 },
       );
     }
@@ -212,3 +213,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

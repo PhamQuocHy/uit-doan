@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import {
   assertSessionToken,
@@ -6,7 +7,7 @@ import {
   getSessionById,
 } from "@/lib/mobile/sessions";
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { sessionId?: string };
   const sessionId = body.sessionId;
   if (!sessionId) {
@@ -24,3 +25,5 @@ export async function POST(req: Request) {
   await disconnectSession(sessionId);
   return NextResponse.json({ ok: true, status: "DISCONNECTED" });
 }
+
+export const POST = withApiGuard(POSTHandler);

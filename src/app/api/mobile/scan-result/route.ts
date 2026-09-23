@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import {
   assertSessionToken,
@@ -9,7 +10,7 @@ import {
 import type { ScanResultPayload } from "@/lib/mobile/types";
 import { compareNfcAndOcr } from "@/lib/mobile/verify";
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const body = (await req.json()) as Partial<ScanResultPayload>;
   if (!body.sessionId || !body.scanId) {
     return NextResponse.json({ error: "sessionId and scanId required" }, { status: 400 });
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
 
   const nfc = body.nfc ?? {};
   const ocr = body.ocr ?? {};
-  const verification = body.verification ?? compareNfcAndOcr(nfc, ocr);
+  const verification = compareNfcAndOcr(nfc, ocr);
 
   try {
     const saved = await saveScanResult({
@@ -57,9 +58,11 @@ export async function POST(req: Request) {
       citizen: saved.citizen ?? null,
       verification,
     });
-  } catch (error) {
+  } catch {
     await updateSessionStatus(body.sessionId, "ERROR", "scan_persist_failed");
-    console.error("[mobile/scan-result]", error instanceof Error ? error.message : "failed");
+    console.error("[mobile/scan-result]", "failed");
     return NextResponse.json({ error: "Không lưu được kết quả quét" }, { status: 500 });
   }
 }
+
+export const POST = withApiGuard(POSTHandler);

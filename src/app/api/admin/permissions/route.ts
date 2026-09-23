@@ -1,8 +1,9 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { findPermissionsFromDb, PERMISSION_MODULES } from "@/lib/roles-db";
 
-export async function GET() {
+async function GETHandler() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,3 +24,5 @@ export async function GET() {
     meta: { source: "mysql" },
   });
 }
+
+export const GET = withApiGuard(GETHandler);

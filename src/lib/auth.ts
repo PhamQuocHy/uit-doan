@@ -1,8 +1,13 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'ymsa-secret-key-2024-very-secure';
-const ENCODED_KEY = new TextEncoder().encode(SECRET_KEY);
+function signingKey() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || Buffer.byteLength(secret) < 32 || secret === 'ymsa-secret-key-2024-very-secure' || secret.startsWith('REPLACE_')) {
+    throw new Error('JWT_SECRET must be a unique random secret of at least 32 bytes');
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export interface SessionPayload {
   userId: string;
@@ -18,16 +23,21 @@ export interface SessionPayload {
 export async function encrypt(payload: Omit<SessionPayload, 'expiresAt'> & { expiresAt: string | Date }) {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer('nvqs').setAudience('nvqs-web').setJti(crypto.randomUUID())
     .setIssuedAt()
     .setExpirationTime('24h')
-    .sign(ENCODED_KEY);
+    .sign(signingKey());
 }
 
 export async function decrypt(session: string | undefined = '') {
   try {
-    const { payload } = await jwtVerify(session, ENCODED_KEY, {
+    const { payload } = await jwtVerify(session, signingKey(), {
+      issuer: 'nvqs', audience: 'nvqs-web', requiredClaims: ['exp', 'iat', 'jti'],
       algorithms: ['HS256'],
     });
+    if (typeof payload.userId !== 'string' || typeof payload.username !== 'string' ||
+        !['admin', 'user'].includes(String(payload.role)) || typeof payload.unitCode !== 'string' ||
+        typeof payload.hierarchyLevel !== 'string') return null;
     return payload as unknown as SessionPayload;
   } catch {
     return null;
@@ -65,7 +75,15 @@ export async function deleteSession() {
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const cookie = cookieStore.get('session')?.value;
-  return await decrypt(cookie);
+  const session = await decrypt(cookie);
+  if (!session) return null;
+  // Resolve current status and permissions on every server-side request.
+  const { findUserByIdFromDb } = await import('@/lib/auth-users');
+  const user = await findUserByIdFromDb(session.userId);
+  if (!user) return process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEMO_AUTH === 'true' ? session : null;
+  if (user.status !== 'active') return null;
+  return { ...session, role: user.role, hierarchyLevel: user.hierarchyLevel, unitCode: user.unitCode,
+    functionalRole: user.role === 'admin' ? session.functionalRole : user.functionalRole };
 }
 
 export async function requireAuth(): Promise<SessionPayload> {

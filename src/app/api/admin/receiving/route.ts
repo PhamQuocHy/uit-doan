@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
 import { getSession } from "@/lib/auth";
@@ -104,7 +105,7 @@ function scopeForSession(
   };
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -113,6 +114,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const campaignId = (searchParams.get("campaignId") || "").trim();
   const statusFilter = searchParams.get("status") || "";
+  const paginated = searchParams.has("page");
+  const page = Math.min(1_000_000, Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1));
+  const limit = Math.min(5000, Math.max(1, parseInt(searchParams.get("limit") || "500", 10) || 500));
   const search = (searchParams.get("search") || "").trim();
   const localityFilter = (searchParams.get("unitCode") || "").trim();
   const quanKhuFilter = (searchParams.get("quanKhuCode") || "").trim();
@@ -186,6 +190,9 @@ export async function GET(request: NextRequest) {
   const params = [...baseParams];
   const filterSql = statusFilterSql(statusFilter);
   if (filterSql) where.push(filterSql);
+  const totals = paginated ? await queryRows<(RowDataPacket & { total: number })[]>(
+    `SELECT COUNT(*) AS total FROM citizens c WHERE ${where.join(" AND ")}`, params,
+  ) : [];
 
   const rows = await queryRows<
     (RowDataPacket & {
@@ -207,8 +214,8 @@ export async function GET(request: NextRequest) {
      FROM citizens c
      WHERE ${where.join(" AND ")}
      ORDER BY FIELD(${bucketSql("c")}, 'chua_phan_quan','da_phan_quan','submitted_to_bo','bo_approved','published','unit_confirmed'),
-              c.updated_at DESC
-     LIMIT 5000`,
+              c.updated_at DESC, c.id ASC
+     LIMIT ${paginated ? limit : 5000} OFFSET ${paginated ? (page - 1) * limit : 0}`,
     params,
   );
 
@@ -229,6 +236,7 @@ export async function GET(request: NextRequest) {
       receivingUnitName: unitName(r.receiving_unit_code),
       campaignId: r.campaign_id || undefined,
     })),
+    ...(paginated && { page, limit, totalPages: Math.ceil(Number(totals[0]?.total || 0) / limit) }),
     counts,
     assignableUnits: assignable,
     militaryRegions,
@@ -241,7 +249,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -442,3 +450,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ error: "Action không hợp lệ" }, { status: 400 });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

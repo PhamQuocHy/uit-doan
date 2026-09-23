@@ -5,7 +5,6 @@ import {
   Activity,
   BarChart3,
   Calendar,
-  Download,
   MapPin,
   PieChart as PieIcon,
   RefreshCw,
@@ -28,7 +27,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import * as XLSX from "xlsx";
+import ExcelExportButton from "@/components/admin/ExcelExportButton";
+import { reportExcelSheets } from "@/lib/analytics/excel";
 import type { AnalyticsDashboard } from "@/lib/analytics/types";
 import StatCard from "@/components/ui/StatCard";
 
@@ -142,45 +142,6 @@ export default function ReportsPage() {
     fetchData();
   }, [fetchData]);
 
-  const exportExcel = () => {
-    if (!data) return;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([data.overview]), "KPI");
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(data.recruitmentStatsByYear),
-      "Theo_nam"
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(data.defermentReasons),
-      "Tam_hoan"
-    );
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.funnel), "Funnel");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.quotas), "Chi_tieu");
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(data.unitQualifyRates),
-      "Dia_ban"
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(data.educationVsHealth),
-      "Hocvan_SK"
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet([
-        ["", ...data.correlations.labels],
-        ...data.correlations.matrix.map((row, i) => [
-          data.correlations.labels[i],
-          ...row,
-        ]),
-      ]),
-      "Tuong_quan"
-    );
-    XLSX.writeFile(wb, `bao-cao-nvqs-${data.meta.year}-${data.meta.unitCode}.xlsx`);
-  };
 
   const funnelMax = useMemo(() => {
     if (!data?.funnel.length) return 1;
@@ -352,14 +313,8 @@ export default function ReportsPage() {
                 {aiLoading ? "Đang phân tích..." : "Phân tích AI"}
               </button>
             )}
-            <button
-              onClick={exportExcel}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-105"
-              style={{ background: OLIVE.wash, color: OLIVE.forest }}
-            >
-              <Download size={15} />
-              Xuất Excel
-            </button>
+            <ExcelExportButton filename={`bao-cao-nvqs-${data.meta.year ?? "tat-ca"}-${data.meta.unitCode}`}
+              disabled={loading} getSheets={async () => reportExcelSheets(data)} />
           </div>
         </div>
       </section>

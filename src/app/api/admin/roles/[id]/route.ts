@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { canEditGlobalRoles, manageableUnitCodes } from "@/lib/user-management";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -13,7 +14,7 @@ import { writeAuditLog } from "@/lib/audit-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
+async function GETHandler(_req: NextRequest, { params }: Ctx) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   });
 }
 
-export async function PUT(request: NextRequest, { params }: Ctx) {
+async function PUTHandler(request: NextRequest, { params }: Ctx) {
   const session = await getSession();
   if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -92,7 +93,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
+async function DELETEHandler(_req: NextRequest, { params }: Ctx) {
   const session = await getSession();
   if (!session || !canEditGlobalRoles(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -117,3 +118,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = withApiGuard(GETHandler);
+export const PUT = withApiGuard(PUTHandler);
+export const DELETE = withApiGuard(DELETEHandler);

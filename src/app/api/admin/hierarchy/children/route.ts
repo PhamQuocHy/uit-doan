@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
 import { getSession } from "@/lib/auth";
@@ -57,7 +58,7 @@ async function childrenFromDb(parentCode: string): Promise<HierarchyUnit[]> {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -111,3 +112,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ items, total: items.length, parentCode });
 }
+
+export const GET = withApiGuard(GETHandler);

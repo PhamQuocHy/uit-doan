@@ -1,4 +1,5 @@
 "use client";
+import HumanCheckNotice from "@/components/admin/HumanCheckNotice";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { X, Printer, ChevronDown, ChevronUp, Filter, Lock, Plus, Sparkles, Upload, Trash2, CalendarClock } from "lucide-react";
@@ -342,6 +343,7 @@ export default function CitizenDetailModal({
   const [aiSuggestBusy, setAiSuggestBusy] = useState(false);
   const [aiSuggestError, setAiSuggestError] = useState<string | null>(null);
   const [aiSuggest, setAiSuggest] = useState<{
+    humanCheck?: import("@/lib/human-check").HumanCheck;
     suggestion: NvqsCallChoice;
     confidence: number;
     reasons: string[];
@@ -383,6 +385,7 @@ export default function CitizenDetailModal({
       const item = (data.items || [])[0] as
         | {
             suggestion?: string;
+            humanCheck?: import("@/lib/human-check").HumanCheck;
             confidence?: number;
             reasons?: string[];
             draftNote?: string;
@@ -400,6 +403,7 @@ export default function CitizenDetailModal({
         throw new Error("Gợi ý không hợp lệ");
       }
       setAiSuggest({
+        humanCheck: item.humanCheck,
         suggestion: sug,
         confidence: Number(item.confidence) || 0,
         reasons: Array.isArray(item.reasons) ? item.reasons.map(String) : [],
@@ -408,6 +412,7 @@ export default function CitizenDetailModal({
         label: String(item.label || sug),
         source: String(item.source || "rules"),
       });
+      window.dispatchEvent(new Event("human-check-updated"));
     } catch (e) {
       setAiSuggest(null);
       setAiSuggestError(
@@ -420,6 +425,7 @@ export default function CitizenDetailModal({
 
   const applyAiSuggest = () => {
     if (!aiSuggest || !nvqsCanEdit) return;
+    if (aiSuggest.humanCheck?.required && !window.confirm("Gợi ý này cần Human Check. Bạn đã đối chiếu hồ sơ và minh chứng, và muốn điền gợi ý vào biểu mẫu?")) return;
     setNvqsCallChoice(aiSuggest.suggestion);
     if (aiSuggest.draftNote) setNvqsReason(aiSuggest.draftNote);
     setNvqsError(null);
@@ -2895,6 +2901,7 @@ export default function CitizenDetailModal({
                             : " · Quy tắc"}
                         </span>
                       </div>
+                      <HumanCheckNotice review={aiSuggest.humanCheck} />
                       {aiSuggest.reasons.length > 0 && (
                         <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[13px] text-m3-on-surface">
                           {aiSuggest.reasons.map((r) => (

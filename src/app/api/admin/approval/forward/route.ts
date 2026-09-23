@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { hierarchyUnits, getUnitDescendants, db } from "@/lib/data";
@@ -65,7 +66,7 @@ function notifyUnits(unitCode: string | null, sessionUnit: string) {
   return set;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -316,3 +317,5 @@ export async function POST(request: NextRequest) {
     message: labels[action],
   });
 }
+
+export const POST = withApiGuard(POSTHandler);

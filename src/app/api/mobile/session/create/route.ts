@@ -1,8 +1,9 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createMobileSession } from "@/lib/mobile/sessions";
 
-export async function POST() {
+async function POSTHandler() {
   const auth = await getSession();
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,8 +18,10 @@ export async function POST() {
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
     });
-  } catch (error) {
-    console.error("[mobile/session/create]", error instanceof Error ? error.message : "failed");
+  } catch {
+    console.error("[mobile/session/create]", "failed");
     return NextResponse.json({ error: "Không tạo được phiên kết nối" }, { status: 500 });
   }
 }
+
+export const POST = withApiGuard(POSTHandler);

@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import {
   assertSessionToken,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/mobile/sessions";
 import { getSession } from "@/lib/auth";
 
-export async function GET(req: Request) {
+async function GETHandler(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const sessionId = url.searchParams.get("sessionId");
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
 
   const admin = await getSession();
   const token = bearerToken(req.headers.get("authorization"));
-  const allowed = Boolean(admin) || assertSessionToken(row, token);
+  const allowed = (!!admin && row.created_by_user_id === admin.userId) || assertSessionToken(row, token);
   if (!allowed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -48,3 +49,5 @@ export async function GET(req: Request) {
       : null,
   });
 }
+
+export const GET = withApiGuard(GETHandler);

@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { notifyHumanChecks } from "@/lib/human-check-notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getUnitDescendants } from "@/lib/data";
@@ -53,14 +55,14 @@ function unitInScope(
   return allowed.has(code) || code === sessionUnit || code.startsWith(`${sessionUnit}-`);
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai/approval-suggest",
     ...suggestMeta(),
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -134,8 +136,10 @@ export async function POST(request: NextRequest) {
       kind,
     });
 
+    const reviewedItems = await notifyHumanChecks(session, items, `approval:${mode}:${kind || "auto"}`,
+      mode === "qk" ? "/admin/approval" : "/admin/citizens", true);
     return NextResponse.json({
-      items,
+      items: reviewedItems,
       meta: {
         ...suggestMeta(),
         requested: ids.length,
@@ -149,9 +153,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          e instanceof Error ? e.message : "Không tạo được gợi ý AI",
+          "Không tạo được gợi ý AI hoặc lưu thông báo Human Check. Vui lòng thử lại.",
       },
       { status: 500 },
     );
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

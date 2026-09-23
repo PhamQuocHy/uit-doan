@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { consumeLimit, opaqueKey, readJson, validLogin, InputError, securityEvent } from "@/lib/security/controls";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/data";
 import { createSession } from "@/lib/auth";
@@ -29,10 +31,17 @@ function fromMemory(username: string): AuthUser | null {
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { username, password, unitCode, functionalRole } = body;
+    const body = await readJson(request, 4096);
+    if (!validLogin(body)) throw new InputError("Thông tin đăng nhập không hợp lệ");
+    const { username, password, unitCode, functionalRole } = body as { username: string; password: string; unitCode?: string; functionalRole?: string };
+    const actor = opaqueKey(username.trim().toLowerCase());
+    const retry = consumeLimit(`login:${actor}`, 10, 15 * 60 * 1000);
+    if (retry) {
+      securityEvent("login_rate_limited", { actor, status: 429 });
+      return NextResponse.json({ error: "Thử đăng nhập quá nhiều lần. Vui lòng thử lại sau." }, { status: 429, headers: { "Retry-After": String(retry) } });
+    }
 
     if (!username || !password) {
       return NextResponse.json(
@@ -49,30 +58,16 @@ export async function POST(request: NextRequest) {
       // DB đang chạy → chỉ xác thực qua MySQL (không còn fallback 123)
       user = await findUserByUsernameFromDb(username);
       authSource = "mysql";
-      if (!user) {
-        return NextResponse.json(
-          {
-            error:
-              "Tài khoản không tồn tại trong database. Kiểm tra bảng users (username / password_hash).",
-          },
-          { status: 401 },
-        );
-      }
-    } else {
+    } else if (process.env.NODE_ENV !== "production" && process.env.ALLOW_DEMO_AUTH === "true") {
       user = fromMemory(username);
-      authSource = "memory";
+    } else {
+      securityEvent("auth_backend_unavailable", { status: 503 });
+      return NextResponse.json({ error: "Hệ thống xác thực tạm thời không khả dụng" }, { status: 503 });
     }
 
     if (!user || !verifyPassword(password, user.password)) {
-      return NextResponse.json(
-        {
-          error:
-            authSource === "mysql"
-              ? "Tên đăng nhập hoặc mật khẩu không đúng"
-              : "Tên đăng nhập hoặc mật khẩu không đúng (MySQL offline — đang dùng demo in-memory)",
-        },
-        { status: 401 },
-      );
+      securityEvent("login_failed", { actor, status: 401 });
+      return NextResponse.json({ error: "Tên đăng nhập hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
     if (user.status !== "active") {
@@ -134,6 +129,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    securityEvent("login_succeeded", { actor, status: 200 });
     return NextResponse.json({
       success: true,
       authSource,
@@ -148,7 +144,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
+    if (error instanceof InputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    securityEvent("login_error", { status: 500 });
     return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
   }
 }
+
+export const POST = withApiGuard(POSTHandler);

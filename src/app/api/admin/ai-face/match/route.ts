@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getUnitDescendants } from "@/lib/data";
@@ -39,7 +40,7 @@ function normalizeImage(raw: unknown): string | null {
   return null;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -112,19 +113,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Không nhận dạng được khuôn mặt",
+          "Không nhận dạng được khuôn mặt",
       },
       { status: 500 },
     );
   }
 }
 
-export async function GET() {
+async function GETHandler() {
   return NextResponse.json({
     endpoint: "/api/admin/ai-face/match",
     configured: isGeminiConfigured(),
     modes: ["verify_cccd", "search_gallery"],
   });
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const GET = withApiGuard(GETHandler);

@@ -1,3 +1,5 @@
+import { withApiGuard } from "@/lib/security/api-guard";
+import { notifyHumanChecks } from "@/lib/human-check-notifications";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { pingDb } from "@/lib/db";
@@ -11,7 +13,7 @@ import { ensureMilitaryUnitsInMemory } from "@/lib/military-regions";
 
 ensureMilitaryUnitsInMemory();
 
-export async function GET(
+async function GETHandler(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -26,7 +28,7 @@ export async function GET(
   });
 }
 
-export async function POST(
+async function POSTHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
@@ -124,6 +126,7 @@ export async function POST(
       );
     }
 
+    const reviewedItems = await notifyHumanChecks(session, result.items, `campaign:${campaign.id}`, "/admin/citizens");
     return NextResponse.json({
       campaign: {
         id: campaign.id,
@@ -131,7 +134,7 @@ export async function POST(
         year: campaign.year,
         targetQuota: campaign.targetQuota,
       },
-      items: result.items,
+      items: reviewedItems,
       summary: result.summary,
       meta: {
         ...sampleMeta(),
@@ -145,9 +148,12 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          e instanceof Error ? e.message : "Không tạo được danh sách mẫu AI",
+          "Không tạo được danh sách mẫu AI hoặc lưu thông báo Human Check. Vui lòng thử lại.",
       },
       { status: 500 },
     );
   }
 }
+
+export const GET = withApiGuard(GETHandler);
+export const POST = withApiGuard(POSTHandler);

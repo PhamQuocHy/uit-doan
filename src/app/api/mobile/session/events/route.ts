@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { getSession } from "@/lib/auth";
 import {
   getLatestScan,
@@ -7,7 +8,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+async function GETHandler(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   if (!code) {
@@ -18,6 +19,9 @@ export async function GET(req: Request) {
   if (!admin) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const owned = await getSessionByCode(code);
+  if (!owned || owned.created_by_user_id !== admin.userId) return new Response("Forbidden", { status: 403 });
 
   const encoder = new TextEncoder();
   let lastPayload = "";
@@ -93,3 +97,5 @@ export async function GET(req: Request) {
     },
   });
 }
+
+export const GET = withApiGuard(GETHandler);

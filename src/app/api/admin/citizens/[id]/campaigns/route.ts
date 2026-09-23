@@ -1,9 +1,10 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { pingDb } from "@/lib/db";
 import { listCitizenCampaignHistory } from "@/lib/citizen-campaigns-db";
 
-export async function GET(
+async function GETHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -18,3 +19,5 @@ export async function GET(
   const data = await listCitizenCampaignHistory(id);
   return NextResponse.json({ data });
 }
+
+export const GET = withApiGuard(GETHandler);

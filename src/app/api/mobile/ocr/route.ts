@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { generateGeminiJsonFromImage, isGeminiConfigured } from "@/lib/gemini";
 import {
@@ -19,7 +20,7 @@ function parseJsonObject(text: string): Record<string, string> {
   }
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const body = (await req.json()) as {
     sessionId?: string;
     side?: "front" | "back";
@@ -70,3 +71,5 @@ Không bịa. Để chuỗi rỗng nếu không đọc được.`,
 
   return NextResponse.json({ success: true, data });
 }
+
+export const POST = withApiGuard(POSTHandler);

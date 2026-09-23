@@ -1,3 +1,4 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import {
   assertSessionToken,
@@ -6,7 +7,7 @@ import {
   updateSessionStatus,
 } from "@/lib/mobile/sessions";
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const body = (await req.json()) as { sessionId?: string };
   if (!body.sessionId) {
     return NextResponse.json({ error: "sessionId required" }, { status: 400 });
@@ -26,3 +27,5 @@ export async function POST(req: Request) {
     status: "SCANNING",
   });
 }
+
+export const POST = withApiGuard(POSTHandler);

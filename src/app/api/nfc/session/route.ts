@@ -1,7 +1,7 @@
+import { withApiGuard } from "@/lib/security/api-guard";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
-  connectSession,
   createMobileSession,
   getLatestScan,
   getSessionByCode,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/mobile/sessions";
 
 /** Compatibility wrapper — desktop/mobile should use /api/mobile/session/* */
-export async function POST() {
+async function POSTHandler() {
   const auth = await getSession();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { session } = await createMobileSession(auth.userId);
@@ -21,11 +21,14 @@ export async function POST() {
   });
 }
 
-export async function GET(req: Request) {
+async function GETHandler(req: Request) {
+  const auth = await getSession();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const code = new URL(req.url).searchParams.get("code");
   if (!code) return NextResponse.json({ error: "Code required" }, { status: 400 });
   const row = await getSessionByCode(code);
   if (!row) return NextResponse.json({ error: "Session not found or expired" }, { status: 404 });
+  if (row.created_by_user_id !== auth.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = publicSession(row);
   const scan = session.status === "COMPLETED" ? await getLatestScan(row.id) : null;
   return NextResponse.json({
@@ -41,9 +44,10 @@ export async function GET(req: Request) {
   });
 }
 
-export async function PATCH(req: Request) {
-  const { code } = await req.json();
-  const result = await connectSession(String(code || ""), "ios");
-  if (!result) return NextResponse.json({ error: "Session not found or expired" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+async function PATCHHandler() {
+  return NextResponse.json({ error: "Sử dụng /api/mobile/session/connect để nhận token" }, { status: 410 });
 }
+
+export const POST = withApiGuard(POSTHandler);
+export const GET = withApiGuard(GETHandler);
+export const PATCH = withApiGuard(PATCHHandler);
