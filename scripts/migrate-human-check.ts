@@ -5,7 +5,7 @@ import { getPool } from "../src/lib/db";
 loadEnvConfig(process.cwd(), true);
 async function main() {
   try {
-    await getPool().query(readFileSync("dacta/migrations/024_human_check_notifications.sql", "utf8"));
+    await getPool().query(readFileSync("migrations/024_human_check_notifications.sql", "utf8"));
     console.log("Human Check notification table ready.");
   } finally { await getPool().end(); }
 }

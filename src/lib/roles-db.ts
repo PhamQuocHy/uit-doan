@@ -416,12 +416,12 @@ export async function ensureMedicalOfficerRole(): Promise<number | null> {
       [roleId, roleId],
     );
 
-    // Region commands are operational officers, never receiving-unit accounts.
+    // Region commands use the receiving portal and must keep its functional role.
     await queryExecute(
       `UPDATE users u JOIN roles r ON r.role_name = 'UNIT_OFFICER'
-       SET u.role_id = r.id, u.functional_role = 'tuyen_quan'
+       SET u.role_id = r.id, u.functional_role = 'nhan_quan'
        WHERE u.unit_code IN (${MILITARY_REGIONS.map(() => "?").join(",")})
-         AND (u.role_id <> r.id OR u.role_id IS NULL OR COALESCE(u.functional_role, '') <> 'tuyen_quan')`,
+         AND (u.role_id <> r.id OR u.role_id IS NULL OR COALESCE(u.functional_role, '') <> 'nhan_quan')`,
       MILITARY_REGIONS.map(region => region.code),
     );
 
