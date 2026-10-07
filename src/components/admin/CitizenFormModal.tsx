@@ -12,7 +12,7 @@ import {
   screeningRecordForYear,
 } from "@/lib/health-exam";
 import { getNvqsExamYearWindow } from "@/lib/nvqs-lifecycle";
-import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
+import CccdScanButton from "@/components/admin/CccdScanButton";
 import DateVnInput from "@/components/admin/DateVnInput";
 import type { Hn212CitizenScan } from "@/lib/hn212";
 import { toPortraitDataUrl } from "@/lib/hn212/normalize";
@@ -793,7 +793,7 @@ export default function CitizenFormModal({
           </h2>
           <div className="flex shrink-0 items-center gap-2">
             {mode === "create" && (
-              <Hn212ScanButton
+              <CccdScanButton
                 compact
                 label="Quét CCCD"
                 onScanned={handleScanned}

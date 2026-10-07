@@ -6,7 +6,7 @@ import type { Citizen, HierarchyUnit } from "@/lib/data";
 import { Search, Plus, Eye, Pencil, Trash2, SlidersHorizontal, CheckSquare, GraduationCap, HeartPulse, X, Bell, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import CitizenDetailModal from "@/components/admin/CitizenDetailModal";
 import CitizenFormModal from "@/components/admin/CitizenFormModal";
-import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
+import CccdScanButton from "@/components/admin/CccdScanButton";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { getCallDisplayLabel, RETURN_TAM_HOAN_MARKER } from "@/lib/enlistment-approval";
 import {
@@ -1036,9 +1036,9 @@ export default function CitizensPage() {
               />
             </div>
             {!isArchive && (
-              <Hn212ScanButton
+              <CccdScanButton
                 compact
-                label="Quét NFC"
+                label="Quét CCCD"
                 onScanned={handleNfcSearch}
               />
             )}
