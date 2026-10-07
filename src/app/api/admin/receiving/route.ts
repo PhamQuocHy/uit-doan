@@ -31,18 +31,20 @@ function bucketSql(alias = "c") {
     WHEN ${alias}.receiving_status = 'published' THEN 'published'
     WHEN ${alias}.receiving_status = 'bo_approved' THEN 'bo_approved'
     WHEN ${alias}.receiving_status = 'submitted_to_bo' THEN 'submitted_to_bo'
+    WHEN ${alias}.receiving_status = '' THEN 'invalid'
     WHEN ${alias}.receiving_status = 'chua_phan_quan'
       OR ${alias}.receiving_status IS NULL
       OR ${alias}.receiving_unit_code IS NULL
       OR ${alias}.receiving_unit_code = ''
     THEN 'chua_phan_quan'
-    ELSE 'da_phan_quan'
+    WHEN ${alias}.receiving_status = 'da_phan_quan' THEN 'da_phan_quan'
+    ELSE 'invalid'
   END`;
 }
 
 function statusFilterSql(status: string): string | null {
   if (status === "chua_phan_quan") {
-    return `(c.receiving_status = 'chua_phan_quan' OR c.receiving_status IS NULL OR c.receiving_unit_code IS NULL OR c.receiving_unit_code = '')`;
+    return `(${bucketSql('c')}) = 'chua_phan_quan'`;
   }
   if (status === "da_phan_quan") return `c.receiving_status = 'da_phan_quan'`;
   if (status === "submitted_to_bo") return `c.receiving_status = 'submitted_to_bo'`;
@@ -59,6 +61,7 @@ const emptyCounts = {
   bo_approved: 0,
   published: 0,
   unit_confirmed: 0,
+  invalid: 0,
 };
 
 function scopeForSession(
@@ -267,7 +270,7 @@ async function POSTHandler(request: NextRequest) {
   await ensureCitizenReceivingColumns();
 
   // Quân khu: phân về sư đoàn / trung đoàn
-  if (action === "assign") {
+  if (action === "assign" || action === "reassign") {
     if (
       session.hierarchyLevel !== "donvi" ||
       !isQuanKhuOrBtl(session.unitCode)
@@ -287,6 +290,12 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const scope = citizenScopeForQuanKhu(session.unitCode);
+    const editing = action === "reassign";
+    const expectedUnit = typeof body.expectedReceivingUnitCode === "string"
+      ? body.expectedReceivingUnitCode : "";
+    if (editing && (!expectedUnit || expectedUnit === receivingUnitCode)) {
+      return NextResponse.json({ error: "Chọn đơn vị nhận mới trước khi lưu thay đổi" }, { status: 400 });
+    }
     const result = await queryExecute(
       `UPDATE citizens c SET
          receiving_unit_code = ?,
@@ -297,16 +306,26 @@ async function POSTHandler(request: NextRequest) {
          AND c.campaign_id = ?
          AND c.military_status = 'nhapngu'
          AND c.archived_at IS NULL
-         AND (
-           c.receiving_status IS NULL
-           OR c.receiving_status IN ('chua_phan_quan','da_phan_quan')
-         )`,
-      [receivingUnitCode, id, ...scope.params, campaignId],
+         AND ${editing
+           ? "c.receiving_status = 'da_phan_quan' AND c.receiving_unit_code = ?"
+           : "(c.receiving_status IS NULL OR c.receiving_status = 'chua_phan_quan')"}`,
+      [receivingUnitCode, id, ...scope.params, campaignId, ...(editing ? [expectedUnit] : [])],
     );
     if (result.affectedRows === 0) {
+      const current = await queryRows<(RowDataPacket & { receiving_status: string | null })[]>(
+        `SELECT c.receiving_status FROM citizens c WHERE c.id = ? AND ${scope.sql}
+         AND c.campaign_id = ? AND c.archived_at IS NULL`,
+        [id, ...scope.params, campaignId],
+      );
+      const status = current[0]?.receiving_status;
+      const locked = ['submitted_to_bo', 'bo_approved', 'published', 'unit_confirmed'].includes(status || '');
       return NextResponse.json(
-        { error: "Không phân được (sai phạm vi / đã gửi Bộ)" },
-        { status: 404 },
+        { error: !current.length ? "Hồ sơ không còn trong phạm vi hoặc đợt tuyển quân này."
+          : locked ? "Hồ sơ đã gửi Bộ hoặc đã xử lý ở bước sau. Không được sửa đơn vị nhận."
+          : !status ? "Hồ sơ bị thiếu trạng thái phân quân. Cần kiểm tra lại lịch sử trước khi cho phép sửa."
+          : "Đơn vị nhận đã thay đổi từ lần tải trước. Danh sách sẽ được cập nhật lại.",
+          code: locked ? 'RECEIVING_LOCKED' : !status ? 'RECEIVING_INVALID' : 'RECEIVING_CONFLICT' },
+        { status: 409 },
       );
     }
     return NextResponse.json({

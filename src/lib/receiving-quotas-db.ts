@@ -1,6 +1,7 @@
+import { validateAllocationChange } from "@/lib/receiving-allocation-policy";
 import { randomBytes } from "crypto";
 import { RowDataPacket } from "mysql2";
-import { pingDb, queryRows, queryExecute } from "@/lib/db";
+import { pingDb, queryRows, queryExecute, getPool } from "@/lib/db";
 import { hierarchyUnits } from "@/lib/data";
 import {
   getProvincesForMilitaryRegion,
@@ -474,14 +475,18 @@ export async function findSubQuotasWithFilled(filters: {
   toUnit?: string;
 }): Promise<(SubQuota & { filled: number })[]> {
   const list = await findSubQuotas(filters);
-  return Promise.all(
-    list.map(async (row) => ({
-      ...row,
-      filled: filters.campaignId
-        ? await filledFor(filters.campaignId, row.toUnit)
-        : 0,
-    })),
+  if (!list.length || !filters.campaignId) return list.map(row => ({ ...row, filled: 0 }));
+  const units = [...new Set(list.map(row => row.toUnit))];
+  const counts = await queryRows<(RowDataPacket & { receiving_unit_code: string; n: number })[]>(
+    `SELECT receiving_unit_code, COUNT(*) AS n FROM citizens
+     WHERE campaign_id = ? AND receiving_unit_code IN (${units.map(() => '?').join(',')})
+       AND military_status = 'nhapngu' AND archived_at IS NULL
+       AND receiving_status IN ('da_phan_quan','submitted_to_bo','bo_approved','published','unit_confirmed')
+     GROUP BY receiving_unit_code`,
+    [filters.campaignId, ...units],
   );
+  const filled = new Map(counts.map(row => [row.receiving_unit_code, Number(row.n)]));
+  return list.map(row => ({ ...row, filled: filled.get(row.toUnit) ?? 0 }));
 }
 
 /** Quân khu giao chỉ tiêu nhận quân xuống sư đoàn / trung đoàn / quân đoàn thuộc mình */
@@ -490,50 +495,61 @@ export async function upsertSubQuota(input: {
   fromUnit: string;
   toUnit: string;
   amount: number;
+  expectedAmount: number | null | undefined;
   note?: string | null;
 }): Promise<(SubQuota & { filled?: number }) | null> {
   if (!(await ensureReceivingQuotaTables())) return null;
   if (!isQuanKhuOrBtl(input.fromUnit)) return null;
+  if (!getAssignableReceivingUnits(input.fromUnit).some(u => u.code === input.toUnit)) return null;
 
-  const allowed = getAssignableReceivingUnits(input.fromUnit);
-  if (!allowed.some((u) => u.code === input.toUnit)) return null;
-
-  const existing = await queryRows<(RowDataPacket & { id: string })[]>(
-    `SELECT id FROM receiving_sub_quotas
-     WHERE campaign_id = ? AND from_unit = ? AND to_unit = ? LIMIT 1`,
-    [input.campaignId, input.fromUnit, input.toUnit],
-  );
-  if (existing[0]?.id) {
-    await queryExecute(
-      `UPDATE receiving_sub_quotas SET amount = ?, note = ?, updated_at = NOW() WHERE id = ?`,
-      [input.amount, input.note || null, existing[0].id],
+  const conn = await getPool().getConnection();
+  let filled = 0;
+  try {
+    await conn.beginTransaction();
+    // Serialize allocations within the same campaign/region, including new rows.
+    const [parents] = await conn.execute<(RowDataPacket & { amount: number })[]>(
+      'SELECT amount FROM receiving_quotas WHERE campaign_id = ? AND receiving_unit_code = ? FOR UPDATE',
+      [input.campaignId, input.fromUnit],
     );
-  } else {
-    const id = `rsq_${randomBytes(6).toString("hex")}`;
-    await queryExecute(
-      `INSERT INTO receiving_sub_quotas (id, campaign_id, from_unit, to_unit, amount, note)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        input.campaignId,
-        input.fromUnit,
-        input.toUnit,
-        input.amount,
-        input.note || null,
-      ],
+    const [siblings] = await conn.execute<(RowDataPacket & { id: string; to_unit: string; amount: number })[]>(
+      'SELECT id, to_unit, amount FROM receiving_sub_quotas WHERE campaign_id = ? AND from_unit = ? FOR UPDATE',
+      [input.campaignId, input.fromUnit],
     );
+    const current = siblings.find(s => s.to_unit === input.toUnit);
+    const [assigned] = await conn.execute<RowDataPacket[]>(
+      `SELECT id FROM citizens WHERE campaign_id = ? AND receiving_unit_code = ?
+       AND military_status = 'nhapngu' AND archived_at IS NULL
+       AND receiving_status IN ('da_phan_quan','submitted_to_bo','bo_approved','published','unit_confirmed') FOR UPDATE`,
+      [input.campaignId, input.toUnit],
+    );
+    filled = assigned.length;
+    validateAllocationChange({
+      amount: input.amount, expectedAmount: input.expectedAmount,
+      currentAmount: current ? Number(current.amount) : null,
+      parentAmount: Number(parents[0]?.amount ?? 0),
+      allocatedToOthers: siblings.filter(s => s.to_unit !== input.toUnit).reduce((sum, s) => sum + Number(s.amount), 0),
+      filled,
+    });
+    if (current) {
+      await conn.execute(
+        'UPDATE receiving_sub_quotas SET amount = ?, note = ?, updated_at = NOW() WHERE id = ?',
+        [input.amount, input.note ?? null, current.id],
+      );
+    } else {
+      await conn.execute(
+        'INSERT INTO receiving_sub_quotas (id, campaign_id, from_unit, to_unit, amount, note) VALUES (?, ?, ?, ?, ?, ?)',
+        [`rsq_${randomBytes(6).toString("hex")}`, input.campaignId, input.fromUnit, input.toUnit, input.amount, input.note ?? null],
+      );
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
   }
-  const list = await findSubQuotas({
-    campaignId: input.campaignId,
-    fromUnit: input.fromUnit,
-    toUnit: input.toUnit,
-  });
-  const row = list[0];
-  if (!row) return null;
-  return {
-    ...row,
-    filled: await filledFor(input.campaignId, input.toUnit),
-  };
+  const rows = await findSubQuotas({ campaignId: input.campaignId, fromUnit: input.fromUnit, toUnit: input.toUnit });
+  return rows[0] ? { ...rows[0], filled } : null;
 }
 
 /** Đơn vị nhận mà tỉnh được phép phân quân trong đợt — không còn dùng; QK phân quân */

@@ -123,11 +123,9 @@ async function GETHandler(request: NextRequest) {
       }
     : resolveUnitCodes(session, requestedUnit);
 
+  // Overview cards describe the managed scope, independent of table filters.
   const summaryQuery = {
-    search,
     campaignId,
-    educationLevel,
-    healthGrade,
     unitCodes,
     ageScope: summaryAgeScope,
   };
@@ -208,34 +206,13 @@ async function GETHandler(request: NextRequest) {
   const allForSummary = db.citizens.findAll({
     page: 1,
     limit: 10000,
-    search,
     campaignId,
     unitCodes,
   });
-  let summaryBase = filterCitizensByAgeScopeMemory(
+  const summaryBase = filterCitizensByAgeScopeMemory(
     allForSummary.data as Citizen[],
     summaryAgeScope,
   );
-  if (educationLevel) {
-    const levels =
-      educationLevel === "THPT" || educationLevel === "pho_thong"
-        ? ["THPT", "12/12", "9/12", "THCS", "PTTH"]
-        : educationLevel === "Sau đại học" || educationLevel === "sau_dai_hoc"
-          ? ["Sau đại học", "Thạc sĩ", "Tiến sĩ", "ThS", "TS"]
-          : [educationLevel];
-    summaryBase = summaryBase.filter((c) =>
-      levels.some(
-        (lv) => (c.educationLevel || "").toLowerCase() === lv.toLowerCase(),
-      ),
-    );
-  }
-  if (healthGrade === "none") {
-    summaryBase = summaryBase.filter((c) => !c.healthStatus);
-  } else if (healthGrade) {
-    summaryBase = summaryBase.filter(
-      (c) => c.healthStatus === `Loại ${healthGrade}`,
-    );
-  }
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));

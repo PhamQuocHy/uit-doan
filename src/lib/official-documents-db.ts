@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import fs from "fs/promises";
+import { writePrivateUpload } from "@/lib/private-uploads";
 import path from "path";
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
@@ -9,7 +9,6 @@ import type {
 } from "@/lib/data";
 import { toDateOnlyString } from "@/lib/date-vn";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "cong-van");
 
 function newId(prefix: string): string {
   return `${prefix}_${randomBytes(8).toString("hex")}`;
@@ -154,20 +153,17 @@ export async function saveOfficialDocFiles(
   documentId: string,
   files: File[],
 ): Promise<SavedUploadFile[]> {
-  const dir = path.join(UPLOAD_DIR, documentId);
-  await fs.mkdir(dir, { recursive: true });
   const saved: SavedUploadFile[] = [];
 
   for (const file of files) {
     const id = newId("att");
     const safeName = file.name.replace(/[^\w.\-()\sÀ-ỹ]+/gi, "_").slice(0, 180);
     const diskName = `${id}_${safeName}`;
-    const abs = path.join(dir, diskName);
     const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(abs, buf);
     const relativePath = path
       .join("uploads", "cong-van", documentId, diskName)
       .replace(/\\/g, "/");
+    await writePrivateUpload(relativePath, buf);
     saved.push({
       id,
       fileName: file.name,

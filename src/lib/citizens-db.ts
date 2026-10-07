@@ -231,8 +231,8 @@ export async function ensureCitizenApprovalCommentColumn(): Promise<void> {
   if (approvalCommentReady === true) return;
   if (!(await pingDb())) return;
   try {
-    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string })[]>(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    const cols = await queryRows<(RowDataPacket & { COLUMN_NAME: string; COLUMN_TYPE: string })[]>(
+      `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'citizens'
          AND COLUMN_NAME = 'approval_comment'`,
@@ -371,11 +371,17 @@ export async function ensureCitizenReceivingColumns(): Promise<boolean> {
       await queryExecute(
         `ALTER TABLE citizens
          ADD COLUMN receiving_status
-           ENUM('chua_phan_quan','da_phan_quan','submitted_to_bo','bo_approved','published')
+           ENUM('chua_phan_quan','da_phan_quan','submitted_to_bo','bo_approved','published','unit_confirmed')
            NULL DEFAULT NULL
            COMMENT 'Trạng thái phân đơn vị nhận quân'
          AFTER campaign_id`,
       );
+    }
+    const receivingColumn = cols.find(c => c.COLUMN_NAME === 'receiving_status');
+    if (receivingColumn?.COLUMN_TYPE.startsWith('enum(') && !receivingColumn.COLUMN_TYPE.includes("'unit_confirmed'")) {
+      // Append without remapping existing enum values, including invalid legacy values.
+      const expandedType = receivingColumn.COLUMN_TYPE.slice(0, -1) + ",'unit_confirmed')";
+      await queryExecute(`ALTER TABLE citizens MODIFY COLUMN receiving_status ${expandedType} NULL DEFAULT NULL, ALGORITHM=INPLACE, LOCK=NONE`);
     }
     if (!have.has("receiving_unit_code")) {
       await queryExecute(
@@ -1027,6 +1033,21 @@ async function upsertCitizenIdentity(
     data.avatar !== undefined;
   if (!hasAny) return;
 
+  // Chip portraits arrive as base64 when a profile is created or scanned.
+  // Store only the protected URL in the database, just like uploaded portraits.
+  let avatar = data.avatar;
+  if (avatar && !/^(\/uploads\/|uploads\/|https?:\/\/)/i.test(avatar)) {
+    const { portraitFileFromBase64 } = await import('@/lib/portrait-file');
+    const { saveCitizenAvatarFile } = await import('@/lib/citizen-avatar-db');
+    const rows = await queryRows<(RowDataPacket & { unit_code: string })[]>(
+      'SELECT unit_code FROM citizens WHERE id = ? LIMIT 1', [citizenId],
+    );
+    const saved = await saveCitizenAvatarFile(citizenId, portraitFileFromBase64(avatar), {
+      citizenUnitCode: data.unitCode || rows[0]?.unit_code,
+    });
+    avatar = saved.avatar;
+  }
+
   await queryExecute(
     `INSERT INTO citizen_identities
       (citizen_id, identification_features, issue_date, expiry_date, old_id_number, avatar_url)
@@ -1043,7 +1064,7 @@ async function upsertCitizenIdentity(
       data.issueDate ?? null,
       data.expiryDate ?? null,
       data.oldIdNumber ?? null,
-      data.avatar ?? null,
+      avatar ?? null,
     ],
   );
 }

@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import fs from "fs/promises";
+import { writePrivateUpload, deletePrivateUpload } from "@/lib/private-uploads";
 import path from "path";
 import { RowDataPacket } from "mysql2";
 import { pingDb, queryRows, queryExecute } from "@/lib/db";
@@ -384,8 +384,6 @@ export async function saveCitizenNvqsFiles(
       month,
     )
     .replace(/\\/g, "/");
-  const absDir = path.join(process.cwd(), "public", relativeDir);
-  await fs.mkdir(absDir, { recursive: true });
 
   const saved: CitizenNvqsAttachment[] = [];
 
@@ -400,8 +398,8 @@ export async function saveCitizenNvqsFiles(
     const id = newId();
     const safeName = file.name.replace(/[^\w.\-()\sÀ-ỹ]+/gi, "_").slice(0, 180);
     const diskName = `${id}_${safeName}`;
-    await fs.writeFile(path.join(absDir, diskName), buf);
     const relativePath = `${relativeDir}/${diskName}`;
+    await writePrivateUpload(relativePath, buf);
 
     await queryExecute(
       `INSERT INTO citizen_nvqs_attachments
@@ -452,8 +450,7 @@ export async function deleteCitizenNvqsAttachment(
     [attachmentId, citizenId],
   );
   try {
-    const abs = path.join(process.cwd(), "public", rows[0].file_path);
-    await fs.unlink(abs);
+    await deletePrivateUpload(rows[0].file_path);
   } catch {
     // ignore missing file
   }

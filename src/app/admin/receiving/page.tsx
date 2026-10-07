@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Check,
   Globe,
@@ -8,6 +8,9 @@ import {
   Save,
   Send,
   Target,
+  Pencil,
+  LockKeyhole,
+  X,
 } from "lucide-react";
 import {
   AdminListHeader,
@@ -89,6 +92,8 @@ function CampaignSelect({
 
 function pill(status: string) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
+    invalid: { label: "Cần kiểm tra trạng thái", bg: "#fff1f2", color: "#be123c" },
+    unit_confirmed: { label: "Đơn vị đã xác nhận", bg: "#ecfdf5", color: "#047857" },
     chua_phan_quan: {
       label: "Chưa phân",
       bg: "var(--color-m3-warning-container)",
@@ -115,7 +120,7 @@ function pill(status: string) {
       color: "var(--color-m3-success)",
     },
   };
-  return map[status] || map.chua_phan_quan;
+  return map[status] || map.invalid;
 }
 
 /** Bộ: giao chỉ tiêu QK + duyệt + công bố */
@@ -511,6 +516,8 @@ function BoView({ session }: { session: Session }) {
 
 /** Quân khu: giao chỉ tiêu ĐV nhận + phân quân + chốt */
 function QuanKhuView({ session }: { session: Session }) {
+  const primaryAction = "inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40";
+  const secondaryAction = "inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-40";
   const { campaigns, campaignId, setCampaignId } = useCampaigns();
   const [tab, setTab] = useState<"alloc" | "assign">("alloc");
   const [parentQuota, setParentQuota] = useState<{ amount: number; filled: number } | null>(
@@ -525,6 +532,13 @@ function QuanKhuView({ session }: { session: Session }) {
   const [subQuotas, setSubQuotas] = useState<
     { toUnit: string; toUnitName: string; amount: number; filled?: number }[]
   >([]);
+  const [editingQuota, setEditingQuota] = useState<Record<string, boolean>>({});
+  const [editingAssignment, setEditingAssignment] = useState<Record<string, boolean>>({});
+  const mutationLock = useRef(false);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const allocRequest = useRef(0);
+  const assignRequest = useRef(0);
+  const [loading, setLoading] = useState(true);
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [rows, setRows] = useState<
     {
@@ -560,11 +574,13 @@ function QuanKhuView({ session }: { session: Session }) {
 
   const loadAlloc = useCallback(async () => {
     if (!campaignId) return;
+    const requestId = ++allocRequest.current;
     const res = await fetch(
       `/api/admin/receiving-quotas?campaignId=${encodeURIComponent(campaignId)}`,
     );
-    if (!res.ok) return;
+    if (!res.ok) throw new Error("Không tải được chỉ tiêu");
     const d = await res.json();
+    if (requestId !== allocRequest.current) return;
     setParentQuota(d.data?.[0] ? { amount: d.data[0].amount, filled: d.data[0].filled } : null);
     setProvinceOptions(d.provinceOptions || []);
     setReceivingUnitOptions(d.receivingUnitOptions || []);
@@ -576,12 +592,14 @@ function QuanKhuView({ session }: { session: Session }) {
 
   const loadAssign = useCallback(async () => {
     if (!campaignId) return;
+    const requestId = ++assignRequest.current;
     const params = new URLSearchParams({ campaignId });
     if (statusFilter) params.set("status", statusFilter);
     if (localityFilter) params.set("unitCode", localityFilter);
     const res = await fetch(`/api/admin/receiving?${params}`);
-    if (!res.ok) return;
+    if (!res.ok) throw new Error("Không tải được danh sách phân quân");
     const d = await res.json();
+    if (requestId !== assignRequest.current) return;
     setRows(d.data || []);
     setAssignable(d.assignableUnits || []);
     setCounts({
@@ -594,7 +612,7 @@ function QuanKhuView({ session }: { session: Session }) {
         (d.counts?.submitted_to_bo || 0) +
         (d.counts?.bo_approved || 0) +
         (d.counts?.published || 0) +
-        (d.counts?.unit_confirmed || 0),
+        (d.counts?.unit_confirmed || 0) + (d.counts?.invalid || 0),
     });
     const next: Record<string, string> = {};
     for (const r of d.data || []) if (r.receivingUnitCode) next[r.id] = r.receivingUnitCode;
@@ -602,10 +620,26 @@ function QuanKhuView({ session }: { session: Session }) {
   }, [campaignId, statusFilter, localityFilter]);
 
   useEffect(() => {
-    void loadAlloc();
+    const request = allocRequest;
+    setEditingQuota({});
+    setSubQuotas([]);
+    setAmounts({});
+    setParentQuota(null);
+    setReceivingUnitOptions([]);
+    void loadAlloc().catch(() => setToast({ message: "Không tải được chỉ tiêu. Vui lòng thử lại.", tone: "error" }));
+    return () => { request.current++; };
   }, [loadAlloc]);
   useEffect(() => {
-    if (tab === "assign") void loadAssign();
+    const request = assignRequest;
+    setEditingAssignment({});
+    setRows([]);
+    setCounts({ chua_phan_quan: 0, da_phan_quan: 0, submitted_to_bo: 0, all: 0 });
+    setLoading(true);
+    let active = true;
+    if (tab === "assign") void loadAssign()
+      .catch(() => { if (active) setToast({ message: "Không tải được danh sách. Vui lòng thử lại.", tone: "error" }); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; request.current++; };
   }, [tab, loadAssign]);
 
   useEffect(() => {
@@ -626,51 +660,83 @@ function QuanKhuView({ session }: { session: Session }) {
   }, [provinceCode]);
 
   const saveAlloc = async (toUnit: string) => {
+    if (mutationLock.current || !campaignId) return;
+    const saved = subQuotas.find(q => q.toUnit === toUnit);
+    if (saved && !editingQuota[toUnit]) return;
+    const amount = amounts[toUnit] ?? 0;
+    if (!Number.isSafeInteger(amount) || amount < (saved?.filled ?? 0) || amount < 0) {
+      setToast({ message: "Chỉ tiêu phải là số nguyên, không nhỏ hơn số quân đã phân.", tone: "error" });
+      return;
+    }
+    mutationLock.current = true;
+    setPendingKey(toUnit);
     setBusy(true);
     try {
       const res = await fetch("/api/admin/receiving-quotas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "allocate_unit",
-          campaignId,
-          toUnit,
-          amount: Number(amounts[toUnit] || 0),
-        }),
+        body: JSON.stringify({ action: "allocate_unit", campaignId, toUnit, amount,
+          expectedAmount: saved?.amount ?? null }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
         setToast({ message: d.error || "Không lưu được", tone: "error" });
-      } else {
-        setToast({
-          message: `Đã giao ${amounts[toUnit] || 0} chỉ tiêu nhận quân`,
-          tone: "success",
-        });
+        return;
       }
-      await loadAlloc();
+      setSubQuotas(q => [...q.filter(s => s.toUnit !== toUnit), d.data]);
+      setEditingQuota(e => ({ ...e, [toUnit]: false }));
+      setToast({ message: `Đã giao ${amount} chỉ tiêu nhận quân`, tone: "success" });
+    } catch {
+      setToast({ message: "Mất kết nối khi lưu chỉ tiêu. Vui lòng tải lại để kiểm tra kết quả.", tone: "error" });
     } finally {
+      mutationLock.current = false;
+      setPendingKey(null);
       setBusy(false);
     }
   };
 
   const assignOne = async (id: string) => {
+    if (mutationLock.current || loading) return;
+    const row = rows.find(r => r.id === id);
     const receivingUnitCode = draft[id];
-    if (!receivingUnitCode) return;
-    const res = await fetch("/api/admin/receiving", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "assign", campaignId, id, receivingUnitCode }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setToast({ message: d.error || "Không phân được", tone: "error" });
-    } else {
+    const editing = row?.receivingStatus === "da_phan_quan" && editingAssignment[id];
+    if (!row || !receivingUnitCode || (!editing && row.receivingStatus !== "chua_phan_quan")) return;
+    if (editing && receivingUnitCode === row.receivingUnitCode) return;
+    mutationLock.current = true;
+    setPendingKey(id);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: editing ? "reassign" : "assign", campaignId, id,
+          receivingUnitCode, expectedReceivingUnitCode: row.receivingUnitCode }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast({ message: d.error || "Không phân được", tone: "error" });
+        if (res.status === 409) {
+          setEditingAssignment({});
+          await loadAssign();
+        }
+        return;
+      }
+      setRows(items => items.map(r => r.id === id ? { ...r, receivingUnitCode, receivingStatus: "da_phan_quan" } : r));
+      setEditingAssignment(e => ({ ...e, [id]: false }));
       setToast({ message: d.message || "Đã phân quân", tone: "success" });
+      await Promise.all([loadAssign(), loadAlloc()]);
+    } catch {
+      setToast({ message: "Không cập nhật được danh sách. Vui lòng tải lại để kiểm tra kết quả.", tone: "error" });
+    } finally {
+      mutationLock.current = false;
+      setPendingKey(null);
+      setBusy(false);
     }
-    await loadAssign();
   };
 
   const submit = async () => {
+    if (mutationLock.current || loading || counts.da_phan_quan === 0) return;
+    mutationLock.current = true;
     setBusy(true);
     try {
       const res = await fetch("/api/admin/receiving", {
@@ -687,14 +753,17 @@ function QuanKhuView({ session }: { session: Session }) {
         setStatusFilter("submitted_to_bo");
         await loadAssign();
       }
+    } catch {
+      setToast({ message: "Không chốt được danh sách. Vui lòng thử lại.", tone: "error" });
     } finally {
+      mutationLock.current = false;
       setBusy(false);
     }
   };
 
   const localityFilters = (
     <>
-      <CampaignSelect campaigns={campaigns} value={campaignId} onChange={setCampaignId} />
+      <CampaignSelect campaigns={campaigns} value={campaignId} onChange={(id) => { if (!mutationLock.current) setCampaignId(id); }} />
       {tab === "assign" && (
         <>
           <SearchableSelect
@@ -702,6 +771,7 @@ function QuanKhuView({ session }: { session: Session }) {
             className="max-w-[220px] min-w-[180px]"
             value={provinceCode}
             onChange={(code) => {
+              if (mutationLock.current) return;
               setProvinceCode(code);
               setWardCode("");
               setStatusFilter("");
@@ -722,6 +792,7 @@ function QuanKhuView({ session }: { session: Session }) {
               className="max-w-[220px] min-w-[160px]"
               value={wardCode}
               onChange={(code) => {
+                if (mutationLock.current) return;
                 setWardCode(code);
                 setStatusFilter("");
               }}
@@ -751,7 +822,7 @@ function QuanKhuView({ session }: { session: Session }) {
           tab === "assign" ? (
             <>
             <ReceivingExcelButton campaignId={campaignId} status={statusFilter} unitCode={localityFilter} />
-            <AdminPrimaryBtn tone="blue" onClick={() => setConfirmOpen(true)}>
+            <AdminPrimaryBtn tone="blue" disabled={busy || loading || counts.da_phan_quan === 0} onClick={() => setConfirmOpen(true)}>
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               Chốt danh sách & gửi Bộ ({counts.da_phan_quan})
             </AdminPrimaryBtn>
@@ -780,7 +851,7 @@ function QuanKhuView({ session }: { session: Session }) {
           { value: "assign", label: "Phân quân & chốt" },
         ]}
         value={tab}
-        onChange={(v) => setTab(v as "alloc" | "assign")}
+        onChange={(v) => { if (!mutationLock.current) setTab(v as "alloc" | "assign"); }}
       />
 
       {!campaignId ? (
@@ -791,30 +862,35 @@ function QuanKhuView({ session }: { session: Session }) {
         <AdminListShell page={1} totalPages={1}>
           <AdminTable>
             <AdminTHead>
-              <th className={ADMIN_TH_CLS}>Đơn vị nhận</th>
-              <th className={ADMIN_TH_CLS}>Chỉ tiêu</th>
-              <th className={ADMIN_TH_CLS}>Đã phân</th>
-              <th className={ADMIN_TH_CLS}>Lưu</th>
+              <th className={`${ADMIN_TH_CLS} w-[40%]`}>Đơn vị nhận</th>
+              <th className={`${ADMIN_TH_CLS} w-[160px]`}>Chỉ tiêu</th>
+              <th className={`${ADMIN_TH_CLS} min-w-[160px]`}>Tiến độ phân quân</th>
+              <th className={`${ADMIN_TH_CLS} min-w-[130px]`}>Trạng thái</th>
+              <th className={`${ADMIN_TH_CLS} w-[240px]`}>Thao tác</th>
             </AdminTHead>
             <tbody>
               {receivingUnitOptions.map((u, i) => {
-                const filled =
-                  subQuotas.find((s) => s.toUnit === u.code)?.filled ?? 0;
+                const saved = subQuotas.find((s) => s.toUnit === u.code);
+                const filled = saved?.filled ?? 0;
+                const editable = !saved || editingQuota[u.code];
                 return (
                   <tr key={u.code} className={adminRowClass(i)}>
                     <td className={ADMIN_TD_CLS}>
                       <div className="font-semibold">{u.name}</div>
                       {u.kind && (
                         <div className="text-[12px] text-m3-on-surface-variant">
-                          {u.kind}
+                          {({ sudoan: "Sư đoàn", trungdoan: "Trung đoàn", quandoan: "Quân đoàn" } as Record<string, string>)[u.kind] || u.kind}
                         </div>
                       )}
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      <input
+                      {editable ? <input
+                        disabled={busy}
+                        aria-label={`Chỉ tiêu ${u.name}`}
                         type="number"
-                        min={0}
-                        className="h-10 w-28 rounded-full border border-black/[0.08] bg-white px-3.5 text-sm outline-none focus:border-m3-primary/40 focus:ring-2 focus:ring-m3-primary/15"
+                        min={filled}
+                        step={1}
+                        className="h-11 w-28 rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold tabular-nums outline-none transition-shadow focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 disabled:opacity-50"
                         value={amounts[u.code] ?? 0}
                         onChange={(e) =>
                           setAmounts((a) => ({
@@ -822,20 +898,47 @@ function QuanKhuView({ session }: { session: Session }) {
                             [u.code]: Number(e.target.value),
                           }))
                         }
-                      />
+                      /> : (
+                        <div className="flex h-11 w-28 items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50 px-3.5">
+                          <span className="text-sm font-semibold tabular-nums text-slate-800">{saved.amount}</span>
+                          <LockKeyhole size={13} className="text-slate-400" aria-label="Đã khóa" />
+                        </div>
+                      )}
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      {filled}/{amounts[u.code] ?? 0}
+                      <div className="w-32 space-y-2">
+                        <div className="flex items-baseline gap-1 text-sm tabular-nums">
+                          <span className="font-semibold text-slate-800">{filled}</span>
+                          <span className="text-xs text-slate-400">/ {saved?.amount ?? 0} quân</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`Tiến độ ${u.name}`} aria-valuenow={filled} aria-valuemin={0} aria-valuemax={Math.max(filled, saved?.amount ?? 0, 1)}>
+                          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${saved?.amount ? Math.min(100, filled / saved.amount * 100) : 0}%` }} />
+                        </div>
+                      </div>
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      <button
+                      <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${saved && editable ? "bg-amber-50 text-amber-700" : saved ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                        {saved && !editable ? <Check size={12} /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+                        {saved && editable ? "Đang chỉnh sửa" : saved ? "Đã giao" : "Chưa giao"}
+                      </span>
+                    </td>
+                    <td className={ADMIN_TD_CLS}>
+                      {!editable ? (
+                        <button type="button" disabled={busy} className={secondaryAction} onClick={() => {
+                          setAmounts(a => ({ ...a, [u.code]: saved.amount }));
+                          setEditingQuota(e => ({ ...e, [u.code]: true }));
+                        }}><Pencil size={14} /> Sửa chỉ tiêu</button>
+                      ) : <div className="flex items-center gap-2"><button
                         type="button"
-                        disabled={busy}
-                        className="inline-flex h-9 items-center gap-1 rounded-full bg-emerald-600 px-3.5 text-[13px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+                        disabled={busy || (saved !== undefined && amounts[u.code] === saved.amount)}
+                        className={primaryAction}
                         onClick={() => void saveAlloc(u.code)}
                       >
-                        <Save size={14} /> Lưu
-                      </button>
+                        {pendingKey === u.code ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saved ? "Lưu thay đổi" : "Giao chỉ tiêu"}
+                      </button>{saved && <button type="button" disabled={busy} className={secondaryAction} onClick={() => {
+                        setAmounts(a => ({ ...a, [u.code]: saved.amount }));
+                        setEditingQuota(e => ({ ...e, [u.code]: false }));
+                      }}><X size={14} /> Hủy</button>}</div>}
                     </td>
                   </tr>
                 );
@@ -843,7 +946,7 @@ function QuanKhuView({ session }: { session: Session }) {
               {receivingUnitOptions.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
                   >
                     Chưa có sư đoàn / trung đoàn thuộc quân khu
@@ -866,7 +969,7 @@ function QuanKhuView({ session }: { session: Session }) {
                 { value: "submitted_to_bo", label: `Đã gửi Bộ (${counts.submitted_to_bo})` },
               ]}
               value={statusFilter}
-              onChange={setStatusFilter}
+              onChange={(v) => { if (!mutationLock.current) setStatusFilter(v); }}
             />
           }
         >
@@ -879,9 +982,9 @@ function QuanKhuView({ session }: { session: Session }) {
             </AdminTHead>
             <tbody>
               {rows.map((r, i) => {
-                const can =
-                  r.receivingStatus === "chua_phan_quan" ||
-                  r.receivingStatus === "da_phan_quan";
+                const assigned = r.receivingStatus === "da_phan_quan";
+                const can = r.receivingStatus === "chua_phan_quan" || (assigned && editingAssignment[r.id]);
+                const unitName = assignable.find(u => u.code === r.receivingUnitCode)?.name || receivingUnitOptions.find(u => u.code === r.receivingUnitCode)?.name || r.receivingUnitCode || "—";
                 return (
                   <tr key={r.id} className={adminRowClass(i)}>
                     <td className={ADMIN_TD_CLS}>
@@ -892,7 +995,9 @@ function QuanKhuView({ session }: { session: Session }) {
                     <td className={ADMIN_TD_CLS}>
                       {can ? (
                         <select
-                          className="h-10 w-full min-w-[180px] rounded-full border border-black/[0.08] bg-white px-3 text-sm outline-none focus:border-m3-primary/40"
+                          disabled={busy}
+                          aria-label={`Đơn vị nhận của ${r.fullName}`}
+                          className="h-11 w-full min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition-shadow focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 disabled:opacity-50"
                           value={draft[r.id] || ""}
                           onChange={(e) =>
                             setDraft((d) => ({ ...d, [r.id]: e.target.value }))
@@ -906,19 +1011,24 @@ function QuanKhuView({ session }: { session: Session }) {
                           ))}
                         </select>
                       ) : (
-                        draft[r.id] || r.receivingUnitCode || "—"
+                        <div className="space-y-1"><div>{unitName}</div><AdminPill {...pill(r.receivingStatus)} /></div>
                       )}
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      {can && (
-                        <button
+                      {can ? (
+                        <div className="flex items-center gap-3"><button
                           type="button"
-                          className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm hover:bg-emerald-700"
+                          disabled={busy || !draft[r.id] || (assigned && draft[r.id] === r.receivingUnitCode)}
+                          className={primaryAction}
                           onClick={() => void assignOne(r.id)}
                         >
-                          Phân quân
-                        </button>
-                      )}
+                          {pendingKey === r.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          {pendingKey === r.id ? "Đang lưu…" : assigned ? "Lưu thay đổi" : "Phân quân"}
+                        </button>{assigned && <button type="button" disabled={busy} className={secondaryAction} onClick={() => {
+                          setDraft(d => ({ ...d, [r.id]: r.receivingUnitCode || "" }));
+                          setEditingAssignment(e => ({ ...e, [r.id]: false }));
+                        }}><X size={14} /> Hủy</button>}</div>
+                      ) : assigned ? <button type="button" disabled={busy} className={secondaryAction} onClick={() => setEditingAssignment(e => ({ ...e, [r.id]: true }))}><Pencil size={14} /> Sửa đơn vị</button> : null}
                     </td>
                   </tr>
                 );
@@ -929,7 +1039,7 @@ function QuanKhuView({ session }: { session: Session }) {
                     colSpan={4}
                     className="px-4 py-10 text-center text-sm text-m3-on-surface-variant"
                   >
-                    {wardCode
+                    {loading ? "Đang tải danh sách…" : wardCode
                       ? "Không có hồ sơ nhập ngũ tại xã/phường này (chỉ hiện người đã duyệt gọi)."
                       : provinceCode
                         ? "Không có hồ sơ nhập ngũ theo bộ lọc hiện tại."
