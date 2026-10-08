@@ -1,7 +1,7 @@
 import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { buildChatKnowledgeContext, buildDirectCitizenStatsReply } from "@/lib/analytics/chat-context";
+import { buildChatKnowledgeContext, buildDirectCitizenStatsReply, detectCitizenQueryIntent, resolveCitizenLocality } from "@/lib/analytics/chat-context";
 import {
   generateGeminiChat,
   getGeminiModel,
@@ -32,16 +32,6 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isGeminiConfigured()) {
-    return NextResponse.json(
-      {
-        error:
-          "Chưa cấu hình GEMINI_API_KEY. Thêm vào .env và khởi động lại server.",
-      },
-      { status: 503 },
-    );
-  }
-
   try {
     const body = await request.json();
     const message = String(body.message || "").trim();
@@ -65,16 +55,36 @@ async function POSTHandler(request: NextRequest) {
     };
 
     // Thống kê theo trạng thái → trả lời trực tiếp số hồ sơ từ DB
-    const directStats = await buildDirectCitizenStatsReply(sessionScope, message);
+    let statsQuestion = message;
+    const locality = resolveCitizenLocality(sessionScope, message);
+    if (detectCitizenQueryIntent(message) && !locality.error && locality.targets.length === 0 &&
+      !/toàn quốc|cả nước|tất cả|đơn vị|toan quoc|ca nuoc|tat ca|don vi/i.test(message)) {
+      for (const h of history.slice(-6).reverse()) {
+        if (h.role !== "user" || typeof h.content !== "string") continue;
+        const previous = resolveCitizenLocality(sessionScope, h.content.slice(0, 2000));
+        if (previous.error) break;
+        if (previous.targets.length) {
+          statsQuestion = `${message}\nĐịa bàn: ${previous.targets.map((t) => t.name).join("; ")}`;
+          break;
+        }
+      }
+    }
+    const directStats = await buildDirectCitizenStatsReply(sessionScope, statsQuestion);
     if (directStats) {
       return NextResponse.json({
         reply: directStats,
-        model: getGeminiModel(),
-        dataSource: "mysql",
+        model: null,
         focus: [],
-        directFromDb: true,
+        directStats: true,
         generatedAt: new Date().toISOString(),
       });
+    }
+
+    if (!isGeminiConfigured()) {
+      return NextResponse.json(
+        { error: "Chưa cấu hình GEMINI_API_KEY. Thêm vào .env.local và khởi động lại server." },
+        { status: 503 },
+      );
     }
 
     const { text: knowledge, source, focus } = await buildChatKnowledgeContext(

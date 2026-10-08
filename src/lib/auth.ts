@@ -82,7 +82,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   const user = await findUserByIdFromDb(session.userId);
   if (!user) return process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEMO_AUTH === 'true' ? session : null;
   if (user.status !== 'active') return null;
-  return { ...session, role: user.role, hierarchyLevel: user.hierarchyLevel, unitCode: user.unitCode,
+  return { ...session, name: user.name, username: user.username, role: user.role, hierarchyLevel: user.hierarchyLevel, unitCode: user.unitCode,
     functionalRole: user.role === 'admin' ? session.functionalRole : user.functionalRole };
 }
 

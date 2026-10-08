@@ -82,7 +82,7 @@ export function consumeLimit(key: string, limit: number, windowMs: number, now =
 export function opaqueKey(value: string): string { return createHash('sha256').update(value).digest('hex'); }
 
 // Allowlisted fields only: never include credentials, request bodies, CCCD or URLs with query strings.
-export function securityEvent(event: string, fields: { actor?: string; status?: number; requestId?: string } = {}) {
+export function securityEvent(event: string, fields: { actor?: string; status?: number; requestId?: string; stage?: 'lookup' | 'password' | 'session' | 'audit' | 'input' } = {}) {
   console.warn(JSON.stringify({ type: 'security', event: event.slice(0, 80), time: new Date().toISOString(), ...fields }));
 }
 

@@ -1,8 +1,11 @@
 import type { Citizen } from "@/lib/data";
 import { generateGeminiJsonFromImages } from "@/lib/gemini";
+import { readPrivateUpload } from "@/lib/private-uploads";
 
 const MATCH_THRESHOLD = 72;
 const BATCH_SIZE = 6;
+const BATCH_CONCURRENCY = 3;
+const GEMINI_TIMEOUT_MS = 30_000;
 
 export type FaceMatchHit = {
   matched: boolean;
@@ -24,14 +27,41 @@ export type FaceMatchHit = {
 };
 
 function extractJson(text: string): unknown {
-  const trimmed = text.trim();
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
     return JSON.parse(trimmed);
   } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
+    // Tolerate a short explanation before/after JSON without accepting
+    // incomplete or unrelated objects.
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < trimmed.length; i += 1) {
+      const char = trimmed[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+      if (char === "{") {
+        if (depth === 0) start = i;
+        depth += 1;
+      } else if (char === "}" && depth > 0) {
+        depth -= 1;
+        if (depth === 0 && start >= 0) {
+          try {
+            return JSON.parse(trimmed.slice(start, i + 1));
+          } catch {
+            start = -1;
+          }
+        }
+      }
     }
     throw new Error("AI không trả JSON hợp lệ.");
   }
@@ -56,6 +86,31 @@ type BatchVerdict = {
   reason?: string;
 };
 
+async function resolveAvatarImage(avatar: string): Promise<string> {
+  const value = avatar.trim();
+  if (value.startsWith("data:image/")) return value;
+
+  const uploadPath = value.replace(/^\/+/, "");
+  if (uploadPath.startsWith("uploads/")) {
+    const data = await readPrivateUpload(uploadPath);
+    const extension = uploadPath.split(".").pop()?.toLowerCase();
+    const mime =
+      extension === "png"
+        ? "image/png"
+        : extension === "webp"
+          ? "image/webp"
+          : "image/jpeg";
+    return `data:${mime};base64,${data.toString("base64")}`;
+  }
+
+  // Legacy records may still contain raw base64 rather than a private path.
+  if (/^[A-Za-z0-9+/=\s]+$/.test(value)) {
+    return `data:image/jpeg;base64,${value.replace(/\s+/g, "")}`;
+  }
+
+  throw new Error("Ảnh hồ sơ có định dạng không hỗ trợ.");
+}
+
 async function compareProbeToBatch(
   probeBase64: string,
   candidates: { id: string; imageBase64: string }[],
@@ -79,6 +134,7 @@ Trả đúng JSON:
 - matched: true chỉ khi chắc chắn cùng người và confidence >= ${MATCH_THRESHOLD}
 - Nếu ảnh mờ / không thấy mặt: matched=false, bestIndex=null`,
     images,
+    timeoutMs: GEMINI_TIMEOUT_MS,
   });
 
   const parsed = extractJson(raw) as Partial<BatchVerdict>;
@@ -123,7 +179,7 @@ export async function verifyFaceAgainstCitizen(
   }
 
   const verdict = await compareProbeToBatch(probeBase64, [
-    { id: citizen.id, imageBase64: citizen.avatar },
+    { id: citizen.id, imageBase64: await resolveAvatarImage(citizen.avatar) },
   ]);
 
   return {
@@ -159,24 +215,45 @@ export async function searchFaceInGallery(
     reason?: string;
   } | null = null;
 
+  const batches = [];
   for (let i = 0; i < withAvatar.length; i += BATCH_SIZE) {
-    const batch = withAvatar.slice(i, i + BATCH_SIZE);
-    const verdict = await compareProbeToBatch(
-      probeBase64,
-      batch.map((c) => ({ id: c.id, imageBase64: c.avatar! })),
+    batches.push(withAvatar.slice(i, i + BATCH_SIZE));
+  }
+
+  for (let i = 0; i < batches.length; i += BATCH_CONCURRENCY) {
+    const wave = batches.slice(i, i + BATCH_CONCURRENCY);
+    const results = await Promise.allSettled(
+      wave.map(async (batch) => ({
+        batch,
+        verdict: await compareProbeToBatch(
+          probeBase64,
+          await Promise.all(
+            batch.map(async (c) => ({
+              id: c.id,
+              imageBase64: await resolveAvatarImage(c.avatar!),
+            })),
+          ),
+        ),
+      })),
     );
-    if (
-      verdict.matched &&
-      verdict.bestIndex != null &&
-      (!best || verdict.confidence > best.confidence)
-    ) {
-      best = {
-        citizen: batch[verdict.bestIndex]!,
-        confidence: verdict.confidence,
-        reason: verdict.reason,
-      };
+
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const { batch, verdict } = result.value;
+      if (
+        verdict.matched &&
+        verdict.bestIndex != null &&
+        (!best || verdict.confidence > best.confidence)
+      ) {
+        best = {
+          citizen: batch[verdict.bestIndex]!,
+          confidence: verdict.confidence,
+          reason: verdict.reason,
+        };
+      }
     }
-    // Đã rất chắc → dừng sớm
+
+    // Do not spend more API calls after a highly confident match.
     if (best && best.confidence >= 92) break;
   }
 

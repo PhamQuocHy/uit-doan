@@ -114,6 +114,7 @@ export async function generateGeminiJsonFromImage(args: {
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 1024,
+      responseMimeType: "application/json",
     },
   });
 }
@@ -123,6 +124,7 @@ export async function generateGeminiJsonFromImages(args: {
   prompt: string;
   systemInstruction?: string;
   images: { base64: string; mimeType?: string; label?: string }[];
+  timeoutMs?: number;
 }): Promise<string> {
   const parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] =
     [{ text: args.prompt }];
@@ -137,16 +139,20 @@ export async function generateGeminiJsonFromImages(args: {
     });
   }
 
-  return callGemini({
-    systemInstruction: args.systemInstruction
-      ? { parts: [{ text: args.systemInstruction }] }
-      : undefined,
-    contents: [{ role: "user", parts }],
-    generationConfig: {
-      temperature: 0.05,
-      maxOutputTokens: 512,
+  return callGemini(
+    {
+      systemInstruction: args.systemInstruction
+        ? { parts: [{ text: args.systemInstruction }] }
+        : undefined,
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        temperature: 0.05,
+        maxOutputTokens: 512,
+        responseMimeType: "application/json",
+      },
     },
-  });
+    args.timeoutMs,
+  );
 }
 
 export async function generateGeminiText(

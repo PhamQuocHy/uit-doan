@@ -20,6 +20,7 @@ import CccdScanButton from "@/components/admin/CccdScanButton";
 import AiVoiceTab from "@/components/admin/AiVoiceTab";
 import type { Hn212CitizenScan } from "@/lib/hn212";
 import { STATUS_LABELS } from "@/lib/analytics/types";
+import { resolveCitizenAvatarSrc } from "@/lib/citizen-avatar";
 
 type Tab = "face" | "voice";
 
@@ -83,6 +84,7 @@ export default function AiFacePage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cameraAttemptRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
 
   const CAMERA_PREF_KEY = "ai_face_preferred_camera_id";
@@ -206,8 +208,8 @@ export default function AiFacePage() {
         audio: false,
         video: {
           deviceId: { exact: deviceId },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
       },
       { audio: false, video: { deviceId: { exact: deviceId } } },
@@ -246,18 +248,6 @@ export default function AiFacePage() {
     deviceId: string;
   }> => {
     const failNotes: string[] = [];
-    // Xin quyền nhanh để có label thật (một số máy cần)
-    try {
-      const warm = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: true,
-      });
-      releaseStream(warm);
-      await new Promise((r) => setTimeout(r, 200));
-    } catch {
-      /* ignore — vẫn enumerate được */
-    }
-
     const cams = await refreshCameraList();
     const pc = findPcCamera(cams);
     const others = cams
@@ -277,8 +267,6 @@ export default function AiFacePage() {
       );
     }
 
-    await new Promise((r) => setTimeout(r, 200));
-
     for (const cam of tryOrder) {
       try {
         const stream = await openDevice(cam.deviceId);
@@ -289,7 +277,7 @@ export default function AiFacePage() {
     }
 
     throw new Error(
-      `Không mở được PC camera.\n${failNotes.join("\n")}\nWindows Camera mở được thì F5 trang rồi bấm «Reset & mở PC camera».`,
+      `Không mở được PC camera.\n${failNotes.join("\n")}\nĐóng hẳn Windows Camera, Zoom, Teams hoặc trình duyệt khác đang dùng camera rồi thử lại.`,
     );
   };
 
@@ -322,6 +310,7 @@ export default function AiFacePage() {
 
   /** Webcam trình duyệt — ưu tiên PC camera */
   const startCamera = async (forceDeviceId?: string) => {
+    const attempt = ++cameraAttemptRef.current;
     setError(null);
     setCameraStarting(true);
     setScanHint("Đang mở PC camera…");
@@ -342,15 +331,24 @@ export default function AiFacePage() {
           );
         }
         const stream = await openDevice(forceDeviceId);
+        if (attempt !== cameraAttemptRef.current) {
+          releaseStream(stream);
+          return;
+        }
         await refreshCameraList();
         await attachStream(stream, forceDeviceId);
       } else {
         const { stream, deviceId } = await requestCameraStream();
+        if (attempt !== cameraAttemptRef.current) {
+          releaseStream(stream);
+          return;
+        }
         await refreshCameraList();
         await attachStream(stream, deviceId);
       }
       setScanHint("Canh mặt vào khung rồi Chụp & nhận dạng.");
     } catch (err) {
+      if (attempt !== cameraAttemptRef.current) return;
       setError(cameraErrorMessage(err));
       setCameraOn(false);
       setScanHint(
@@ -376,14 +374,22 @@ export default function AiFacePage() {
     if (!video || !canvas || !video.videoWidth) return null;
     const w = video.videoWidth;
     const h = video.videoHeight;
-    canvas.width = w;
-    canvas.height = h;
+    // The guide oval occupies the center. Cropping it makes the face larger
+    // than a full webcam frame while retaining enough head-and-shoulders area.
+    const cropW = Math.round(w * 0.72);
+    const cropH = Math.round(h * 0.9);
+    const sx = Math.max(0, Math.round((w - cropW) / 2));
+    const sy = Math.max(0, Math.round((h - cropH) / 2));
+    canvas.width = cropW;
+    canvas.height = cropH;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    ctx.translate(w, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.translate(cropW, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.92);
+    ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+    return canvas.toDataURL("image/jpeg", 0.95);
   };
 
   // ─── Face recognition handlers ──────────────────────────────────────────
@@ -851,9 +857,10 @@ export default function AiFacePage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={
-                            result.citizen.avatar.startsWith("data:")
-                              ? result.citizen.avatar
-                              : `data:image/jpeg;base64,${result.citizen.avatar}`
+                            resolveCitizenAvatarSrc(
+                              result.citizen.avatar,
+                              result.citizen.fullName,
+                            )
                           }
                           alt=""
                           className="h-24 w-[72px] rounded-lg object-cover border border-black/[0.08]"

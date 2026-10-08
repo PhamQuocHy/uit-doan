@@ -68,7 +68,7 @@ const ALIASES: Record<string, string> = {
 /** Từ khóa tiếng Việt → mã trạng thái NVQS */
 const STATUS_KEYWORDS: Array<{ keys: string[]; status: string }> = [
   { keys: ["da dau", "dau tuyen", "trung tuyen", "trungtuyen"], status: "trungtuyen" },
-  { keys: ["rot tuyen", "rot", "truot tuyen", "truottuyen"], status: "truottuyen" },
+  { keys: ["rot tuyen", "rot", "truot tuyen", "truottuyen", "khong dau"], status: "truottuyen" },
   { keys: ["tam hoan", "tamhoan"], status: "tamhoan" },
   { keys: ["mien goi", "miengoi"], status: "miengoi" },
   { keys: ["nhap ngu", "nhapngu"], status: "nhapngu" },
@@ -108,7 +108,8 @@ export function detectCitizenQueryIntent(question: string): CitizenQueryIntent |
 
   const isList = listWords.some((w) => q.includes(w));
   const isCount = countWords.some((w) => q.includes(w));
-  if (!isList && !isCount) return null;
+  const isFollowup = /^(con|the con)\s/.test(q);
+  if (!isList && !isCount && !isFollowup) return null;
 
   const statuses: string[] = [];
   for (const { keys, status } of STATUS_KEYWORDS) {
@@ -127,10 +128,11 @@ export function detectCitizenQueryIntent(question: string): CitizenQueryIntent |
     if (q.includes("mien")) statuses.push("miengoi");
   }
 
-  if (statuses.length === 0) return null;
+  if (statuses.length === 0 && (questionNeedsLegalContext(question) ||
+    (!isCount && !["liet ke", "danh sach"].some((w) => q.includes(w))))) return null;
 
   return {
-    mode: isList ? "list" : isCount ? "count" : "overview",
+    mode: isCount ? "count" : isList ? "list" : "overview",
     statuses: [...new Set(statuses)],
   };
 }
@@ -164,7 +166,7 @@ export function detectProvincesInQuestion(question: string): ProvinceRef[] {
   const seen = new Set<string>();
 
   for (const [alias, code] of Object.entries(ALIASES)) {
-    if (q.includes(alias)) {
+    if (` ${q} `.includes(` ${normalizeVn(alias)} `)) {
       const p = provinces.find((x) => x.code === code);
       if (p && !seen.has(p.code)) {
         seen.add(p.code);
@@ -180,8 +182,8 @@ export function detectProvincesInQuestion(question: string): ProvinceRef[] {
       .replace(/^tinh\s+/, "")
       .trim();
     if (
-      (full.length >= 4 && q.includes(full)) ||
-      (short.length >= 4 && q.includes(short))
+      (full.length >= 4 && ` ${q} `.includes(` ${full} `)) ||
+      (short.length >= 4 && ` ${q} `.includes(` ${short} `))
     ) {
       if (!seen.has(p.code)) {
         seen.add(p.code);
@@ -287,35 +289,6 @@ async function statusByProvinceMysql(
   ];
 }
 
-async function statusTotalMysql(
-  statuses: string[],
-  scope: SessionScope,
-  detectedProvinces: ProvinceRef[] = [],
-): Promise<number> {
-  const scopeClause = scopeWhereClause(scope);
-  const placeholders = statuses.map(() => "?").join(", ");
-  const params: string[] = [...statuses, ...scopeClause.params];
-
-  let provinceFilter = "";
-  if (detectedProvinces.length > 0) {
-    const provinceClauses = detectedProvinces.map(
-      () => "(unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))",
-    );
-    provinceFilter = ` AND (${provinceClauses.join(" OR ")})`;
-    for (const p of detectedProvinces) {
-      params.push(p.code, p.code);
-    }
-  }
-
-  const [row] = await queryRows<(RowDataPacket & { cnt: number })[]>(
-    `SELECT COUNT(*) AS cnt FROM citizens
-     WHERE military_status IN (${placeholders})
-       AND ${scopeClause.where}${provinceFilter}`,
-    params,
-  );
-  return Number(row?.cnt || 0);
-}
-
 function statusByProvinceMemory(
   statuses: string[],
   scope: SessionScope,
@@ -365,7 +338,45 @@ function statusByProvinceMemory(
   return { total: all.length, lines };
 }
 
-/** Trả lời trực tiếp chỉ số hồ sơ (không liệt kê từng người) */
+export function resolveCitizenLocality(scope: SessionScope, question: string): {
+  targets: ProvinceRef[]; error?: string;
+} {
+  const q = ` ${normalizeVn(question)} `;
+  const provinces = detectProvincesInQuestion(question);
+  const inScope = (code: string) => scope.hierarchyLevel === "bo" ||
+    code === scope.unitCode || code.startsWith(`${scope.unitCode}-`);
+  const shortName = (name: string) => normalizeVn(name).replace(/^(xa|phuong|thi tran|dac khu)\s+/, "");
+  const matches = hierarchyUnits.filter((u) => u.level === "xa" &&
+    (q.includes(` ${normalizeVn(u.name)} `) ||
+      (shortName(u.name).length >= 3 && q.includes(` ${shortName(u.name)} `))));
+  let wards = matches;
+  if (provinces.length) wards = wards.filter((u) => provinces.some((p) => u.parentCode === p.code));
+  else if (wards.some((u) => inScope(u.code))) wards = wards.filter((u) => inScope(u.code));
+  const explicit = wards.filter((u) => q.includes(` ${normalizeVn(u.name)} `));
+  if (explicit.length) wards = explicit;
+  const longest = Math.max(0, ...wards.map((u) => shortName(u.name).length));
+  wards = wards.filter((u) => shortName(u.name).length === longest);
+  const label = (u: typeof hierarchyUnits[number]) => ({
+    code: u.code,
+    name: `${u.name}, ${hierarchyUnits.find((p) => p.code === u.parentCode)?.name || u.parentCode}`,
+  });
+  if (wards.length > 1) return {
+    targets: [], error: `Có nhiều xã/phường trùng tên. Bạn muốn hỏi địa bàn nào?\n${wards.map((u) => `- ${label(u).name}`).join("\n")}`,
+  };
+  if (wards.length === 1) {
+    if (!inScope(wards[0].code)) return { targets: [], error: "Địa bàn được hỏi nằm ngoài phạm vi đơn vị của bạn." };
+    return { targets: wards.map(label) };
+  }
+  if (/\b(xa|phuong|thi tran|dac khu)\s+/.test(normalizeVn(question))) {
+    return { targets: [], error: "Chưa xác định được xã/phường trong câu hỏi. Bạn hãy ghi đầy đủ tên xã/phường và tỉnh/thành phố." };
+  }
+  if (provinces.some((p) => !inScope(p.code) && !scope.unitCode.startsWith(`${p.code}-`))) {
+    return { targets: [], error: "Địa bàn được hỏi nằm ngoài phạm vi đơn vị của bạn." };
+  }
+  return { targets: provinces };
+}
+
+/** Đếm trực tiếp từ DB, không suy ra tổng từ mẫu hồ sơ hoặc dữ liệu demo. */
 export async function buildDirectCitizenStatsReply(
   scope: SessionScope,
   question: string,
@@ -373,44 +384,47 @@ export async function buildDirectCitizenStatsReply(
   const intent = detectCitizenQueryIntent(question);
   if (!intent) return null;
 
-  const detected = detectProvincesInQuestion(question);
-  const statusLabel = intent.statuses
-    .map((s) => STATUS_LABELS[s] || s)
-    .join(", ");
+  const locality = resolveCitizenLocality(scope, question);
+  if (locality.error) return locality.error;
   const scopeClause = scopeWhereClause(scope);
-  const dbOk = await pingDb();
-
-  if (dbOk) {
-    try {
-      const total = await statusTotalMysql(intent.statuses, scope, detected);
-      const byProvince = await statusByProvinceMysql(
-        intent.statuses,
-        scope,
-        detected,
-      );
-      const provinceLines = byProvince.filter((l) => l.startsWith("- "));
-      return [
-        `Thống kê hồ sơ — trạng thái: ${statusLabel}`,
-        `Phạm vi: ${scopeClause.label}`,
-        `Tổng: ${total} hồ sơ`,
-        "",
-        detected.length > 0 ? "Theo địa bàn được hỏi:" : "Theo tỉnh/thành phố:",
-        ...provinceLines,
-      ].join("\n");
-    } catch (e) {
-      console.error("buildDirectCitizenStatsReply mysql:", e);
-    }
+  let where = scopeClause.where;
+  const params = [...scopeClause.params];
+  if (locality.targets.length) {
+    where += ` AND (${locality.targets.map(() => "(unit_code = ? OR unit_code LIKE CONCAT(?, '-%'))").join(" OR ")})`;
+    for (const target of locality.targets) params.push(target.code, target.code);
   }
-
-  const mem = statusByProvinceMemory(intent.statuses, scope, detected);
-  return [
-    `Thống kê hồ sơ — trạng thái: ${statusLabel}`,
-    `Phạm vi: ${scopeClause.label}`,
-    `Tổng: ${mem.total} hồ sơ`,
-    "",
-    "Theo tỉnh/thành phố:",
-    ...mem.lines,
-  ].join("\n");
+  if (intent.statuses.length) {
+    where += ` AND military_status IN (${intent.statuses.map(() => "?").join(", ")})`;
+    params.push(...intent.statuses);
+  }
+  try {
+    const rows = await queryRows<(RowDataPacket & { unit_code: string; military_status: string; cnt: number })[]>(
+      `SELECT unit_code, military_status, COUNT(*) AS cnt FROM citizens WHERE ${where} GROUP BY unit_code, military_status`, params,
+    );
+    const total = rows.reduce((sum, row) => sum + Number(row.cnt), 0);
+    const statuses = new Map<string, number>();
+    const units = new Map<string, number>();
+    for (const row of rows) {
+      statuses.set(row.military_status, (statuses.get(row.military_status) || 0) + Number(row.cnt));
+      const code = locality.targets.length === 1 && locality.targets[0].code.includes("-") ? row.unit_code : row.unit_code.split("-")[0];
+      units.set(code, (units.get(code) || 0) + Number(row.cnt));
+    }
+    return [
+      "Thống kê hồ sơ",
+      `Địa bàn: ${locality.targets.map((t) => t.name).join("; ") || scopeClause.label}`,
+      ...(scope.hierarchyLevel !== "bo" ? [`Phạm vi tài khoản: ${scopeClause.label}`] : []),
+      ...(intent.statuses.length ? [`Trạng thái được hỏi: ${intent.statuses.map((s) => STATUS_LABELS[s] || s).join(", ")}`] : []),
+      `Tổng: ${total} hồ sơ`, "", "Theo trạng thái NVQS:",
+      ...Object.entries(STATUS_LABELS).filter(([code]) => !intent.statuses.length || intent.statuses.includes(code))
+        .map(([code, name]) => `- ${name}: ${statuses.get(code) || 0} hồ sơ`),
+      ...[...statuses].filter(([code]) => !STATUS_LABELS[code]).map(([code, count]) => `- ${code || "Chưa xác định"}: ${count} hồ sơ`),
+      ...(units.size > 1 ? ["", "Theo địa bàn:", ...[...units].map(([code, count]) => `- ${hierarchyUnits.find((u) => u.code === code)?.name || code}: ${count} hồ sơ`)] : []),
+      ...(total === 0 ? ["Không có hồ sơ phù hợp trong dữ liệu hiện tại và phạm vi được phép xem."] : []),
+    ].join("\n");
+  } catch (error) {
+    console.error("buildDirectCitizenStatsReply mysql:", error);
+    return "Hiện chưa truy vấn được cơ sở dữ liệu hồ sơ. Vui lòng thử lại sau; chưa thể xác nhận số hồ sơ của địa bàn này.";
+  }
 }
 
 async function scopeStatsMysql(

@@ -32,6 +32,7 @@ function fromMemory(username: string): AuthUser | null {
 }
 
 async function POSTHandler(request: NextRequest) {
+  let stage: 'input' | 'lookup' | 'password' | 'session' | 'audit' = 'input';
   try {
     const body = await readJson(request, 4096);
     if (!validLogin(body)) throw new InputError("Thông tin đăng nhập không hợp lệ");
@@ -50,6 +51,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
+    stage = 'lookup';
     const dbOnline = await pingDb();
     let user: AuthUser | null = null;
     let authSource: "mysql" | "memory" = "memory";
@@ -65,6 +67,7 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ error: "Hệ thống xác thực tạm thời không khả dụng" }, { status: 503 });
     }
 
+    stage = 'password';
     if (!user || !verifyPassword(password, user.password)) {
       securityEvent("login_failed", { actor, status: 401 });
       return NextResponse.json({ error: "Tên đăng nhập hoặc mật khẩu không đúng" }, { status: 401 });
@@ -102,6 +105,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
+    stage = 'session';
     await createSession({
       id: user.id,
       username: user.username,
@@ -112,6 +116,7 @@ async function POSTHandler(request: NextRequest) {
       functionalRole: selectedRole,
     });
 
+    stage = 'audit';
     if (authSource === "mysql") {
       // Tự nâng cấp mật khẩu plaintext cũ lên scrypt hash ngay khi khớp
       if (!isHashed(user.password)) {
@@ -145,7 +150,7 @@ async function POSTHandler(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof InputError) return NextResponse.json({ error: error.message }, { status: error.status });
-    securityEvent("login_error", { status: 500 });
+    securityEvent("login_error", { status: 500, stage });
     return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
   }
 }

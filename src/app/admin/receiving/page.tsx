@@ -34,6 +34,7 @@ import {
 import type { HierarchyUnit } from "@/lib/data";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import ReceivingExcelButton from "@/components/admin/ReceivingExcelButton";
+import ReceivingAssignmentModal from "@/components/admin/ReceivingAssignmentModal";
 
 const SELECT_CLS =
   "h-9 min-w-[200px] rounded-full border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium outline-none";
@@ -533,7 +534,8 @@ function QuanKhuView({ session }: { session: Session }) {
     { toUnit: string; toUnitName: string; amount: number; filled?: number }[]
   >([]);
   const [editingQuota, setEditingQuota] = useState<Record<string, boolean>>({});
-  const [editingAssignment, setEditingAssignment] = useState<Record<string, boolean>>({});
+  const [assignmentId, setAssignmentId] = useState<string | null>(null);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const mutationLock = useRef(false);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const allocRequest = useRef(0);
@@ -631,7 +633,8 @@ function QuanKhuView({ session }: { session: Session }) {
   }, [loadAlloc]);
   useEffect(() => {
     const request = assignRequest;
-    setEditingAssignment({});
+    setAssignmentId(null);
+    setAssignmentError(null);
     setRows([]);
     setCounts({ chua_phan_quan: 0, da_phan_quan: 0, submitted_to_bo: 0, all: 0 });
     setLoading(true);
@@ -699,11 +702,12 @@ function QuanKhuView({ session }: { session: Session }) {
     if (mutationLock.current || loading) return;
     const row = rows.find(r => r.id === id);
     const receivingUnitCode = draft[id];
-    const editing = row?.receivingStatus === "da_phan_quan" && editingAssignment[id];
+    const editing = row?.receivingStatus === "da_phan_quan" && assignmentId === id;
     if (!row || !receivingUnitCode || (!editing && row.receivingStatus !== "chua_phan_quan")) return;
     if (editing && receivingUnitCode === row.receivingUnitCode) return;
     mutationLock.current = true;
     setPendingKey(id);
+    setAssignmentError(null);
     setBusy(true);
     try {
       const res = await fetch("/api/admin/receiving", {
@@ -714,18 +718,20 @@ function QuanKhuView({ session }: { session: Session }) {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
+        setAssignmentError(d.error || "Không phân được quân. Vui lòng thử lại.");
         setToast({ message: d.error || "Không phân được", tone: "error" });
         if (res.status === 409) {
-          setEditingAssignment({});
+          setAssignmentId(null);
           await loadAssign();
         }
         return;
       }
       setRows(items => items.map(r => r.id === id ? { ...r, receivingUnitCode, receivingStatus: "da_phan_quan" } : r));
-      setEditingAssignment(e => ({ ...e, [id]: false }));
+      setAssignmentId(null);
       setToast({ message: d.message || "Đã phân quân", tone: "success" });
       await Promise.all([loadAssign(), loadAlloc()]);
     } catch {
+      setAssignmentError("Mất kết nối. Vui lòng thử lại hoặc tải lại danh sách để kiểm tra kết quả.");
       setToast({ message: "Không cập nhật được danh sách. Vui lòng tải lại để kiểm tra kết quả.", tone: "error" });
     } finally {
       mutationLock.current = false;
@@ -761,6 +767,7 @@ function QuanKhuView({ session }: { session: Session }) {
     }
   };
 
+  const selectedAssignment = rows.find((row) => row.id === assignmentId);
   const localityFilters = (
     <>
       <CampaignSelect campaigns={campaigns} value={campaignId} onChange={(id) => { if (!mutationLock.current) setCampaignId(id); }} />
@@ -983,7 +990,6 @@ function QuanKhuView({ session }: { session: Session }) {
             <tbody>
               {rows.map((r, i) => {
                 const assigned = r.receivingStatus === "da_phan_quan";
-                const can = r.receivingStatus === "chua_phan_quan" || (assigned && editingAssignment[r.id]);
                 const unitName = assignable.find(u => u.code === r.receivingUnitCode)?.name || receivingUnitOptions.find(u => u.code === r.receivingUnitCode)?.name || r.receivingUnitCode || "—";
                 return (
                   <tr key={r.id} className={adminRowClass(i)}>
@@ -993,42 +999,22 @@ function QuanKhuView({ session }: { session: Session }) {
                     </td>
                     <td className={ADMIN_TD_CLS}>{r.unitName}</td>
                     <td className={ADMIN_TD_CLS}>
-                      {can ? (
-                        <select
-                          disabled={busy}
-                          aria-label={`Đơn vị nhận của ${r.fullName}`}
-                          className="h-11 w-full min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition-shadow focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 disabled:opacity-50"
-                          value={draft[r.id] || ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...d, [r.id]: e.target.value }))
-                          }
-                        >
-                          <option value="">— Sư đoàn / Trung đoàn —</option>
-                          {assignable.map((u) => (
-                            <option key={u.code} value={u.code}>
-                              {u.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="space-y-1"><div>{unitName}</div><AdminPill {...pill(r.receivingStatus)} /></div>
-                      )}
+                      <div className="space-y-1.5">
+                        {r.receivingUnitCode ? <div className="text-[13px] font-semibold">{unitName}</div> : <div className="text-[13px] text-m3-on-surface-variant">Chưa chọn đơn vị nhận</div>}
+                        <AdminPill {...pill(r.receivingStatus)} />
+                      </div>
                     </td>
                     <td className={ADMIN_TD_CLS}>
-                      {can ? (
-                        <div className="flex items-center gap-3"><button
-                          type="button"
-                          disabled={busy || !draft[r.id] || (assigned && draft[r.id] === r.receivingUnitCode)}
-                          className={primaryAction}
-                          onClick={() => void assignOne(r.id)}
-                        >
-                          {pendingKey === r.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                          {pendingKey === r.id ? "Đang lưu…" : assigned ? "Lưu thay đổi" : "Phân quân"}
-                        </button>{assigned && <button type="button" disabled={busy} className={secondaryAction} onClick={() => {
+                      {(assigned || r.receivingStatus === "chua_phan_quan") && <button
+                        type="button"
+                        disabled={busy || loading}
+                        className={assigned ? secondaryAction : primaryAction}
+                        onClick={() => {
                           setDraft(d => ({ ...d, [r.id]: r.receivingUnitCode || "" }));
-                          setEditingAssignment(e => ({ ...e, [r.id]: false }));
-                        }}><X size={14} /> Hủy</button>}</div>
-                      ) : assigned ? <button type="button" disabled={busy} className={secondaryAction} onClick={() => setEditingAssignment(e => ({ ...e, [r.id]: true }))}><Pencil size={14} /> Sửa đơn vị</button> : null}
+                          setAssignmentError(null);
+                          setAssignmentId(r.id);
+                        }}
+                      >{assigned ? <Pencil size={14} /> : <Target size={14} />}{assigned ? "Sửa đơn vị" : "Phân quân"}</button>}
                     </td>
                   </tr>
                 );
@@ -1068,6 +1054,23 @@ function QuanKhuView({ session }: { session: Session }) {
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => void submit()}
       />
+      {selectedAssignment && <ReceivingAssignmentModal
+        citizen={selectedAssignment}
+        units={assignable}
+        quotas={subQuotas}
+        currentUnitName={assignable.find(u => u.code === selectedAssignment.receivingUnitCode)?.name || receivingUnitOptions.find(u => u.code === selectedAssignment.receivingUnitCode)?.name || selectedAssignment.receivingUnitCode || "—"}
+        campaignName={campaigns.find(c => c.id === campaignId)?.name || ""}
+        value={draft[selectedAssignment.id] || ""}
+        onChange={(code) => {
+          if (mutationLock.current) return;
+          setDraft(d => ({ ...d, [selectedAssignment.id]: code }));
+          setAssignmentError(null);
+        }}
+        busy={busy}
+        error={assignmentError}
+        onClose={() => { if (!mutationLock.current) setAssignmentId(null); }}
+        onConfirm={() => void assignOne(selectedAssignment.id)}
+      />}
     </div>
   );
 }
@@ -1352,6 +1355,8 @@ function TinhView({ session }: { session: Session }) {
   }, [campaignId, statusFilter]);
 
   useEffect(() => {
+    // load only updates state after awaiting the network response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
