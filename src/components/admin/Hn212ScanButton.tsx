@@ -10,6 +10,7 @@ type Props = {
   onScanned: (data: Hn212CitizenScan) => void;
   /** Gọi trước khi mở modal / quét — ví dụ tắt webcam trình duyệt */
   onBeforeScan?: () => void;
+  onChangeDevice?: () => void;
   label?: string;
   compact?: boolean;
   className?: string;
@@ -34,6 +35,7 @@ const STATUS_TEXT: Record<string, string> = {
 export default function Hn212ScanButton({
   onScanned,
   onBeforeScan,
+  onChangeDevice,
   label = "Quét CCCD (HN-212)",
   compact = false,
   className = "",
@@ -47,6 +49,7 @@ export default function Hn212ScanButton({
     wsUrl,
     busy,
     connect,
+    disconnect,
     scan,
     demoScan,
     isDev,
@@ -168,6 +171,8 @@ export default function Hn212ScanButton({
                   </p>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+              {onChangeDevice && <button type="button" disabled={busy} onClick={() => {disconnect();setOpen(false);onChangeDevice();}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">Đổi thiết bị</button>}
               <button
                 type="button"
                 disabled={busy}
@@ -176,6 +181,7 @@ export default function Hn212ScanButton({
               >
                 <X size={18} />
               </button>
+              </div>
             </div>
 
             <div className="space-y-4 px-5 py-5">

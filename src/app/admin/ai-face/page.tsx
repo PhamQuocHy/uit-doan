@@ -16,7 +16,7 @@ import {
   Mic,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Hn212ScanButton from "@/components/admin/Hn212ScanButton";
+import CccdScanButton from "@/components/admin/CccdScanButton";
 import AiVoiceTab from "@/components/admin/AiVoiceTab";
 import type { Hn212CitizenScan } from "@/lib/hn212";
 import { STATUS_LABELS } from "@/lib/analytics/types";
@@ -404,7 +404,7 @@ export default function AiFacePage() {
     }
   };
 
-  const handleHn212Scanned = (data: Hn212CitizenScan) => {
+  const handleCccdScanned = (data: Hn212CitizenScan) => {
     const portrait = data.portraitBase64?.trim();
     if (portrait) {
       stopCamera();
@@ -473,7 +473,7 @@ export default function AiFacePage() {
       return;
     }
     if (!imageBase64) {
-      setError("Mở camera để chụp, hoặc tải ảnh / quét HN-212.");
+      setError("Mở camera để chụp, hoặc tải ảnh / quét CCCD.");
       return;
     }
     await runMatch(imageBase64);
@@ -553,10 +553,10 @@ export default function AiFacePage() {
                   </h2>
                 </div>
               </div>
-              <Hn212ScanButton
+              <CccdScanButton
                 compact
-                label="Quét HN-212"
-                onScanned={handleHn212Scanned}
+                label="Quét CCCD"
+                onScanned={handleCccdScanned}
                 onBeforeScan={stopCamera}
               />
             </div>

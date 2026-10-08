@@ -29,6 +29,8 @@
 .capacitor
 
 # misc
+/storage/
+/public/uploads/
 .DS_Store
 *.pem
 

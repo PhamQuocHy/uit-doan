@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import fs from "fs/promises";
+import { writePrivateUpload, deletePrivateUpload } from "@/lib/private-uploads";
 import path from "path";
 import { pingDb, queryExecute, queryRows } from "@/lib/db";
 import type { RowDataPacket } from "mysql2";
@@ -11,10 +11,6 @@ const ALLOWED_EXT = /\.(png|jpe?g|webp|gif)$/i;
 
 function newId() {
   return `avatar_${randomBytes(6).toString("hex")}`;
-}
-
-function publicRoot() {
-  return path.join(process.cwd(), "public");
 }
 
 async function readCurrentAvatarUrl(citizenId: string): Promise<string | null> {
@@ -29,7 +25,7 @@ async function unlinkIfManagedAvatar(filePath: string | null | undefined) {
   const raw = (filePath || "").trim().replace(/^\/+/, "");
   if (!raw.startsWith("uploads/avatars/")) return;
   try {
-    await fs.unlink(path.join(publicRoot(), raw));
+    await deletePrivateUpload(raw);
   } catch {
     // ignore missing file
   }
@@ -94,14 +90,12 @@ export async function saveCitizenAvatarFile(
       month,
     )
     .replace(/\\/g, "/");
-  const absDir = path.join(publicRoot(), relativeDir);
-  await fs.mkdir(absDir, { recursive: true });
 
   const id = newId();
   const safeName = file.name.replace(/[^\w.\-()\sÀ-ỹ]+/gi, "_").slice(0, 120);
   const diskName = `${id}_${safeName}`;
-  await fs.writeFile(path.join(absDir, diskName), buf);
   const relativePath = `${relativeDir}/${diskName}`;
+  await writePrivateUpload(relativePath, buf);
   const publicUrl = `/${relativePath}`;
 
   const prev = await readCurrentAvatarUrl(citizenId);

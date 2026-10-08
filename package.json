@@ -28,7 +28,8 @@
     "test:security": "node --import tsx --test src/lib/security/*.test.ts",
     "security:audit": "npm audit --omit=dev --audit-level=moderate",
     "security:check": "npm run test:security && tsc --noEmit && npm run security:audit",
-    "test:security:http": "node scripts/security-smoke.mjs"
+    "test:security:http": "node scripts/security-smoke.mjs",
+    "uploads:migrate": "tsx scripts/migrate-private-uploads.ts"
   },
   "dependencies": {
     "@capacitor/camera": "^7.0.2",

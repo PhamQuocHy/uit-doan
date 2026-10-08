@@ -1,3 +1,4 @@
+import { AllocationConflict } from "@/lib/receiving-allocation-policy";
 import { withApiGuard } from "@/lib/security/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -225,37 +226,22 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ error: "Thiếu thông tin" }, { status: 400 });
     }
 
-    // Không vượt tổng chỉ tiêu nhận (= tuyển) Bộ giao cho QK
-    const parent = await findReceivingQuotas({
-      campaignId,
-      receivingUnitCode: session.unitCode,
-    });
-    const parentAmount = parent?.[0]?.amount ?? 0;
-    if (parentAmount > 0) {
-      const siblings = await findSubQuotasWithFilled({
+    let row;
+    try {
+      row = await upsertSubQuota({
         campaignId,
         fromUnit: session.unitCode,
+        toUnit,
+        amount,
+        expectedAmount: body.expectedAmount,
+        note: body.note != null ? String(body.note) : null,
       });
-      const others = siblings
-        .filter((s) => s.toUnit !== toUnit)
-        .reduce((sum, s) => sum + s.amount, 0);
-      if (others + amount > parentAmount) {
-        return NextResponse.json(
-          {
-            error: `Tổng giao xuống ĐV nhận không được vượt ${parentAmount} (chỉ tiêu tuyển/nhận Bộ giao). Đã giao đơn vị khác: ${others}.`,
-          },
-          { status: 400 },
-        );
+    } catch (error) {
+      if (error instanceof AllocationConflict) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
       }
+      throw error;
     }
-
-    const row = await upsertSubQuota({
-      campaignId,
-      fromUnit: session.unitCode,
-      toUnit,
-      amount,
-      note: body.note != null ? String(body.note) : null,
-    });
     if (!row) {
       return NextResponse.json(
         { error: "Đơn vị nhận không thuộc quân khu hoặc lỗi lưu" },
